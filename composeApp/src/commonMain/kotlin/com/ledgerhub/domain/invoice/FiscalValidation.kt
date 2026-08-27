@@ -25,4 +25,18 @@ object FiscalValidation {
         } else {
             ValidationResult.Invalid("Le SIRET doit comporter exactement 14 chiffres")
         }
+
+    /**
+     * Immutabilité fiscale — seule une facture au statut [InvoiceStatus.DRAFT] peut encore être
+     * modifiée ou supprimée (voir [Invoice.isEditable]). Toute tentative de modification d'une
+     * facture finalisée doit être rejetée avant même d'atteindre le repository, jamais après.
+     */
+    fun validateEditable(invoice: Invoice): ValidationResult =
+        if (invoice.isEditable) {
+            ValidationResult.Valid
+        } else {
+            ValidationResult.Invalid(
+                "La facture ${invoice.number} est au statut ${invoice.status} : verrouillée, elle ne peut plus être modifiée"
+            )
+        }
 }

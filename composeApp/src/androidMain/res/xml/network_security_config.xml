@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Autorise le trafic HTTP en clair (non chiffré) uniquement vers le backend local de dev —
-  voir com.ledgerhub.data.network.AuthHttpClient (authBaseUrl = http://10.0.2.2:3000). Android
+  voir com.ledgerhub.data.remote.HttpClientFactory (authBaseUrl / ledgerApiBaseUrl = http://10.0.2.2:3000). Android
   bloque tout cleartext par défaut depuis l'API 28 ; sans cette exception, chaque appel réseau
   échoue immédiatement avec "Cleartext HTTP traffic to 10.0.2.2 not permitted", avant même
   d'atteindre le serveur. Aucun domaine de production n'est listé ici : à retirer/restreindre

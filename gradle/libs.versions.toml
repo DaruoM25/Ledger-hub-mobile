@@ -18,6 +18,8 @@ ktor-serialization-kotlinx-json= { module = "io.ktor:ktor-serialization-kotlinx-
 # ── Moteurs platform-specific (interdit dans commonMain) ──────────────────────
 ktor-client-android            = { module = "io.ktor:ktor-client-android",                version.ref = "ktor" }
 ktor-client-darwin             = { module = "io.ktor:ktor-client-darwin",                 version.ref = "ktor" }
+# ── Moteur de test — commonTest uniquement, simule les réponses HTTP sans accès réseau réel ──
+ktor-client-mock               = { module = "io.ktor:ktor-client-mock",                   version.ref = "ktor" }
 # ── Kotlinx ───────────────────────────────────────────────────────────────────
 kotlinx-coroutines-core        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }

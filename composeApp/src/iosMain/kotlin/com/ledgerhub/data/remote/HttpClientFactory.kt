@@ -1,4 +1,4 @@
-package com.ledgerhub.data.network
+package com.ledgerhub.data.remote
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
@@ -11,3 +11,6 @@ actual fun createPlatformHttpClient(): HttpClient = HttpClient(Darwin) {
 
 /** Le simulateur iOS partage la pile réseau de la machine hôte — pas d'alias spécial requis. */
 actual val authBaseUrl: String = "http://127.0.0.1:3000"
+
+/** Même backend local que l'auth (routes `/api/invoices` du même serveur de dev) — voir [authBaseUrl]. */
+actual val ledgerApiBaseUrl: String = "http://127.0.0.1:3000"

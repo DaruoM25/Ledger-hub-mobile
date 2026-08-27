@@ -81,6 +81,7 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)   // runTest, advanceUntilIdle
+            implementation(libs.ktor.client.mock)           // MockEngine — LedgerRepositoryImplTest
             @OptIn(ExperimentalComposeLibrary::class)
             implementation(compose.uiTest)                  // runComposeUiTest, onNodeWithTag
         }

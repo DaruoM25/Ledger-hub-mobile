@@ -1,7 +1,7 @@
 package com.ledgerhub.data.auth
 
-import com.ledgerhub.data.network.authBaseUrl
-import com.ledgerhub.data.network.createPlatformHttpClient
+import com.ledgerhub.data.remote.authBaseUrl
+import com.ledgerhub.data.remote.createPlatformHttpClient
 import com.ledgerhub.domain.auth.AuthRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
