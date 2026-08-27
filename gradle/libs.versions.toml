@@ -1,0 +1,44 @@
+[versions]
+agp                  = "8.5.2"
+kotlin               = "2.1.0"
+compose-multiplatform= "1.7.3"
+ktor                 = "3.0.3"
+coroutines           = "1.9.0"
+serialization        = "1.7.3"
+activity-compose     = "1.9.3"
+robolectric          = "4.14.1"
+sqldelight           = "2.1.0"
+
+[libraries]
+# ── Ktor — réseau multiplateforme (JAMAIS android.* dans commonMain) ──────────
+ktor-client-core               = { module = "io.ktor:ktor-client-core",                   version.ref = "ktor" }
+ktor-client-content-negotiation= { module = "io.ktor:ktor-client-content-negotiation",    version.ref = "ktor" }
+ktor-client-logging            = { module = "io.ktor:ktor-client-logging",                version.ref = "ktor" }
+ktor-serialization-kotlinx-json= { module = "io.ktor:ktor-serialization-kotlinx-json",   version.ref = "ktor" }
+# ── Moteurs platform-specific (interdit dans commonMain) ──────────────────────
+ktor-client-android            = { module = "io.ktor:ktor-client-android",                version.ref = "ktor" }
+ktor-client-darwin             = { module = "io.ktor:ktor-client-darwin",                 version.ref = "ktor" }
+# ── Kotlinx ───────────────────────────────────────────────────────────────────
+kotlinx-coroutines-core        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json     = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+# ── Android uniquement ────────────────────────────────────────────────────────
+androidx-activity-compose      = { module = "androidx.activity:activity-compose",         version.ref = "activity-compose" }
+# ── Tests androidUnitTest uniquement — fournit un runtime Android simulé pour Robolectric ──
+robolectric                    = { module = "org.robolectric:robolectric",                version.ref = "robolectric" }
+# ── SQLDelight — persistance locale multiplateforme (commonMain = runtime + coroutines) ──
+sqldelight-runtime              = { module = "app.cash.sqldelight:runtime",                version.ref = "sqldelight" }
+sqldelight-coroutines-extensions= { module = "app.cash.sqldelight:coroutines-extensions",  version.ref = "sqldelight" }
+# ── Pilotes SQLDelight platform-specific (interdit dans commonMain) ───────────
+sqldelight-android-driver       = { module = "app.cash.sqldelight:android-driver",         version.ref = "sqldelight" }
+sqldelight-native-driver        = { module = "app.cash.sqldelight:native-driver",          version.ref = "sqldelight" }
+# ── Pilote JDBC en mémoire — androidUnitTest uniquement (tests JVM/Robolectric déterministes) ──
+sqldelight-sqlite-driver        = { module = "app.cash.sqldelight:sqlite-driver",          version.ref = "sqldelight" }
+
+[plugins]
+androidApplication    = { id = "com.android.application",                         version.ref = "agp" }
+kotlinMultiplatform   = { id = "org.jetbrains.kotlin.multiplatform",              version.ref = "kotlin" }
+kotlinSerialization   = { id = "org.jetbrains.kotlin.plugin.serialization",       version.ref = "kotlin" }
+composeMultiplatform  = { id = "org.jetbrains.compose",                           version.ref = "compose-multiplatform" }
+composeCompiler       = { id = "org.jetbrains.kotlin.plugin.compose",             version.ref = "kotlin" }
+sqldelight            = { id = "app.cash.sqldelight",                             version.ref = "sqldelight" }

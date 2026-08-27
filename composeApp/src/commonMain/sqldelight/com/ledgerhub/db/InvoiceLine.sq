@@ -1,0 +1,22 @@
+-- unitPriceHtCents est en centimes (Long) — même règle que Money en domaine : jamais de flottant.
+CREATE TABLE InvoiceLine (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    invoiceNumber TEXT NOT NULL,
+    label TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unitPriceHtCents INTEGER NOT NULL,
+    vatRate TEXT NOT NULL,
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+insert:
+INSERT INTO InvoiceLine(invoiceNumber, label, quantity, unitPriceHtCents, vatRate)
+VALUES (?, ?, ?, ?, ?);
+
+selectByInvoiceNumber:
+SELECT * FROM InvoiceLine
+WHERE invoiceNumber = ?;
+
+deleteByInvoiceNumber:
+DELETE FROM InvoiceLine
+WHERE invoiceNumber = ?;

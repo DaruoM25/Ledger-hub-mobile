@@ -1,0 +1,37 @@
+# Gradle & Java
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Fichiers système & IDE
+.DS_Store
+._*
+.idea/
+*.iml
+*.iws
+*.ipr
+.project
+.settings/
+out/
+
+# Android
+local.properties
+.navigation/
+captures/
+output-metadata.json
+*.apk
+*.aab
+
+# iOS & Xcode
+iosApp/.build/
+iosApp/*.xcodeproj/project.xcworkspace/
+iosApp/*.xcodeproj/xcuserdata/
+iosApp/*.xcworkspace/xcuserdata/
+iosApp/DerivedData/
+*.hmap
+*.ipa
+
+# Logs et outils IA
+.claude/
+*.log

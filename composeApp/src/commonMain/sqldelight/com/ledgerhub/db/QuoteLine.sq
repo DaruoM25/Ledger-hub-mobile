@@ -1,0 +1,21 @@
+CREATE TABLE QuoteLine (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    quoteNumber TEXT NOT NULL,
+    label TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unitPriceHtCents INTEGER NOT NULL,
+    vatRate TEXT NOT NULL,
+    FOREIGN KEY (quoteNumber) REFERENCES Quote(number) ON DELETE CASCADE
+);
+
+insert:
+INSERT INTO QuoteLine(quoteNumber, label, quantity, unitPriceHtCents, vatRate)
+VALUES (?, ?, ?, ?, ?);
+
+selectByQuoteNumber:
+SELECT * FROM QuoteLine
+WHERE quoteNumber = ?;
+
+deleteByQuoteNumber:
+DELETE FROM QuoteLine
+WHERE quoteNumber = ?;

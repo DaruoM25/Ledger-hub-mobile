@@ -1,0 +1,21 @@
+-- Client (destinataire) réutilisable entre devis/factures. SIRET = identité métier unique.
+CREATE TABLE Customer (
+    siret TEXT NOT NULL PRIMARY KEY,
+    siren TEXT NOT NULL,
+    name TEXT NOT NULL
+);
+
+insertOrReplace:
+INSERT OR REPLACE INTO Customer(siret, siren, name)
+VALUES (?, ?, ?);
+
+selectAll:
+SELECT * FROM Customer;
+
+selectBySiret:
+SELECT * FROM Customer
+WHERE siret = ?;
+
+deleteBySiret:
+DELETE FROM Customer
+WHERE siret = ?;

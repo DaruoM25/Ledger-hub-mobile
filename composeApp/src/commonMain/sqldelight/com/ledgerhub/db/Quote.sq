@@ -1,0 +1,37 @@
+-- Structure symétrique à Invoice.sq — validityDate remplace l'échéance de paiement des factures.
+CREATE TABLE Quote (
+    number TEXT NOT NULL PRIMARY KEY,
+    issueDate TEXT NOT NULL,
+    validityDate TEXT NOT NULL,
+    status TEXT NOT NULL,
+    userEmail TEXT NOT NULL,
+    issuerName TEXT NOT NULL,
+    issuerSiren TEXT NOT NULL,
+    issuerSiret TEXT NOT NULL,
+    recipientSiret TEXT NOT NULL,
+    FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
+);
+
+insertOrReplace:
+INSERT OR REPLACE INTO Quote(number, issueDate, validityDate, status, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAll:
+SELECT * FROM Quote;
+
+selectByUserEmail:
+SELECT * FROM Quote
+WHERE userEmail = ?;
+
+selectByNumber:
+SELECT * FROM Quote
+WHERE number = ?;
+
+updateStatus:
+UPDATE Quote
+SET status = ?
+WHERE number = ?;
+
+deleteByNumber:
+DELETE FROM Quote
+WHERE number = ?;

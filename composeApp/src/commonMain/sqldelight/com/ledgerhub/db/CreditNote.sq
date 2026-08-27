@@ -1,0 +1,43 @@
+-- Avoir d'annulation intégrale d'une facture — toujours lié à Invoice(number), montants négatifs
+-- (voir domain.creditnote.CreditNote). Pas de UPDATE : un avoir, comme une facture finalisée,
+-- est un document fiscal immuable une fois émis (une correction s'exprime par un nouvel avoir,
+-- jamais par l'édition d'un avoir existant).
+CREATE TABLE CreditNote (
+    number TEXT NOT NULL PRIMARY KEY,
+    issueDate TEXT NOT NULL,
+    invoiceNumber TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    userEmail TEXT NOT NULL,
+    issuerName TEXT NOT NULL,
+    issuerSiren TEXT NOT NULL,
+    issuerSiret TEXT NOT NULL,
+    recipientSiret TEXT NOT NULL,
+    totalHtCents INTEGER NOT NULL,
+    totalVatCents INTEGER NOT NULL,
+    totalTtcCents INTEGER NOT NULL,
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number),
+    FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
+);
+
+insertOrReplace:
+INSERT OR REPLACE INTO CreditNote(number, issueDate, invoiceNumber, reason, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret, totalHtCents, totalVatCents, totalTtcCents)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAll:
+SELECT * FROM CreditNote;
+
+selectByUserEmail:
+SELECT * FROM CreditNote
+WHERE userEmail = ?;
+
+selectByInvoiceNumber:
+SELECT * FROM CreditNote
+WHERE invoiceNumber = ?;
+
+selectByNumber:
+SELECT * FROM CreditNote
+WHERE number = ?;
+
+deleteByNumber:
+DELETE FROM CreditNote
+WHERE number = ?;

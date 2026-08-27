@@ -1,0 +1,40 @@
+-- L'émetteur reste embarqué (c'est toujours la même entreprise, celle de l'utilisateur) ;
+-- seul le destinataire est normalisé vers Customer (réutilisé d'une facture à l'autre).
+CREATE TABLE Invoice (
+    number TEXT NOT NULL PRIMARY KEY,
+    issueDate TEXT NOT NULL,
+    status TEXT NOT NULL,
+    -- Numéro du devis d'origine si cette facture vient d'une conversion — piste d'audit fiscale.
+    sourceQuoteId TEXT,
+    -- Compte propriétaire de cette facture côté app (SaaS multi-utilisateurs) — voir selectByUserEmail.
+    userEmail TEXT NOT NULL,
+    issuerName TEXT NOT NULL,
+    issuerSiren TEXT NOT NULL,
+    issuerSiret TEXT NOT NULL,
+    recipientSiret TEXT NOT NULL,
+    FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
+);
+
+insertOrReplace:
+INSERT OR REPLACE INTO Invoice(number, issueDate, status, sourceQuoteId, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAll:
+SELECT * FROM Invoice;
+
+selectByUserEmail:
+SELECT * FROM Invoice
+WHERE userEmail = ?;
+
+selectByNumber:
+SELECT * FROM Invoice
+WHERE number = ?;
+
+updateStatus:
+UPDATE Invoice
+SET status = ?
+WHERE number = ?;
+
+deleteByNumber:
+DELETE FROM Invoice
+WHERE number = ?;

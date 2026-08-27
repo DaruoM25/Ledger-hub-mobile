@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Manifeste additif fusionné uniquement dans le variant debug (jamais release).
+    ComposeUiTest (runComposeUiTest) lance un androidx.activity.ComponentActivity via une
+    intention explicite MAIN/LAUNCHER pour héberger le contenu Compose testé ; Robolectric,
+    contrairement à un vrai device, a besoin de cette activité déclarée dans le manifeste
+    pour la résoudre (voir https://github.com/robolectric/robolectric/pull/4736).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
