@@ -1,0 +1,266 @@
+package com.ledgerhub.presentation.invoices
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.invoice.Invoice
+import com.ledgerhub.domain.invoice.VatBreakdown
+import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.invoices.components.FacturXBadge
+import com.ledgerhub.presentation.invoices.components.StatusTag
+
+/** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
+object InvoiceDetailScreenTags {
+    const val SCREEN = "invoices_detail_screen"
+    const val LOADING = "invoices_detail_loading"
+    const val ERROR = "invoices_detail_error"
+    const val RETRY_BUTTON = "invoices_detail_retry_button"
+    const val NOT_FOUND = "invoices_detail_not_found"
+    const val STATUS_TAG = "invoices_detail_status_tag"
+    const val FACTURX_BADGE = "invoices_detail_facturx_badge"
+    const val TOTAL_HT = "invoices_detail_total_ht"
+    const val TOTAL_VAT = "invoices_detail_total_vat"
+    const val TOTAL_TTC = "invoices_detail_total_ttc"
+    const val EDIT_BUTTON = "invoices_detail_edit_button"
+    const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
+    const val LOCKED_BANNER = "invoices_detail_locked_banner"
+    fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
+}
+
+/** Composable stateful — observe [InvoiceDetailViewModel], délègue les actions au parent. */
+@Composable
+fun InvoiceDetailScreen(
+    viewModel: InvoiceDetailViewModel,
+    onEditClick: (Invoice) -> Unit = {},
+    onCreateCreditNoteClick: (Invoice) -> Unit = {},
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    InvoiceDetailView(
+        uiState = uiState,
+        onRetry = viewModel::retry,
+        onEditClick = onEditClick,
+        onCreateCreditNoteClick = onCreateCreditNoteClick,
+    )
+}
+
+@Composable
+internal fun InvoiceDetailView(
+    uiState: InvoiceDetailUiState,
+    onRetry: () -> Unit = {},
+    onEditClick: (Invoice) -> Unit = {},
+    onCreateCreditNoteClick: (Invoice) -> Unit = {},
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .semantics { testTag = InvoiceDetailScreenTags.SCREEN }
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val invoice = uiState.invoice
+        when {
+            uiState.isLoading -> LoadingState()
+            uiState.errorMessage != null -> ErrorState(uiState.errorMessage, onRetry)
+            uiState.notFound -> NotFoundState()
+            invoice != null -> InvoiceBody(
+                uiState = uiState,
+                invoice = invoice,
+                onEditClick = onEditClick,
+                onCreateCreditNoteClick = onCreateCreditNoteClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun InvoiceBody(
+    uiState: InvoiceDetailUiState,
+    invoice: Invoice,
+    onEditClick: (Invoice) -> Unit,
+    onCreateCreditNoteClick: (Invoice) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            invoice.number,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        StatusTag(invoice.status, InvoiceDetailScreenTags.STATUS_TAG)
+    }
+    FacturXBadge(tag = InvoiceDetailScreenTags.FACTURX_BADGE)
+
+    Text("Émetteur : ${invoice.issuer.name} — SIREN ${invoice.issuer.siren}")
+    Text("Destinataire : ${invoice.recipient.name} — SIREN ${invoice.recipient.siren}")
+    Text("Date d'émission : ${invoice.issueDate}")
+
+    HorizontalDivider()
+
+    Text(
+        "Ventilation TVA",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    uiState.vatBreakdown.forEach { line -> VatRow(line) }
+
+    HorizontalDivider()
+
+    TotalRow("Total HT", invoice.totalHt.formatEuros(), InvoiceDetailScreenTags.TOTAL_HT)
+    TotalRow("TVA", invoice.totalVat.formatEuros(), InvoiceDetailScreenTags.TOTAL_VAT)
+    TotalRow(
+        label = "Total TTC",
+        value = invoice.totalTtc.formatEuros(),
+        tag = InvoiceDetailScreenTags.TOTAL_TTC,
+        emphasize = true,
+    )
+
+    HorizontalDivider()
+
+    if (uiState.isLocked) {
+        LockedBanner()
+    }
+
+    // Verrouillage des actions selon le statut fiscal : les boutons restent visibles
+    // (repère pédagogique) mais sont désactivés hors des cas métier autorisés.
+    Button(
+        onClick = { onEditClick(invoice) },
+        enabled = uiState.canEdit,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.EDIT_BUTTON },
+    ) {
+        Text("Modifier la facture")
+    }
+    OutlinedButton(
+        onClick = { onCreateCreditNoteClick(invoice) },
+        enabled = uiState.canCancelByCreditNote,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.CREDIT_NOTE_BUTTON },
+    ) {
+        Text("Annuler par un avoir")
+    }
+}
+
+@Composable
+private fun VatRow(line: VatBreakdown) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.vatRow(line.rate) },
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text("Base ${line.rate.label}", style = MaterialTheme.typography.bodyMedium)
+        Text(line.baseHt.formatEuros(), style = MaterialTheme.typography.bodyMedium)
+        Text("TVA ${line.vatAmount.formatEuros()}", style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun TotalRow(label: String, value: String, tag: String, emphasize: Boolean = false) {
+    val style =
+        if (emphasize) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = tag },
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = style, fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Normal)
+        Text(value, style = style, fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+@Composable
+private fun LockedBanner() {
+    Surface(
+        color = Color(0xFFFFEBEE),
+        contentColor = Color(0xFFB71C1C),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                testTag = InvoiceDetailScreenTags.LOCKED_BANNER
+                contentDescription = "Facture annulée — lecture seule"
+            },
+    ) {
+        Text(
+            "Facture annulée — lecture seule",
+            modifier = Modifier.padding(12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun LoadingState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.LOADING },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CircularProgressIndicator()
+        Text("Chargement de la facture…")
+    }
+}
+
+@Composable
+private fun ErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                testTag = InvoiceDetailScreenTags.ERROR
+                contentDescription = message
+            },
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(message, color = MaterialTheme.colorScheme.error)
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.RETRY_BUTTON },
+        ) {
+            Text("Réessayer")
+        }
+    }
+}
+
+@Composable
+private fun NotFoundState() {
+    Text(
+        "Facture introuvable côté serveur.",
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.NOT_FOUND },
+    )
+}

@@ -52,3 +52,61 @@ DTOs de transport, repository distant) ont été créés.
 | **Correctif** | Reformulation du commentaire (`/api/invoices` sans le `/*` final) dans les deux fichiers `actual` |
 | **Action préventive** | Éviter toute séquence `/*` dans un commentaire KDoc — écrire les chemins avec un `{id}` ou sans wildcard `*` |
 | **Impact** | Aucun — détecté avant tout commit, aucun test n'a tourné sur du code cassé |
+
+---
+
+## Sprint 1 — US-02 : ViewModel, Gestion d'état & Écrans Factur-X (Liste & Détail)
+- **Date :** 2026-08-28
+- **Statut :** ✅ Clos — suite complète verte (188/188 tests), compilation Windows validée
+- **Objectif :** Connecter l'UI Compose Multiplatform au `LedgerRepository` distant (US-01).
+
+### Décision d'architecture (validée par le PO en Étape 1)
+Création d'un package dédié `presentation/invoices/` **sans impacter l'existant**
+`presentation/invoicedetail/` (module Avoir, données locales SQLDelight). Le nouveau package
+consomme exclusivement l'API distante `LedgerRepository`. Convention ViewModel maison respectée
+à l'identique (`CoroutineScope(SupervisorJob() + dispatcher)` + `MutableStateFlow` + `processIntent`
++ `onCleared()`), aucun `androidx.lifecycle` dans `commonMain`.
+
+Les 4 états d'affichage (`Loading` / `Error` / `Empty` / `Success`) sont exposés par une
+projection calculée `InvoiceListUiState.content` (sealed interface) dérivée des champs bruts —
+le pattern data class + projections reste homogène avec `QuotesUiState`.
+
+Le verrouillage des actions du détail **dérive exclusivement** des règles métier déjà portées
+par `domain/invoice/Invoice.kt` (`isEditable`, `isCancellableByCreditNote`) — jamais recalculé
+dans la couche présentation (un seul lieu de vérité fiscale).
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `presentation/invoices/MoneyFormat.kt` | `Money.formatEuros()` — format FR (espace insécable milliers, virgule décimale, `€` suffixé). Centralise les `formatCents` privés dupliqués |
+| `presentation/invoices/InvoiceStatusUi.kt` | `InvoiceStatus.displayLabel()` / `.tagColor()` — helpers d'affichage du statut (noms distincts du module Avoir pour éviter les collisions d'import) |
+| `presentation/invoices/InvoiceListUiState.kt` | `InvoiceListUiState` (data class + projections `visibleInvoices`, `counts`, `content`), `InvoiceStatusFilter` (filtres par statut), `InvoiceListContent` (sealed : Loading/Error/Empty/Success) |
+| `presentation/invoices/InvoiceListViewModel.kt` | Chargement asynchrone via `LedgerRepository.fetchInvoices()`, intents `Load`/`Retry`/`FilterSelected`, mapping erreur réseau → message lisible |
+| `presentation/invoices/InvoiceListScreen.kt` | Écran liste : `when (content)` → spinner / erreur+Réessayer / vide / `LazyColumn` de cartes ; rangée de filtres avec compteurs ; navigation déléguée au parent |
+| `presentation/invoices/components/InvoiceCard.kt` | Carte facture : n°, pastille statut, destinataire, date, **badge « Conforme Factur-X 2026 »**, TTC formaté. `StatusTag` / `FacturXBadge` réutilisables |
+| `presentation/invoices/InvoiceDetailUiState.kt` | État détail : `invoice`, `isLoading`, `errorMessage`, `notFound` + projections `vatBreakdown`, `canEdit`, `canCancelByCreditNote`, `isLocked` |
+| `presentation/invoices/InvoiceDetailViewModel.kt` | Chargement via `LedgerRepository.getInvoiceDetail(number)` ; `null` (404) → `notFound`, erreur → `errorMessage` ; `retry()` |
+| `presentation/invoices/InvoiceDetailScreen.kt` | Vue détail : en-tête + badge Factur-X, **ventilation TVA par taux (base HT / TVA)**, récap **HT / TVA / TTC**, bandeau « lecture seule » si annulée, boutons Modifier / Annuler par un avoir **désactivés selon le statut fiscal** |
+| `data/repository/MockLedgerRepository.kt` | Implémentation en mémoire de `LedgerRepository` (6 factures, statuts variés) — valeur par défaut des ViewModels + jeu de `@Preview` |
+
+### Fichiers de test créés (`composeApp/src/commonTest/`)
+| Fichier | Couverture |
+|---|---|
+| `presentation/invoices/FakeLedgerRepository.kt` | Double de test mutable (succès↔échec entre appels) + fabrique `testInvoice(...)` |
+| `presentation/invoices/InvoiceListViewModelTest.kt` | 7 tests : Loading→Success, échec→Error, liste vide→Empty, filtre par statut (sans rechargement), tri date décroissante, compteurs par statut, `Retry` après erreur |
+| `presentation/invoices/InvoiceDetailViewModelTest.kt` | 7 tests : succès + ventilation TVA au centime, 404→`notFound`, échec→`errorMessage`, verrouillage DRAFT / PAID / CANCELLED, `retry()` après échec |
+| `presentation/invoices/MoneyFormatTest.kt` | 7 tests : zéro, < 1 €, virgule décimale, groupement milliers/millions (U+00A0), signe négatif |
+
+### Fichiers modifiés
+| Fichier | Modification |
+|---|---|
+| *(aucun)* | Câblage dans `App.kt` volontairement hors périmètre US-02 (navigation traitée au démarrage du module Dashboard) — package existant `presentation/invoicedetail/` non touché |
+
+### Tests
+- **Nouveaux :** +21 tests unitaires de ViewModel/formateur (`FakeLedgerRepository`, `StandardTestDispatcher`, aucun accès réseau réel)
+- **Résultat global :** `./gradlew :composeApp:testDebugUnitTest --console=plain` → **188/188 tests verts** (167 → 188), `compileDebugKotlinAndroid` OK
+- **Contrôle KMP :** zéro import `android.*` / `Context` / Jetpack natif dans `commonMain` (Compose Multiplatform uniquement)
+
+### Points d'attention transmis
+- Tri des factures par `issueDate` : comparaison lexicographique, valide tant que le format ISO `YYYY-MM-DD` est garanti côté DTO (pas de `kotlinx-datetime` en v1)
+- `MoneyFormat.NON_BREAKING_SPACE` : constante partagée U+00A0 référencée aussi par les tests, pour lever toute ambiguïté d'encodage du séparateur de milliers
