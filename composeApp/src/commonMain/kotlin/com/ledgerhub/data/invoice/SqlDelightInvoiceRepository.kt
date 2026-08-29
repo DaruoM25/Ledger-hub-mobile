@@ -109,8 +109,31 @@ class SqlDelightInvoiceRepository(
         }
     }
 
+    /**
+     * Nombre de factures du compte. Ne construit **aucun** objet de domaine, donc ne peut pas
+     * échouer sur une ligne indésérialisable — c'est précisément ce qui rend ce comptage sûr
+     * pour décider s'il faut semer les données de démonstration (voir `seedDemoDataIfEmpty`).
+     */
+    suspend fun countInvoices(): Result<Long> = runCatching {
+        database.invoiceQueries.countByUserEmail(userEmail).executeAsOne()
+    }
+
+    /**
+     * Une ligne indésérialisable est **écartée**, pas propagée : auparavant, une seule facture
+     * corrompue faisait échouer la lecture entière et vidait l'écran de toutes les autres.
+     * Perdre une ligne à l'affichage est regrettable ; perdre les cent autres est inacceptable.
+     *
+     * L'anomalie est signalée sur la sortie standard — le projet n'a pas de journalisation
+     * partagée, et `println` est la seule sortie disponible en commonMain. À remplacer par un
+     * vrai logger le jour où il en existe un.
+     */
     override suspend fun fetchInvoices(): Result<List<Invoice>> = runCatching {
-        database.invoiceQueries.selectByUserEmail(userEmail).executeAsList().map { it.toDomain() }
+        database.invoiceQueries.selectByUserEmail(userEmail).executeAsList().mapNotNull { row ->
+            runCatching { row.toDomain() }.getOrElse { throwable ->
+                println("[LedgerHub] Facture ${row.number} ignorée — enregistrement illisible : ${throwable.message}")
+                null
+            }
+        }
     }
 
     private fun InvoiceRow.toDomain(): Invoice {

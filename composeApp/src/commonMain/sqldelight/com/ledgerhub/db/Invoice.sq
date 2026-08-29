@@ -40,6 +40,14 @@ selectByNumber:
 SELECT * FROM Invoice
 WHERE number = ?;
 
+-- Le semis de démonstration s'appuie sur ce comptage, et non sur une lecture de toutes les
+-- factures : une seule ligne indésérialisable faisait échouer la lecture complète, le semis
+-- concluait « base vide » et réécrivait les factures de démonstration par-dessus les vraies.
+-- Un COUNT ne construit aucun objet de domaine : il ne peut pas échouer pour cette raison.
+countByUserEmail:
+SELECT COUNT(*) FROM Invoice
+WHERE userEmail = ?;
+
 -- Garde-fou de suppression d'une fiche client : on ne retire pas de l'historique un
 -- destinataire qui figure sur des factures déjà émises (voir ClientRepository.deleteClient).
 countByRecipientSiret:

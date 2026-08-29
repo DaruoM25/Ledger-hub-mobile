@@ -528,8 +528,15 @@ private fun LedgerSidebar(
  *   la lecture des écrans, qui ont chargé la base avant que le semis ne se termine.
  */
 private suspend fun seedDemoDataIfEmpty(repository: SqlDelightInvoiceRepository): Boolean {
-    val existing = repository.fetchInvoices().getOrDefault(emptyList())
-    if (existing.isNotEmpty()) return false
+    // Comptage direct, et non lecture de toutes les factures : une seule ligne indésérialisable
+    // faisait échouer la lecture, `getOrDefault(emptyList())` concluait « base vide », et le semis
+    // réécrivait les factures de démonstration par-dessus les vraies — à chaque lancement.
+    // Un comptage ne construit aucun objet de domaine, il ne peut pas échouer pour cette raison.
+    //
+    // En cas d'échec malgré tout (base inaccessible), on s'abstient : ne rien semer laisse un
+    // écran vide, semer à tort détruit des données.
+    val existingCount = repository.countInvoices().getOrElse { return false }
+    if (existingCount > 0) return false
     demoInvoices().forEach { repository.submitInvoice(it) }
     return true
 }

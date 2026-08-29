@@ -203,3 +203,12 @@ tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach
         excludeTestsMatching("com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreenTest")
     }
 }
+
+tasks.configureEach {
+    doFirst {
+        val sqliteTmp = rootDir.resolve("build/tmp/sqlite").apply { mkdirs() }
+        val sqlitePath = sqliteTmp.absolutePath.replace('\\', '/')
+        System.setProperty("org.sqlite.tmpdir", sqlitePath)
+        System.setProperty("java.io.tmpdir", sqlitePath)
+    }
+}
