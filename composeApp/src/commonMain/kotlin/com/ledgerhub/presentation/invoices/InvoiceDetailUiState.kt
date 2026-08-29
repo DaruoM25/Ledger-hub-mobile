@@ -33,4 +33,13 @@ data class InvoiceDetailUiState(
     /** Facture annulée → écran en lecture seule, toutes les actions sont neutralisées. */
     val isLocked: Boolean
         get() = invoice?.status == InvoiceStatus.CANCELLED
+
+    /**
+     * Facture verrouillée par l'immutabilité fiscale : tout statut hors Brouillon (Validée,
+     * Envoyée, Payée, Annulée). Distinct de [isLocked], qui ne vise que l'annulation.
+     * Sert l'affordance de verrouillage — cadenas et atténuation — et non la règle métier
+     * elle-même, qui reste portée par [Invoice.isEditable].
+     */
+    val isFiscallyLocked: Boolean
+        get() = invoice?.isEditable == false
 }

@@ -367,3 +367,59 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 - **`isSubmitEnabled` n'est plus consommé par l'écran.** Il reste calculé, documenté et testé comme indicateur de validité du formulaire — utile pour un futur récapitulatif ou un badge d'état, mais il n'a plus de rôle de pilotage.
 - **Le libellé du bouton d'émission a changé** (« Émettre et Persister » → « Valider et émettre »). Le commentaire de `LocalLedgerRepository` cite encore l'ancien libellé ; sans impact fonctionnel.
 - **Vérification device à compléter** : émission réelle en statut Validée, et affichage du badge « Validée » dans la liste et les filtres (le compteur « Validées » était à 0 sur toutes les passes de recette, faute de chemin pour produire ce statut — ce lot le rend enfin possible).
+
+---
+
+## US-04 — Réactivité i18n à chaud et verrouillage fiscal de l'édition
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-04-clients-actions-settings`
+- **Statut :** ✅ Clos — 237/237 tests unitaires verts (+11), APK `BUILD SUCCESSFUL`, cadenas de liste vérifié sur émulateur
+- **Objectif :** Garantir par le test la réactivité du formatage monétaire et temporel à la bascule de langue, et rendre lisible l'immutabilité des factures non-brouillon dans l'interface.
+
+### Constat d'audit préalable (Étape 1)
+1. **Le formatage monétaire était déjà exactement conforme.** `formatMoney` produit `25 263,60 €` en FR (espace insécable U+00A0, virgule décimale, symbole suffixé) et `€25,263.60` en EN, en arithmétique entière `Long`. La réactivité passe par `LocalAppLanguage`, un `compositionLocalOf` : tout composable lecteur recompose à la bascule. **Rien à corriger — le point 1 relevait de la couverture de test, pas du code.**
+2. **La date FR ne correspondait pas à l'exemple du prompt.** Format en place : `24/06/2026`, contre `24 juin 2026` attendu. Seules les abréviations de mois existent au dictionnaire ; la forme longue FR aurait demandé 12 clés supplémentaires.
+3. **Le verrouillage d'édition était déjà correct côté logique**, absent côté affordance : `enabled = uiState.canEdit`, dérivé de `Invoice.isEditable` (vrai pour `DRAFT` seul). Une facture `VALIDATED` ou `PAID` avait donc déjà son bouton désactivé, sans cadenas ni atténuation.
+4. **`InvoiceCard` n'expose aucun point d'entrée « Modifier »** — carte simplement cliquable vers le détail. Rien à désactiver.
+5. **Aucun accès à l'état mutable du formulaire n'existe aujourd'hui** : `onEditClick` a une valeur par défaut `{}` et n'est câblé nulle part dans `App.kt`. L'exigence est satisfaite par absence de fonctionnalité, non par un garde-fou — distinction qui comptera quand le parcours d'édition sera ouvert.
+6. **Le seul test de réactivité i18n existant, `LanguageUiTest`, est en `androidInstrumentedTest`** : il exige `connectedDebugAndroidTest` et un émulateur, donc ne tourne ni en local ni en CI. Un équivalent Robolectric apportait une couverture réelle.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Date FR maintenue en `24/06/2026`.** Troisième divergence consécutive entre un prompt et la décision du Sprint 2 US-02 : tranchée définitivement en faveur du format numérique — compact pour des cartes de liste denses, et usage dominant sur les pièces comptables françaises.
+2. **Cadenas informatif sur `InvoiceCard`** plutôt qu'un bouton « Modifier » désactivé. Inventer une action sans destination aurait été trompeur : le parcours d'édition n'existe pas. Le cadenas renseigne sur l'immutabilité avant même d'ouvrir le détail.
+3. **Traduction des libellés d'action du détail.** « Modifier la facture », « Annuler par un avoir » et la bannière de lecture seule étaient codés en dur — exclus du lot i18n du Sprint 2. Les laisser aurait produit une zone mêlant textes traduits et textes figés, juste à côté des nouveaux libellés de verrouillage.
+4. **`isFiscallyLocked` distinct de `isLocked`.** Le premier vise tout statut hors Brouillon et pilote l'affordance ; le second reste réservé à l'annulation et à sa bannière. La règle métier, elle, n'est jamais recalculée dans la présentation : elle reste portée par `Invoice.isEditable`.
+
+### Fichiers modifiés
+| Fichier | Nature |
+|---|---|
+| `domain/i18n/StringKey.kt` | Ajout `ACTION_EDIT_INVOICE`, `ACTION_CANCEL_BY_CREDIT_NOTE`, `DETAIL_CANCELLED_READ_ONLY`, `INVOICE_LOCKED_HINT`. |
+| `domain/i18n/AppTranslations.kt` | Les quatre clés en FR et EN — « Facture émise — non modifiable » / « Issued invoice — locked ». |
+| `presentation/invoices/InvoiceDetailUiState.kt` | Ajout `isFiscallyLocked`, dérivé de `Invoice.isEditable`. |
+| `presentation/invoices/InvoiceDetailScreen.kt` | Bouton d'édition : cadenas 🔒 dans le libellé, `alpha 0.4` et `contentDescription` explicative quand la facture est verrouillée ; mention d'aide sous le bouton (tag `LOCKED_HINT`) hors cas d'annulation, qui garde sa bannière. Les trois libellés codés en dur passent par `tr()`. |
+| `presentation/invoices/components/InvoiceCard.kt` | Cadenas à côté du numéro pour toute facture non modifiable, avec `contentDescription` et tag `lockTag(number)`. |
+
+### Fichiers de test créés
+| Fichier | Cas |
+|---|---|
+| `androidUnitTest/…/i18n/LocalizationReactivityTest.kt` | 4 cas. L'arbre n'est monté qu'une fois ; seule la valeur de `LocalAppLanguage` change. Montant reformaté `25 263,60 €` → `€25,263.60`, date `Émise le 24/06/2026` → `Issued on Jun 24, 2026`, retour au français restituant les deux, et pastille de statut retraduite « Payée » → « Paid ». Le test échoue si une valeur est figée à la première composition. |
+| `androidUnitTest/…/invoices/InvoiceImmutabilityUiTest.kt` | 7 cas, à partir d'une facture **persistée puis relue** en base (SQLDelight / `JdbcSqliteDriver` en mémoire) : `VALIDATED` et `PAID` exposent `isEditable = false` et `canDelete = false`, `DRAFT` reste modifiable ; l'écran de détail d'une facture verrouillée présente un bouton désactivé, ne remonte aucun `onEditClick` au clic et affiche la mention de verrouillage ; la carte de liste porte le cadenas sur une facture émise et pas sur un brouillon. |
+
+### Tests
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **237/237 verts**, 0 échec / 0 erreur (226 → 237).
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+- **Émulateur** `Pixel_5_API_35` : cadenas présent sur `FAC-2026-0137` (Envoyée), absent sur les deux brouillons — conforme.
+
+### Matrice RCA — incidents rencontrés
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `assertHasNoClickAction` échoue sur le bouton d'édition désactivé | Compose **conserve** l'action `OnClick` sur un nœud désactivé et se contente de le marquer `[Disabled]` — l'absence d'action n'est donc pas le bon critère | Assertion remplacée par un `performClick` suivi de la vérification que le callback n'a pas été invoqué : on teste l'effet, pas la structure sémantique |
+| 2 | `onNodeWithTag` introuvable sur le cadenas et la pastille de statut | `InvoiceCard` est `clickable`, donc fusionne ses descendants sémantiques : un tag porté par un enfant n'est pas visible dans l'arbre fusionné | `useUnmergedTree = true` sur ces recherches |
+| 3 | `LOCKED_HINT` « not displayed » | L'écran de détail défile ; la mention était hors du viewport de test | `performScrollTo()` avant l'assertion |
+| 4 | Helper de test : `onNodeWith…` non résolus | Le lambda passé à `runWithLanguageSwitch` n'avait pas le receiver `ComposeUiTest` | Type du paramètre passé en `ComposeUiTest.((AppLanguage) -> Unit) -> Unit` |
+
+### Points d'attention transmis
+- **L'immutabilité côté interface reste une affordance, pas une barrière.** Aujourd'hui elle tient parce qu'aucun parcours d'édition n'existe. Le jour où `onEditClick` sera câblé, il faudra un garde-fou en amont — refus côté ViewModel ou use case — car un bouton désactivé ne protège que du clic, pas d'un chemin de navigation alternatif.
+- **`Invoice.isEditable` est l'unique source de la règle.** Les trois points d'affichage (`canEdit`, `isFiscallyLocked`, cadenas de la carte) en dérivent sans la recalculer ; toute évolution du périmètre des statuts modifiables se fait dans le domaine.
+- **Zones toujours en français en dur** dans le détail : « Émetteur », « Destinataire », « Ventilation TVA », « Total HT / TVA / Total TTC ». Hors périmètre de ce lot, mais la zone reste partiellement bilingue.
+- **Le format de date FR est désormais arbitré** (`24/06/2026`) après trois demandes divergentes. À traiter comme acquis dans les prompts suivants.

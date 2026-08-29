@@ -82,6 +82,13 @@ enum class StringKey {
     LIST_RETRY,
     LIST_ISSUED_ON,
     DETAIL_ISSUE_DATE,
+
+    // ── Immutabilité fiscale (verrouillage hors brouillon) ──────────────────
+    ACTION_EDIT_INVOICE,
+    ACTION_CANCEL_BY_CREDIT_NOTE,
+    DETAIL_CANCELLED_READ_ONLY,
+    INVOICE_LOCKED_HINT,
+
     FACTURX_BADGE,
     FILTER_ALL,
     FILTER_DRAFT,
