@@ -56,7 +56,7 @@ class SqlDelightCreditNoteRepositoryTest {
         val sourceInvoice = invoice()
         invoiceRepository.submitInvoice(sourceInvoice)
 
-        val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-2026-001", "2026-08-06", "Erreur tarifaire").getOrThrow()
+        val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-2026-0001", "2026-08-06", "Erreur tarifaire").getOrThrow()
         assertTrue(creditNoteRepository.submitCreditNote(creditNote).isSuccess)
 
         val fetched = creditNoteRepository.fetchCreditNotes().getOrThrow()
@@ -80,7 +80,7 @@ class SqlDelightCreditNoteRepositoryTest {
         val sourceInvoice = invoice(status = InvoiceStatus.SENT)
         invoiceRepository.submitInvoice(sourceInvoice)
 
-        val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-2026-001", "2026-08-06", "Erreur tarifaire").getOrThrow()
+        val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-2026-0001", "2026-08-06", "Erreur tarifaire").getOrThrow()
         creditNoteRepository.submitCreditNote(creditNote)
 
         val updatedInvoice = invoiceRepository.fetchInvoices().getOrThrow().single { it.number == sourceInvoice.number }
@@ -95,7 +95,7 @@ class SqlDelightCreditNoteRepositoryTest {
         val creditNoteRepositoryB = SqlDelightCreditNoteRepository(database, userEmail = "b@ledgerhub.app")
         val sourceInvoice = invoice()
         invoiceRepositoryA.submitInvoice(sourceInvoice)
-        val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-A-001", "2026-08-06", "Erreur").getOrThrow()
+        val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-2026-0009", "2026-08-06", "Erreur").getOrThrow()
         creditNoteRepositoryA.submitCreditNote(creditNote)
 
         assertEquals(1, creditNoteRepositoryA.fetchCreditNotes().getOrThrow().size)

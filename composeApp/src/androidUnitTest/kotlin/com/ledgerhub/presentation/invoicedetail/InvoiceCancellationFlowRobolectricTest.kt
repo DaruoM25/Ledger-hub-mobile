@@ -100,7 +100,6 @@ class InvoiceCancellationFlowRobolectricTest {
         onNodeWithTag(CreditNoteFormTags.SCREEN).assertIsDisplayed()
 
         // Le motif légal est obligatoire avant validation.
-        onNodeWithTag(CreditNoteFormTags.CREDIT_NOTE_NUMBER).performScrollTo().performTextInput("AV-2026-001")
         onNodeWithTag(CreditNoteFormTags.ISSUE_DATE).performScrollTo().performTextInput("2026-08-06")
         onNodeWithTag(CreditNoteFormTags.REASON).performScrollTo().performTextInput("Erreur tarifaire")
         onNodeWithTag(CreditNoteFormTags.SUBMIT_BUTTON).performScrollTo().performClick()
@@ -116,7 +115,7 @@ class InvoiceCancellationFlowRobolectricTest {
             val creditNotes = creditNoteRepository.fetchCreditNotes().getOrThrow()
             assertEquals(1, creditNotes.size)
             val creditNote = creditNotes.single()
-            assertEquals("AV-2026-001", creditNote.number)
+            assertEquals("AV-2026-0001", creditNote.number)
             assertEquals(invoice.number, creditNote.invoiceId)
             assertEquals("Erreur tarifaire", creditNote.reason)
             assertTrue(creditNote.totalTtc.cents < 0)

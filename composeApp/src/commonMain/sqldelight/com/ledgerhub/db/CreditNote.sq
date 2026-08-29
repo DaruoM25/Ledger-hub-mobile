@@ -15,13 +15,26 @@ CREATE TABLE CreditNote (
     totalHtCents INTEGER NOT NULL,
     totalVatCents INTEGER NOT NULL,
     totalTtcCents INTEGER NOT NULL,
+    -- Date d'émission de la facture annulée. Recopiée sur l'avoir : la référence croisée attendue
+    -- par Factur-X 2026 est le couple numéro + date, pas le seul numéro. DEFAULT '' pour les
+    -- avoirs antérieurs à la colonne. Déclarée en dernier pour coïncider avec la position que lui
+    -- donne l'ALTER TABLE de la migration 1.sqm — sans quoi verifyMigrations signale un écart.
+    originalInvoiceDate TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number),
     FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
 );
 
 insertOrReplace:
-INSERT OR REPLACE INTO CreditNote(number, issueDate, invoiceNumber, reason, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret, totalHtCents, totalVatCents, totalTtcCents)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO CreditNote(number, issueDate, invoiceNumber, originalInvoiceDate, reason, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret, totalHtCents, totalVatCents, totalTtcCents)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- Dernier numéro attribué pour un exercice donné (motif `AV-2026-%`). Le tri lexicographique
+-- suffit : le suffixe est à largeur fixe sur 4 chiffres (voir CreditNoteNumbering).
+selectLastNumberForPrefix:
+SELECT number FROM CreditNote
+WHERE number LIKE ?
+ORDER BY number DESC
+LIMIT 1;
 
 selectAll:
 SELECT * FROM CreditNote;

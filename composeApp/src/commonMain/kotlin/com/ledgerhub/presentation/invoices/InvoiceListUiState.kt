@@ -37,6 +37,8 @@ data class InvoiceListUiState(
     val invoices: List<Invoice> = emptyList(),
     val errorMessage: String? = null,
     val statusFilter: InvoiceStatusFilter = InvoiceStatusFilter.TOUTES,
+    /** Numéro de l'avoir par facture annulée — alimente la mention croisée US-05. */
+    val creditNotesByInvoice: Map<String, String> = emptyMap(),
 ) {
     /**
      * Factures du filtre courant, triées par date d'émission décroissante (plus récentes

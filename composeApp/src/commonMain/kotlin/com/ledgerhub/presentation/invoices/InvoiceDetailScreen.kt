@@ -53,6 +53,7 @@ object InvoiceDetailScreenTags {
     const val TOTAL_TTC = "invoices_detail_total_ttc"
     const val EDIT_BUTTON = "invoices_detail_edit_button"
     const val LOCKED_HINT = "invoices_detail_locked_hint"
+    const val CREDIT_NOTE_MENTION = "invoices_detail_credit_note_mention"
     const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
     const val LOCKED_BANNER = "invoices_detail_locked_banner"
     fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
@@ -123,6 +124,27 @@ private fun InvoiceBody(
         StatusTag(invoice.status, InvoiceDetailScreenTags.STATUS_TAG)
     }
     FacturXBadge(tag = InvoiceDetailScreenTags.FACTURX_BADGE)
+
+    // Référence croisée vers l'avoir qui annule cette facture (US-05).
+    uiState.creditNoteNumber?.let { creditNoteNumber ->
+        val mention = "${tr(StringKey.INVOICE_CREDITED_BY)} $creditNoteNumber"
+        Surface(
+            color = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.semantics {
+                testTag = InvoiceDetailScreenTags.CREDIT_NOTE_MENTION
+                contentDescription = mention
+            },
+        ) {
+            Text(
+                mention,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
 
     val lang = LocalAppLanguage.current
 

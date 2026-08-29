@@ -36,6 +36,7 @@ object InvoiceCardTags {
     fun card(number: String) = "invoice_card_$number"
     fun statusTag(number: String) = "invoice_card_status_$number"
     fun lockTag(number: String) = "invoice_card_lock_$number"
+    fun creditNoteTag(number: String) = "invoice_card_credit_note_$number"
     const val FACTURX_BADGE = "invoice_card_facturx_badge"
 }
 
@@ -52,6 +53,8 @@ fun InvoiceCard(
     invoice: Invoice,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Avoir annulant cette facture, s'il en existe un — mention croisée US-05. */
+    creditNoteNumber: String? = null,
 ) {
     Card(
         modifier = modifier
@@ -96,6 +99,19 @@ fun InvoiceCard(
             }
 
             Text(invoice.recipient.name, style = MaterialTheme.typography.bodyMedium)
+            creditNoteNumber?.let { number ->
+                val mention = "${tr(StringKey.INVOICE_CREDITED_BY)} $number"
+                Text(
+                    mention,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics {
+                        testTag = InvoiceCardTags.creditNoteTag(invoice.number)
+                        contentDescription = mention
+                    },
+                )
+            }
             Text(
                 "${tr(StringKey.LIST_ISSUED_ON)} ${formatIsoDate(invoice.issueDate, LocalAppLanguage.current)}",
                 style = MaterialTheme.typography.bodySmall,

@@ -17,6 +17,8 @@ data class InvoiceDetailUiState(
     val invoice: Invoice? = null,
     val errorMessage: String? = null,
     val notFound: Boolean = false,
+    /** Numéro de l'avoir qui annule cette facture, s'il en existe un — mention croisée US-05. */
+    val creditNoteNumber: String? = null,
 ) {
     /** Ventilation TVA (base HT / TVA par taux) — vide tant que la facture n'est pas chargée. */
     val vatBreakdown: List<VatBreakdown>

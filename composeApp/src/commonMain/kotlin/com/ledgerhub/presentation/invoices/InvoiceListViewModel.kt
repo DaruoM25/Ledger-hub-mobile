@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.invoices
 
 import com.ledgerhub.data.repository.MockLedgerRepository
+import com.ledgerhub.domain.creditnote.CreditNoteRepository
 import com.ledgerhub.domain.repository.LedgerRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,8 @@ private const val NETWORK_ERROR_MESSAGE =
  */
 class InvoiceListViewModel(
     private val ledgerRepository: LedgerRepository = MockLedgerRepository(),
+    /** Facultatif : sans lui, aucune mention croisée n'est affichée sur les cartes. */
+    private val creditNoteRepository: CreditNoteRepository? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -58,10 +61,19 @@ class InvoiceListViewModel(
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         scope.launch {
             val result = ledgerRepository.fetchInvoices()
+            // Index avoir par facture — alimente la mention croisée sur les cartes (US-05).
+            val creditNotes = creditNoteRepository?.fetchCreditNotes()?.getOrNull()
+                ?.associate { it.invoiceId to it.number }
+                ?: emptyMap()
             _uiState.update { current ->
                 result.fold(
                     onSuccess = { invoices ->
-                        current.copy(isLoading = false, invoices = invoices, errorMessage = null)
+                        current.copy(
+                            isLoading = false,
+                            invoices = invoices,
+                            errorMessage = null,
+                            creditNotesByInvoice = creditNotes,
+                        )
                     },
                     onFailure = {
                         current.copy(isLoading = false, errorMessage = NETWORK_ERROR_MESSAGE)

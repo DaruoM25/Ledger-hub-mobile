@@ -25,7 +25,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
+import com.ledgerhub.presentation.invoices.formatMoney
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
 object CreditNoteFormTags {
@@ -39,6 +41,10 @@ object CreditNoteFormTags {
     const val LOADING_INDICATOR = "credit_note_form_loading_indicator"
     const val SUCCESS_MESSAGE = "credit_note_form_success_message"
     const val ERROR_MESSAGE = "credit_note_form_error_message"
+    const val CROSS_REFERENCE = "credit_note_form_cross_reference"
+    const val BLOCKED_BANNER = "credit_note_form_blocked_banner"
+    const val LINES = "credit_note_form_lines"
+    const val VAT_BREAKDOWN = "credit_note_form_vat_breakdown"
 
     fun errorTagFor(field: CreditNoteFormField) = "credit_note_form_error_${field.name}"
 }
@@ -55,6 +61,9 @@ internal fun CreditNoteFormContent(
     onIntent: (CreditNoteFormIntent) -> Unit = {},
 ) {
     val fieldsEnabled = uiState.isFormEnabled
+    // Formatage monétaire partagé avec le reste de l'application (Sprint 2 US-02) : l'écran
+    // d'avoir avait jusqu'ici son propre formateur, qui ignorait la locale active.
+    val lang = LocalAppLanguage.current
 
     Column(
         modifier = Modifier
@@ -65,28 +74,41 @@ internal fun CreditNoteFormContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SectionTitle("Avoir")
+
+        // Émission refusée d'emblée : inutile de laisser saisir un motif pour échouer ensuite.
+        uiState.blockedByExistingCreditNote?.let { existing ->
+            StatusBanner(
+                text = "Cette facture a déjà été annulée par l'avoir $existing",
+                tag = CreditNoteFormTags.BLOCKED_BANNER,
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+
+        // Référence croisée Factur-X 2026 : le couple numéro + date de la facture annulée.
         Text(
-            text = "Annule la facture ${uiState.invoiceId}",
-            modifier = Modifier.semantics { testTag = CreditNoteFormTags.INVOICE_ID },
+            text = "Annule la facture ${uiState.invoiceId} du ${uiState.originalInvoiceDate}",
+            modifier = Modifier.semantics {
+                testTag = CreditNoteFormTags.INVOICE_ID
+                contentDescription = CreditNoteFormTags.CROSS_REFERENCE
+            },
             style = MaterialTheme.typography.bodyMedium,
         )
         Text("Émetteur : ${uiState.issuerName}")
         Text("Destinataire : ${uiState.recipientName}")
 
-        FormField(
-            label = "Numéro d'avoir",
-            value = uiState.creditNoteNumber,
-            tag = CreditNoteFormTags.CREDIT_NOTE_NUMBER,
-            error = uiState.errors[CreditNoteFormField.CREDIT_NOTE_NUMBER],
-            errorTag = CreditNoteFormTags.errorTagFor(CreditNoteFormField.CREDIT_NOTE_NUMBER),
-            enabled = fieldsEnabled,
-            onValueChange = { onIntent(CreditNoteFormIntent.CreditNoteNumberChanged(it)) },
+        // Numéro attribué par la séquence, jamais saisi : la continuité est une obligation fiscale.
+        Text(
+            text = "Numéro d'avoir : ${uiState.creditNoteNumber.ifBlank { "…" }}",
+            modifier = Modifier.semantics { testTag = CreditNoteFormTags.CREDIT_NOTE_NUMBER },
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
         )
         FormField(
             label = "Date d'émission (AAAA-MM-JJ)",
             value = uiState.issueDate,
             tag = CreditNoteFormTags.ISSUE_DATE,
-            error = uiState.errors[CreditNoteFormField.ISSUE_DATE],
+            error = uiState.visibleErrors[CreditNoteFormField.ISSUE_DATE],
             errorTag = CreditNoteFormTags.errorTagFor(CreditNoteFormField.ISSUE_DATE),
             enabled = fieldsEnabled,
             onValueChange = { onIntent(CreditNoteFormIntent.IssueDateChanged(it)) },
@@ -98,23 +120,46 @@ internal fun CreditNoteFormContent(
             label = "Motif (obligatoire)",
             value = uiState.reason,
             tag = CreditNoteFormTags.REASON,
-            error = uiState.errors[CreditNoteFormField.REASON],
+            error = uiState.visibleErrors[CreditNoteFormField.REASON],
             errorTag = CreditNoteFormTags.errorTagFor(CreditNoteFormField.REASON),
             enabled = fieldsEnabled,
             onValueChange = { onIntent(CreditNoteFormIntent.ReasonChanged(it)) },
         )
 
         HorizontalDivider()
+        // Lignes recopiées de la facture annulée : l'avoir est une pièce autoportante.
+        SectionTitle("Lignes annulées")
+        Column(modifier = Modifier.semantics { testTag = CreditNoteFormTags.LINES }) {
+            uiState.lines.forEach { line ->
+                Text(
+                    "${line.quantity} × ${line.label} — ${formatMoney(line.unitPriceHt.cents, lang)} HT (${line.vatRate.label})",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        SectionTitle("Assiettes de TVA (au crédit)")
+        Column(modifier = Modifier.semantics { testTag = CreditNoteFormTags.VAT_BREAKDOWN }) {
+            uiState.vatBreakdown.forEach { breakdown ->
+                Text(
+                    "Base ${breakdown.rate.label} : ${formatMoney(breakdown.baseHt.cents, lang)} — TVA ${formatMoney(breakdown.vatAmount.cents, lang)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
+        HorizontalDivider()
         SectionTitle("Montants (annulation — toujours négatifs)")
         Text(
-            text = "TTC : ${formatCents(uiState.totalTtc.cents)} €",
+            text = "TTC : ${formatMoney(uiState.totalTtc.cents, lang)}",
             modifier = Modifier.semantics { testTag = CreditNoteFormTags.TOTAL_TTC },
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error,
         )
         Text(
-            text = "HT : ${formatCents(uiState.totalHt.cents)} € — TVA : ${formatCents(uiState.totalVat.cents)} €",
+            text = "HT : ${formatMoney(uiState.totalHt.cents, lang)} — TVA : ${formatMoney(uiState.totalVat.cents, lang)}",
             color = MaterialTheme.colorScheme.error,
         )
 
@@ -210,10 +255,4 @@ private fun StatusBanner(text: String, tag: String, containerColor: Color, conte
 }
 
 /** Formate des centimes (positifs ou négatifs) en chaîne décimale (ex: -1250 -> "-12.50"). */
-private fun formatCents(cents: Long): String {
-    val sign = if (cents < 0) "-" else ""
-    val absCents = kotlin.math.abs(cents)
-    val whole = absCents / 100
-    val fraction = (absCents % 100).toString().padStart(2, '0')
-    return "$sign$whole.$fraction"
-}
+

@@ -1,19 +1,29 @@
 package com.ledgerhub.presentation.creditnoteform
 
 import com.ledgerhub.domain.creditnote.CreditNote
+import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.Money
+import com.ledgerhub.domain.invoice.VatBreakdown
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 
 /**
- * État immuable du formulaire d'avoir — pattern UDF, symétrique à QuoteFormUiState.
- * [invoiceId], [issuerName], [recipientName] et les totaux sont pré-remplis (lecture seule côté
- * UI) à partir de la facture source dès la construction du ViewModel ; seuls [creditNoteNumber],
- * [issueDate] et [reason] sont saisis par l'utilisateur.
+ * État immuable du formulaire d'avoir — pattern UDF, symétrique à `QuoteFormUiState`.
+ *
+ * Tout est pré-rempli en lecture seule depuis la facture source : référence croisée
+ * ([invoiceId] + [originalInvoiceDate]), lignes recopiées, assiettes de TVA et totaux inversés.
+ * Le [creditNoteNumber] est **attribué par la séquence** et non saisi (obligation de continuité).
+ * Seuls [issueDate] et [reason] relèvent de l'utilisateur.
  */
 data class CreditNoteFormUiState(
     val invoiceId: String = "",
+    /** Date d'émission de la facture annulée — seconde moitié de la référence croisée. */
+    val originalInvoiceDate: String = "",
     val issuerName: String = "",
     val recipientName: String = "",
+    /** Lignes recopiées de la facture d'origine — prix positifs, sens comptable porté par les totaux. */
+    val lines: List<InvoiceLine> = emptyList(),
+    /** Assiettes de TVA par taux, inversées. */
+    val vatBreakdown: List<VatBreakdown> = emptyList(),
     /** Toujours négatif ou nul — inversion des montants de la facture source (règle fiscale). */
     val totalHt: Money = Money.ZERO,
     val totalVat: Money = Money.ZERO,
@@ -22,16 +32,28 @@ data class CreditNoteFormUiState(
     val issueDate: String = "",
     val reason: String = "",
     val errors: Map<CreditNoteFormField, String> = emptyMap(),
+    val touchedFields: Set<CreditNoteFormField> = emptySet(),
+    val submitAttempted: Boolean = false,
     val submittedCreditNote: CreditNote? = null,
     val submissionStatus: SubmissionStatus = SubmissionStatus.Idle,
+    /**
+     * Numéro de l'avoir déjà émis pour cette facture, le cas échéant : l'émission est alors
+     * refusée d'emblée, avant toute saisie (voir [InvoiceAlreadyCreditedException]
+     * [com.ledgerhub.domain.creditnote.InvoiceAlreadyCreditedException]).
+     */
+    val blockedByExistingCreditNote: String? = null,
 ) {
-    val isFormEnabled: Boolean get() = submissionStatus != SubmissionStatus.Loading
+    val isFormEnabled: Boolean
+        get() = submissionStatus != SubmissionStatus.Loading && blockedByExistingCreditNote == null
 
     /**
-     * `false` une fois l'avoir déjà créé avec succès — évite qu'un second tap sur "Valider"
-     * (bouton resté visible et cliquable à l'écran) ne déclenche une resoumission inutile.
-     * QA manuelle (campagne 1) : ce n'était auparavant pas un crash (INSERT OR REPLACE côté
-     * SQLDelight), mais un bouton "actif" après succès reste trompeur pour l'utilisateur.
+     * `false` une fois l'avoir créé — un bouton resté actif après succès est trompeur, et une
+     * resoumission n'a aucun sens sur une pièce fiscale déjà émise (QA manuelle, campagne 1).
      */
-    val isSubmitEnabled: Boolean get() = errors.isEmpty() && isFormEnabled && submissionStatus != SubmissionStatus.Success
+    val isSubmitEnabled: Boolean
+        get() = errors.isEmpty() && isFormEnabled && submissionStatus != SubmissionStatus.Success
+
+    /** Erreurs présentées : un champ jamais saisi reste neutre jusqu'à la première tentative (D-02). */
+    val visibleErrors: Map<CreditNoteFormField, String>
+        get() = if (submitAttempted) errors else errors.filterKeys { it in touchedFields }
 }

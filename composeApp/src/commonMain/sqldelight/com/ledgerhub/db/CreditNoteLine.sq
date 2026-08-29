@@ -1,0 +1,26 @@
+-- Lignes recopiées de la facture annulée sur l'avoir. Un avoir est un document fiscal
+-- autoportant : il conserve sa propre copie des lignes, comme la facture conserve depuis D-03
+-- sa copie gelée du destinataire. Les prix restent positifs — c'est le sens comptable de la
+-- pièce (crédit) qui inverse les totaux, voir domain.creditnote.CreditNote.
+-- unitPriceHtCents en centimes (Long), jamais de flottant : même règle que Money.
+CREATE TABLE CreditNoteLine (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    creditNoteNumber TEXT NOT NULL,
+    label TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unitPriceHtCents INTEGER NOT NULL,
+    vatRate TEXT NOT NULL,
+    FOREIGN KEY (creditNoteNumber) REFERENCES CreditNote(number) ON DELETE CASCADE
+);
+
+insert:
+INSERT INTO CreditNoteLine(creditNoteNumber, label, quantity, unitPriceHtCents, vatRate)
+VALUES (?, ?, ?, ?, ?);
+
+selectByCreditNoteNumber:
+SELECT * FROM CreditNoteLine
+WHERE creditNoteNumber = ?;
+
+deleteByCreditNoteNumber:
+DELETE FROM CreditNoteLine
+WHERE creditNoteNumber = ?;

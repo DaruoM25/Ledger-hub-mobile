@@ -87,7 +87,8 @@ internal fun InvoiceListView(
             InvoiceListContent.Loading -> LoadingState()
             is InvoiceListContent.Error -> ErrorState { onIntent(InvoiceListIntent.Retry) }
             InvoiceListContent.Empty -> EmptyState()
-            is InvoiceListContent.Success -> InvoiceList(content.invoices, onInvoiceClick)
+            is InvoiceListContent.Success ->
+                InvoiceList(content.invoices, onInvoiceClick, uiState.creditNotesByInvoice)
         }
     }
 }
@@ -185,7 +186,11 @@ private fun EmptyState() {
 }
 
 @Composable
-private fun InvoiceList(invoices: List<Invoice>, onInvoiceClick: (String) -> Unit) {
+private fun InvoiceList(
+    invoices: List<Invoice>,
+    onInvoiceClick: (String) -> Unit,
+    creditNotesByInvoice: Map<String, String>,
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -193,7 +198,11 @@ private fun InvoiceList(invoices: List<Invoice>, onInvoiceClick: (String) -> Uni
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(invoices, key = { it.number }) { invoice ->
-            InvoiceCard(invoice = invoice, onClick = { onInvoiceClick(invoice.number) })
+            InvoiceCard(
+                invoice = invoice,
+                onClick = { onInvoiceClick(invoice.number) },
+                creditNoteNumber = creditNotesByInvoice[invoice.number],
+            )
         }
     }
 }

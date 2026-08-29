@@ -1,0 +1,33 @@
+-- Migration 1 → 2 — US-05, avoirs Factur-X 2026.
+--
+-- Première migration du projet : jusqu'ici tout changement de schéma cassait silencieusement les
+-- bases installées (dette A-01). À partir d'ici, une base existante est migrée au lieu d'être
+-- abandonnée, et `verifyMigrations` fait échouer le build si un `.sq` évolue sans son `.sqm`.
+
+-- Référence croisée complète sur l'avoir : le couple numéro + date de la facture annulée.
+ALTER TABLE CreditNote ADD COLUMN originalInvoiceDate TEXT NOT NULL DEFAULT '';
+
+-- Lignes recopiées : l'avoir devient un document autoportant.
+CREATE TABLE IF NOT EXISTS CreditNoteLine (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    creditNoteNumber TEXT NOT NULL,
+    label TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unitPriceHtCents INTEGER NOT NULL,
+    vatRate TEXT NOT NULL,
+    FOREIGN KEY (creditNoteNumber) REFERENCES CreditNote(number) ON DELETE CASCADE
+);
+
+-- Rattrapage des bases antérieures à l'US-04, qui se déclarent en version 1 sans porter la
+-- table des paramètres fiscaux (incident A-01 constaté en recette). Sans effet sur une base
+-- saine — le IF NOT EXISTS la rend idempotente — et `verifyMigrations` la valide comme telle.
+CREATE TABLE IF NOT EXISTS TaxSettings (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    issuerName TEXT NOT NULL,
+    issuerSiren TEXT NOT NULL,
+    issuerSiret TEXT NOT NULL,
+    issuerEmail TEXT NOT NULL DEFAULT '',
+    vatNumber TEXT NOT NULL DEFAULT '',
+    defaultVatRate TEXT NOT NULL DEFAULT 'TAUX_NORMAL',
+    facturXEnabled INTEGER NOT NULL DEFAULT 1
+);
