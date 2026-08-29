@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,10 @@ import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.domain.export.DocumentExporter
+import com.ledgerhub.domain.export.NoOpDocumentExporter
+import com.ledgerhub.domain.facturx.FacturXGenerator
+import com.ledgerhub.domain.facturx.toFacturXDocument
 import com.ledgerhub.domain.settings.TaxSettings
 import com.ledgerhub.presentation.dashboard.DashboardIntent
 import com.ledgerhub.presentation.dashboard.DashboardScreen
@@ -77,6 +82,7 @@ import com.ledgerhub.presentation.settings.TaxSettingsScreen
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubColors
 import com.ledgerhub.presentation.theme.LedgerHubTheme
+import kotlinx.coroutines.launch
 
 /** Compte utilisateur courant, en dur tant qu'il n'y a pas de flux d'authentification (v1). */
 private const val CURRENT_USER_EMAIL_PLACEHOLDER = "demo@ledgerhub.app"
@@ -112,7 +118,11 @@ private sealed interface Overlay {
  * immédiatement visible dans « Factures » et sur le tableau de bord (voir [LocalLedgerRepository]).
  */
 @Composable
-fun App(database: LedgerHubDatabase) {
+fun App(
+    database: LedgerHubDatabase,
+    /** Remise des documents générés à la plateforme — voir [DocumentExporter]. */
+    documentExporter: DocumentExporter = NoOpDocumentExporter,
+) {
     val invoiceRepository = remember(database) {
         SqlDelightInvoiceRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
     }
@@ -161,6 +171,35 @@ fun App(database: LedgerHubDatabase) {
 
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
     val onCreateCreditNote = { invoice: Invoice -> overlay = Overlay.CreditNote(invoice) }
+
+    // Export Factur-X (US-06) : le XML est généré à la demande depuis les données déjà en
+    // mémoire, puis remis à la plateforme. Aucun état persisté — un export est un geste, pas
+    // un document de plus à stocker.
+    val exportScope = rememberCoroutineScope()
+    val onExportInvoiceXml = { invoice: Invoice ->
+        exportScope.launch {
+            documentExporter.export(
+                fileName = DocumentExporter.FACTUR_X_FILE_NAME,
+                mimeType = DocumentExporter.XML_MIME_TYPE,
+                content = FacturXGenerator.generate(invoice.toFacturXDocument(taxSettings)),
+            )
+        }
+        Unit
+    }
+    val onExportCreditNoteXml = { creditNoteNumber: String ->
+        exportScope.launch {
+            creditNoteRepository.fetchCreditNotes().getOrNull()
+                ?.firstOrNull { it.number == creditNoteNumber }
+                ?.let { creditNote ->
+                    documentExporter.export(
+                        fileName = DocumentExporter.FACTUR_X_FILE_NAME,
+                        mimeType = DocumentExporter.XML_MIME_TYPE,
+                        content = FacturXGenerator.generate(creditNote.toFacturXDocument(taxSettings)),
+                    )
+                }
+        }
+        Unit
+    }
     val onBackToTabs = {
         overlay = Overlay.None
         // La liste et le tableau de bord peuvent avoir de nouvelles données après une émission.
@@ -200,6 +239,8 @@ fun App(database: LedgerHubDatabase) {
                                         ledgerRepository = ledgerRepository,
                                         creditNoteRepository = creditNoteRepository,
                                         onCreateCreditNote = onCreateCreditNote,
+                                        onExportInvoiceXml = onExportInvoiceXml,
+                                        onExportCreditNoteXml = onExportCreditNoteXml,
                                         dashboardViewModel = dashboardViewModel,
                                         invoiceListViewModel = invoiceListViewModel,
                                         clientsViewModel = clientsViewModel,
@@ -235,6 +276,8 @@ fun App(database: LedgerHubDatabase) {
                                     ledgerRepository = ledgerRepository,
                                     creditNoteRepository = creditNoteRepository,
                                     onCreateCreditNote = onCreateCreditNote,
+                                    onExportInvoiceXml = onExportInvoiceXml,
+                                    onExportCreditNoteXml = onExportCreditNoteXml,
                                     dashboardViewModel = dashboardViewModel,
                                     invoiceListViewModel = invoiceListViewModel,
                                     clientsViewModel = clientsViewModel,
@@ -277,6 +320,8 @@ private fun ShellContent(
     ledgerRepository: LocalLedgerRepository,
     creditNoteRepository: SqlDelightCreditNoteRepository,
     onCreateCreditNote: (Invoice) -> Unit,
+    onExportInvoiceXml: (Invoice) -> Unit,
+    onExportCreditNoteXml: (String) -> Unit,
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
     clientsViewModel: ClientsViewModel,
@@ -307,6 +352,8 @@ private fun ShellContent(
                 InvoiceDetailScreen(
                     viewModel = detailViewModel,
                     onCreateCreditNoteClick = onCreateCreditNote,
+                    onExportInvoiceXml = onExportInvoiceXml,
+                    onExportCreditNoteXml = onExportCreditNoteXml,
                 )
             }
         }

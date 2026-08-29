@@ -701,3 +701,77 @@ Point le plus important de cette recette : l'APK a été installé **par-dessus*
 - **Les bases antérieures à l'US-04 sont rattrapées par la migration**, mais ce rattrapage est un correctif ponctuel inscrit dans `1.sqm` : il n'y aura pas d'équivalent pour un futur écart, puisque `verifyMigrations` empêche désormais qu'il s'en produise.
 - **La bannière de refus d'un second avoir est un filet de sécurité.** En pratique l'émission cascade la facture en `CANCELLED`, ce qui désactive déjà l'action côté interface ; la bannière et l'exception du dépôt couvrent les cas de course ou d'état incohérent. Les deux niveaux sont testés.
 - **Messages du domaine et du formulaire d'avoir toujours en français en dur** (motifs de validation, libellés de section). Même limitation que les écrans Clients et Paramètres, signalée en US-04.
+
+---
+
+## US-06 — Moteur de génération et d'export Factur-X (CII, profil BASIC / EN 16931)
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-06-facturx-export` (créée depuis `feature/US-05-credit-notes`)
+- **Statut :** ✅ Clos — 370/370 tests unitaires verts (+53, dont **7 de validation XSD officielle**), APK `BUILD SUCCESSFUL`, export et partage vérifiés de bout en bout sur émulateur
+- **Objectif :** Produire le XML Factur-X des factures et des avoirs, et le remettre à la plateforme.
+
+### Constats d'audit préalable
+1. **`feature/US-05-credit-notes` était déjà mergée dans `main`** (`bae2b9f`), diff vide entre les deux. Branchement effectué depuis la branche demandée, contenu identique.
+2. **Il n'existe aucun écran de détail d'avoir** — seulement un formulaire de création. Le point 2 de la spécification n'avait pas de cible pour les avoirs.
+3. **`Party` ne porte aucune adresse**, ni `Customer`, ni `TaxSettings`. Or `ram:CountryID` est obligatoire dans `ram:PostalTradeAddress` : sans lui, aucun document n'aurait été conforme.
+4. **Aucune bibliothèque XML** au catalogue, **aucun `FileProvider`** au manifeste.
+5. `presentation/invoicedetail` est un **second module de détail non câblé** (code mort hors tests) — à ne pas confondre avec `presentation/invoices`, le vivant.
+
+### Décisions d'architecture (validées par le PO)
+1. **Constructeur XML maison** (`XmlBuilder`, ~90 lignes) plutôt qu'une dépendance. CII est profondément imbriqué avec quatre préfixes de namespace ; un mapping par annotations aurait été plus verbeux que le XML lui-même. Cohérent avec les décisions v1 (rejet de `kotlinx-datetime`, arithmétique entière maison). Sortie déterministe, donc comparable au caractère près.
+2. **`ram:CountryID` fixé à `FR`.** Arbitrage assumé : produit franco-français. Une adresse complète relève d'une US dédiée (schéma + deux formulaires + migration).
+3. **Export de l'avoir depuis le détail de sa facture parente**, à l'endroit où figure déjà la mention de liaison. Aucun écran nouveau.
+4. **Validation XSD incluse** — 4 fichiers officiels du profil BASIC (~20 Ko) versés dans `androidUnitTest/resources/facturx/`, depuis `ZUGFeRD/mustangproject` (Apache 2.0).
+5. **`DocumentExporter` en interface injectée**, pas en `expect`/`actual`. La règle du projet réserve ce mécanisme au dernier recours ; une abstraction suffit, et elle rend l'action substituable en test sans runtime de plateforme.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `domain/facturx/XmlBuilder.kt` | DSL XML minimal, échappement, indentation déterministe. |
+| `domain/facturx/FacturXFormat.kt` | Montants `xs:decimal`, dates format 102, taux — arithmétique entière. |
+| `domain/facturx/FacturXDocument.kt` | Modèle pivot neutre, codes 380/381, catégories S/E. |
+| `domain/facturx/FacturXMapper.kt` | `Invoice`/`CreditNote` → pivot ; aucun recalcul de montant. |
+| `domain/facturx/FacturXGenerator.kt` | Génération CII, profil BASIC. |
+| `domain/export/DocumentExporter.kt` | Contrat d'export + implémentation neutre. |
+| `androidMain/data/export/AndroidDocumentExporter.kt` | Écriture en cache, `FileProvider`, `ACTION_SEND`. |
+| `androidMain/res/xml/file_paths.xml` | Un seul chemin exposé : `cache/exports/`. |
+| `androidUnitTest/resources/facturx/*.xsd` | 4 schémas officiels du profil BASIC. |
+| 5 fichiers de test | 53 cas — détail ci-dessous. |
+
+### Fichiers modifiés
+`AndroidManifest.xml` (provider) · `App.kt` (paramètre `documentExporter`, génération à la demande, propagation) · `MainActivity.kt` · `presentation/invoices/InvoiceDetailScreen.kt` (deux actions d'export) · `domain/i18n/{StringKey,AppTranslations}.kt` (4 clés FR/EN).
+
+### Tests — 53 cas ajoutés
+| Suite | Cas | Portée |
+|---|---|---|
+| `XmlBuilderTest` | 7 | Imbrication, ordre des attributs, échappement — dont l'injection de balise via une raison sociale. |
+| `FacturXFormatTest` | 8 | Décimales, signe négatif, absence de groupement, date 102, cinq taux. |
+| `FacturXGeneratorTest` | 22 | Racine et 4 namespaces, profil EN 16931, 380 vs 381, chaînage d'avoir et sa position dans la séquence, parties, lignes, assiettes par taux, catégories S/E, sommation au centime. |
+| **`FacturXSchemaValidationTest`** | **7** | **Validation contre le XSD officiel** : facture, avoir, multi-taux, sans TVA intracommunautaire, avec balisage échappé — **plus deux contre-épreuves** vérifiant que le validateur rejette bien un ordre invalide et une balise obligatoire manquante. |
+| `FacturXExportUiTest` | 9 | Présence et état des deux actions, absence de l'export d'avoir sans avoir, câblage des événements, contenu remis à la plateforme. |
+
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest` → **370/370 verts** (317 → 370).
+- **Build** : `./gradlew assembleDebug` → `BUILD SUCCESSFUL`.
+
+### Matrice RCA
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | Arguments dupliqués dans un appel à `ShellContent` | Un remplacement scripté à deux niveaux d'indentation a frappé deux fois le même site, et manqué le second. | Déduplication et ajout manuel sur le site oublié. Détecté à la relecture, avant compilation. |
+
+### Recette manuelle sur émulateur
+| Contrôle | Résultat |
+|---|---|
+| Deux actions d'export sur une facture annulée portant un avoir | ✅ « Exporter la facture en XML » et « Exporter l'avoir AV-2026-0001 » |
+| Génération du fichier | ✅ `cache/exports/factur-x.xml`, 4 060 o (facture) / 4 449 o (avoir) |
+| Feuille de partage Android | ✅ « Sharing 1 file — factur-x.xml », Quick Share / Drive / Gmail |
+| Contenu du XML de facture | ✅ Racine, 4 namespaces, profil BASIC, `380`, `20260712`, montants exacts |
+| Contenu du XML d'avoir | ✅ `381`, `AV-2026-0001`, totaux négatifs, `IssuerAssignedID` = `FAC-2026-0137` daté `20260712` |
+| Logcat | ✅ 0 crash, 0 `FileUriExposedException` |
+
+### Points d'attention transmis
+- **La validation XSD porte sur le générateur, pas sur l'artefact du téléphone.** Aucun validateur n'était disponible localement pour valider le fichier extrait de l'appareil. Le test XSD exerce néanmoins `FacturXGenerator.generate()` — la fonction même qui l'a produit — sur les mêmes données (`FAC-2026-0137`, `AV-2026-0001`). La couverture est équivalente, la nuance mérite d'être connue.
+- **`CountryID` codé à `FR`.** Le premier client étranger, ou la première facture intracommunautaire, rendra ce raccourci faux. C'est la limite structurelle de ce lot.
+- **Le destinataire ne porte pas de numéro de TVA** : l'application ne le collecte pas. `ram:SpecifiedTaxRegistration` n'est donc émis que pour le vendeur. Le profil l'admet, une facturation intracommunautaire ne s'en contenterait pas.
+- **Le nom `factur-x.xml` est imposé par la norme**, donc deux exports successifs se recouvrent. Le dossier de cache est vidé avant chaque écriture plutôt que d'accumuler des fichiers homonymes.
+- **iOS reçoit `NoOpDocumentExporter`** : l'export y réussit sans rien faire. À implémenter avec `UIActivityViewController` le jour où la cible iOS sera activée.
+- **Le PDF Factur-X n'est pas produit** — ce lot génère le XML seul, conformément au périmètre. L'embarquement dans un PDF/A-3 reste à faire.

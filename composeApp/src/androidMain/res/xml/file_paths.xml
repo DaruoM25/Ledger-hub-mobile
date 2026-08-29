@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Chemins exposés par le FileProvider de l'application.
+
+  Volontairement limité au sous-dossier `exports` du cache : c'est le seul emplacement où
+  AndroidDocumentExporter écrit. Exposer `.` entier rendrait partageable toute la base SQLDelight
+  et les fichiers de travail — un FileProvider ne doit ouvrir que ce qui doit sortir.
+-->
+<paths>
+    <cache-path name="exports" path="exports/" />
+</paths>
