@@ -423,3 +423,129 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 - **`Invoice.isEditable` est l'unique source de la règle.** Les trois points d'affichage (`canEdit`, `isFiscallyLocked`, cadenas de la carte) en dérivent sans la recalculer ; toute évolution du périmètre des statuts modifiables se fait dans le domaine.
 - **Zones toujours en français en dur** dans le détail : « Émetteur », « Destinataire », « Ventilation TVA », « Total HT / TVA / Total TTC ». Hors périmètre de ce lot, mais la zone reste partiellement bilingue.
 - **Le format de date FR est désormais arbitré** (`24/06/2026`) après trois demandes divergentes. À traiter comme acquis dans les prompts suivants.
+
+---
+
+# Bilan de Recette Manuelle & Automatisée — US-04
+
+## 1. En-tête
+
+| Champ | Valeur |
+|---|---|
+| **US** | US-04 — Réactivité i18n à chaud & verrouillage fiscal de l'édition |
+| **Date de recette** | 2026-08-29 |
+| **Cible — émulateur** | AVD `Pixel_5_API_35` |
+| **Cible — OS / API** | Android 15 · API 35 · image `google_apis` x86_64 · rendu `swiftshader_indirect` |
+| **Application** | `com.ledgerhub.app.debug` (`composeApp-debug.apk`) |
+| **Branche** | `feature/US-04-clients-actions-settings` |
+| **Commit SHA** | `d5749a2fa5de4ce0786742691ed1490e9ff873e7` (`d5749a2`) |
+| **Commit parent** | `7c9424a` — Prompt 3, actions Brouillon / Émission |
+| **Méthode** | Pilotage `adb` (taps, saisie, captures), `uiautomator dump` pour le rendu Compose, `sqlite3` sur la base applicative, suite Gradle pour l'automatisé |
+
+## 2. Tableau de Recette
+
+### 2.1 Recette manuelle sur émulateur
+
+| Réf Cas | Intitulé / Action | Résultat Attendu | Résultat Obtenu | Verdict |
+|---|---|---|---|---|
+| RM-01 | Formatage monétaire FR — liste des factures | Espace insécable, virgule décimale, symbole € suffixé | `2 640,00 €`, `1 140,90 €`, `880,80 €` | **CONFORME** |
+| RM-02 | Formatage monétaire EN — détail, après bascule à chaud | Symbole € préfixé, virgule milliers, point décimal | `€2,200.00` · `€440.00` · `€2,640.00` | **CONFORME** |
+| RM-03 | Date FR — carte de liste | Format numérique arbitré `JJ/MM/AAAA` | `Émise le 12/07/2026` | **CONFORME** |
+| RM-04 | Date EN — détail, après bascule à chaud | `MMM d, yyyy` | `Issue date : Jul 12, 2026` | **CONFORME** |
+| RM-05 | Bascule FR → EN en mémoire, sans redémarrage | Montants, dates, libellés et statuts reformatés instantanément | Écran de détail intégralement recomposé au tap ; `Envoyée` → `Sent`, `Conforme Factur-X 2026` → `Factur-X 2026 compliant` | **CONFORME** |
+| RM-06 | Cadenas de liste — facture Envoyée | Cadenas visible à côté du numéro | 🔒 présent sur `FAC-2026-0137` | **CONFORME** |
+| RM-07 | Cadenas de liste — brouillons | Aucun cadenas | Absent sur `FAC-2026-0300` et `FAC-2026-0136` | **CONFORME** |
+| RM-08 | Détail d'une facture Envoyée — bouton d'édition | Désactivé, atténué, icône de cadenas | `🔒 Modifier la facture` nettement atténué et non cliquable | **CONFORME** |
+| RM-09 | Détail — mention de verrouillage | Explication du motif sous le bouton | `Facture émise — non modifiable` | **CONFORME** |
+| RM-10 | Détail — action d'annulation | Reste active (seule sortie légale) | `Annuler par un avoir` actif | **CONFORME** |
+| RM-11 | Nouveaux libellés en EN | Traduits, réactifs à la bascule | `Edit invoice` · `Issued invoice — locked` · `Cancel with a credit note` | **CONFORME** |
+| RM-12 | Filtre de statut « Envoyées » | Restitue la seule facture Envoyée | 1 résultat, `FAC-2026-0137` | **CONFORME** |
+| RM-13 | Stabilité sur le parcours complet | Aucun crash, ANR ni exception | Buffer `crash`, `FATAL`/`ANR`, exceptions applicatives : tous vides | **CONFORME** |
+| RM-14 | Détail en mode EN — libellés du corps | Ensemble de l'écran traduit | `Émetteur`, `Destinataire`, `Ventilation TVA`, `Total HT`, `TVA`, `Total TTC`, `Base 20 %` restent en français | **ÉCART** (connu, hors périmètre — voir §4, A-03) |
+
+### 2.2 Recette automatisée — `testDebugUnitTest`
+
+| Réf Cas | Intitulé / Action | Résultat Attendu | Résultat Obtenu | Verdict |
+|---|---|---|---|---|
+| RA-01 | `LocalizationReactivityTest` — montant reformaté à chaud | `25 263,60 €` → `€25,263.60`, arbre monté une seule fois | Vert | **CONFORME** |
+| RA-02 | `LocalizationReactivityTest` — date reformatée à chaud | `Émise le 24/06/2026` → `Issued on Jun 24, 2026` | Vert | **CONFORME** |
+| RA-03 | `LocalizationReactivityTest` — retour au français | Les deux formats FR restitués | Vert | **CONFORME** |
+| RA-04 | `LocalizationReactivityTest` — pastille de statut retraduite | `Payée` → `Paid` | Vert | **CONFORME** |
+| RA-05 | `InvoiceImmutabilityUiTest` — facture `VALIDATED` persistée puis relue | `isEditable = false`, `canDelete = false`, `isCancellableByCreditNote = true` | Vert | **CONFORME** |
+| RA-06 | `InvoiceImmutabilityUiTest` — facture `PAID` persistée puis relue | `isEditable = false`, `canDelete = false` | Vert | **CONFORME** |
+| RA-07 | `InvoiceImmutabilityUiTest` — facture `DRAFT` persistée puis relue | Reste modifiable et supprimable | Vert | **CONFORME** |
+| RA-08 | `InvoiceImmutabilityUiTest` — détail `VALIDATED` | Bouton désactivé, clic sans effet, mention affichée | Vert | **CONFORME** |
+| RA-09 | `InvoiceImmutabilityUiTest` — détail `PAID` | Bouton désactivé, clic sans effet | Vert | **CONFORME** |
+| RA-10 | `InvoiceImmutabilityUiTest` — détail `DRAFT` | Bouton actif | Vert | **CONFORME** |
+| RA-11 | `InvoiceImmutabilityUiTest` — cadenas de carte | Présent sur `VALIDATED`, absent sur `DRAFT` | Vert | **CONFORME** |
+| RA-12 | Suite complète de non-régression | Aucune régression sur les 35 classes de test | 237/237 verts | **CONFORME** |
+
+### 2.3 Cas non couverts par cette recette
+
+| Réf | Intitulé | Motif |
+|---|---|---|
+| NC-01 | Verrouillage d'une facture au statut `VALIDATED` **sur émulateur** | Aucune facture Validée en base (`Validées (0)`) — le statut n'est atteignable que via l'action « Valider et émettre » livrée en `7c9424a`, dont l'émission bout-en-bout sur device n'a pas abouti. Couvert par RA-05 et RA-08. |
+| NC-02 | Layout étendu ≥ 840 dp (sidebar permanente) | Non exercé sur aucune passe depuis la recette du 29/08 |
+| NC-03 | Parcours d'avoir complet depuis « Annuler par un avoir » | Seul le point d'entrée est observé |
+
+## 3. Tableau de bord Métriques
+
+| Métrique | Valeur | Delta |
+|---|---|---|
+| **Tests unitaires + Robolectric — total** | **237 / 237 verts** | **+11** (226 → 237) |
+| Échecs / erreurs | 0 | — |
+| Classes de test exécutées | 35 | +2 |
+| `LocalizationReactivityTest` (Robolectric) | 4 cas | +4 (nouveau) |
+| `InvoiceImmutabilityUiTest` (Robolectric) | 7 cas | +7 (nouveau) |
+| **APK — `./gradlew assembleDebug`** | **`BUILD SUCCESSFUL`** | — |
+| **Crash logcat (buffer `crash`)** | **0** | — |
+| **ANR applicatif** | **0** | — |
+| Exceptions applicatives (`FATAL` / `AndroidRuntime`) | 0 | — |
+| Fichiers de production modifiés | 5 | — |
+| Fichiers de test créés | 2 | — |
+
+## 4. Fiche des anomalies & arbitrages validés
+
+### 4.1 Arbitrages produit (validés par le PO en Étape 1)
+
+| Réf | Sujet | Décision retenue | Justification |
+|---|---|---|---|
+| AR-01 | Format de date FR — `24 juin 2026` demandé vs `24/06/2026` en place | **`24/06/2026` maintenu**, arbitré définitivement | Troisième divergence consécutive entre prompt et décision Sprint 2 US-02. Format numérique compact adapté aux cartes de liste denses, usage dominant sur les pièces comptables françaises. Économise 12 clés de mois complets. |
+| AR-02 | `InvoiceCard` n'a aucun bouton « Modifier » à désactiver | **Cadenas informatif**, pas de bouton inventé | Créer une action « Modifier » sur la carte l'aurait dotée d'une destination inexistante : le parcours d'édition n'est pas implémenté. Le cadenas renseigne avant l'ouverture du détail. |
+| AR-03 | Libellés d'action du détail codés en dur en français | **Traduits via `tr()`** | Sans cela, la zone aurait mêlé les nouveaux libellés de verrouillage (traduits) et les anciens (figés). Le reste du corps prosaïque reste hors périmètre → **écart RM-14**. |
+
+### 4.2 Anomalies rencontrées en cours d'implémentation
+
+| Réf | Cause | Correctif | Preuve de non-régression |
+|---|---|---|---|
+| A-01 | `assertHasNoClickAction` échouait sur le bouton d'édition désactivé : **Compose conserve l'action `OnClick`** sur un nœud désactivé et se contente de le marquer `[Disabled]`. L'absence d'action n'est donc pas le bon critère de verrouillage. | Assertion remplacée par un `performClick` suivi de la vérification que le callback `onEditClick` n'a pas été invoqué — on teste l'effet, pas la structure sémantique. | RA-08 et RA-09 verts ; RM-08 confirme visuellement l'état désactivé sur device. |
+| A-02 | `onNodeWithTag` ne trouvait ni le cadenas ni la pastille de statut : `InvoiceCard` est `clickable`, donc **fusionne ses descendants sémantiques** ; un tag porté par un enfant est invisible dans l'arbre fusionné. | `useUnmergedTree = true` sur ces recherches. | RA-04 et RA-11 verts ; RM-06 et RM-07 confirment le rendu réel. |
+| A-03 | Mention de verrouillage rapportée « not displayed » : l'écran de détail défile, la mention était hors du viewport de test. | `performScrollTo()` avant l'assertion. | RA-08 vert ; RM-09 confirme l'affichage sur device. |
+| A-04 | Helper de test : les `onNodeWith…` n'étaient pas résolus — le lambda passé à `runWithLanguageSwitch` n'exposait pas le receiver `ComposeUiTest`. | Paramètre typé `ComposeUiTest.((AppLanguage) -> Unit) -> Unit`. | RA-01 à RA-04 verts. |
+
+### 4.3 Constats d'audit — code déjà conforme avant intervention
+
+| Réf | Constat | Conséquence |
+|---|---|---|
+| C-01 | `formatMoney` produisait déjà `25 263,60 €` / `€25,263.60` en arithmétique entière `Long` | Aucune modification : le point 1 de la spécification relevait de la **couverture de test**, pas du code. |
+| C-02 | `canEdit` dérivait déjà de `Invoice.isEditable` — bouton déjà désactivé hors Brouillon | Seule l'**affordance** manquait (cadenas, atténuation, explication). |
+| C-03 | `onEditClick` a une valeur par défaut vide et n'est câblé nulle part dans `App.kt` | « Aucun accès à l'état mutable » est satisfait **par absence de fonctionnalité**, pas par un garde-fou — voir §5. |
+| C-04 | Le seul test de réactivité i18n, `LanguageUiTest`, est en `androidInstrumentedTest` | Il exige `connectedDebugAndroidTest` et un émulateur : il ne tourne ni en local ni en CI. L'équivalent Robolectric ajouté comble ce trou. |
+
+## 5. Conformité Factur-X & Immutabilité — verdict final
+
+**Verdict : CONFORME**, sous une réserve d'architecture explicitée ci-dessous.
+
+| Exigence | État | Preuve |
+|---|---|---|
+| Une facture émise n'est plus modifiable | ✅ | `Invoice.isEditable` restreint la modification au seul statut `DRAFT` ; vérifié sur facture **persistée puis relue en base** (RA-05, RA-06) |
+| Une facture émise n'est plus supprimable | ✅ | `canDelete` faux pour `VALIDATED` et `PAID` (RA-05, RA-06) |
+| Seule sortie légale : l'avoir | ✅ | `isCancellableByCreditNote` vrai, action restée active (RA-05, RM-10) |
+| L'identité du destinataire est gelée à l'émission | ✅ | Acquis du lot D-03 (`recipientName` / `recipientEmail` figés sur la ligne `Invoice`, `INSERT OR IGNORE` sur `Customer`) |
+| Le verrouillage est lisible par l'utilisateur | ✅ | Cadenas en liste et au détail, atténuation, mention explicative, description d'accessibilité (RM-06 à RM-09) |
+| La règle n'est jamais dupliquée dans la présentation | ✅ | `canEdit`, `isFiscallyLocked` et le cadenas de carte dérivent tous de `Invoice.isEditable` |
+| Mention de conformité Factur-X 2026 | ✅ | Badge présent en liste et au détail, traduit dans les deux langues (RM-05) |
+
+**Réserve — l'immutabilité est aujourd'hui une affordance, pas une barrière.** Elle tient parce qu'aucun parcours d'édition n'existe (C-03). Le jour où `onEditClick` sera câblé, un bouton désactivé ne protégera que du clic : il faudra **un refus en amont, côté ViewModel ou use case**, pour couvrir tout chemin de navigation alternatif (deep link, restauration d'état, écran Clients). À traiter comme prérequis de l'US d'édition, et non comme une amélioration ultérieure.
+
+**Réserve secondaire — le statut `VALIDATED` n'a pas été exercé sur device** (NC-01), faute de facture Validée en base : la couverture repose sur l'automatisé. À reprendre dès qu'une émission « Valider et émettre » aura abouti bout-en-bout sur l'émulateur.
