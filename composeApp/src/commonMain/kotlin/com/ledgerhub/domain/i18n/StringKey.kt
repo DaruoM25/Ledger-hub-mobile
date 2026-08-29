@@ -65,9 +65,10 @@ enum class StringKey {
     RECAP_TOTAL_VAT,
     RECAP_TOTAL_TTC,
     FACTURX_TOGGLE_LABEL,
+    ACTION_SAVE_DRAFT,
     ACTION_SUBMIT_INVOICE,
     FORM_ARCHIVE_NOTICE,
-    FORM_SENDING,
+    FORM_PROCESSING,
 
     // ── Toasts / bannières ──────────────────────────────────────────────────
     TOAST_INVOICE_SUCCESS,

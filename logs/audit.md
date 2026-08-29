@@ -312,3 +312,58 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 - **Factures héritées.** Le repli sur la fiche `Customer` couvre les lignes écrites avant le gel ; il disparaîtra naturellement quand plus aucune facture n'aura `recipientName` vide. Une reprise de données pourra figer rétroactivement l'identité si la question se pose avant la première diffusion.
 - **Pas d'outillage de migration.** Le premier build diffusé devra soit repartir d'une base neuve, soit introduire `.sqm` + `verifyMigrations` — décision à prendre avant toute distribution externe.
 - **Zones non couvertes par cette contre-visite** (inchangées depuis la recette du 29/08) : layout étendu ≥ 840 dp (sidebar permanente) et parcours d'avoir depuis « Annuler par un avoir ».
+
+---
+
+## Prompt 3 — UX du formulaire : état de soumission, actions Brouillon / Émission, dates dynamiques
+- **Date :** 2026-08-29
+- **Branche :** `feature/prompt-03-ux-form-dates`
+- **Statut :** ✅ Clos — 226/226 tests unitaires verts (+9), APK `BUILD SUCCESSFUL`, rendu des deux actions vérifié sur émulateur
+- **Objectif :** Exposer l'état de soumission au formulaire de facture, distinguer l'enregistrement en brouillon de l'émission validée, et confirmer le formatage des dates selon la locale active.
+
+### Constat d'audit préalable (Étape 1)
+1. **Le point « dates » était déjà satisfait.** `formatIsoDate` est branché sur les trois surfaces concernées — `InvoiceCard` (liste), `DashboardScreen` (documents récents) et `InvoiceDetailScreen` — toutes via `LocalAppLanguage`, avec `DateFormatTest` en garde-fou. Comportement confirmé sur émulateur lors de la recette du 29/08 (`28/07/2026` en FR, `Jul 28, 2026` en EN). **Aucune modification de code n'était nécessaire.**
+2. **L'état de soumission existait déjà**, porté par `submissionStatus: SubmissionStatus` (`Idle` / `Loading` / `Success` / `Error`) et son dérivé `isFormEnabled`.
+3. **`SaveDraft` et `ValidateAndIssue` n'existaient pas.** Le formulaire n'avait qu'un `Submit`, persistant toujours en `DRAFT`, et un seul bouton. La spécification en évoque deux : c'était un manque fonctionnel réel, aucune facture ne pouvant sortir de l'état Brouillon depuis le formulaire.
+4. **Défaut de conception mis au jour.** Le bouton était `enabled = uiState.isSubmitEnabled`, qui exige un formulaire valide. `Submit` ne pouvant donc jamais partir sur un formulaire invalide, `submitAttempted` ne passait jamais à `true` depuis l'interface : **la révélation de toutes les erreurs livrée avec D-02 était inatteignable en pratique**. Le `enabled = !uiState.isSubmitting` demandé par la spécification corrige exactement cela.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Date EN conservée en `MMM d, yyyy`** (`Jun 24, 2026`). La spécification suggérait `MM/DD/YYYY`, ce qui reviendrait sur la décision du Sprint 2 US-02 ; le format retenu relève du « format international » admis par le prompt et lève l'ambiguïté jour/mois sur une pièce comptable.
+2. **`isSubmitting` en propriété dérivée**, `submissionStatus == Loading`, et non champ stocké. L'écran obtient l'API demandée (`uiState.isSubmitting`) sans second état à maintenir cohérent à chaque transition.
+3. **Deux actions réelles** plutôt qu'un habillage du `Submit` unique : `SaveDraft` → `InvoiceStatus.DRAFT`, `ValidateAndIssue` → `InvoiceStatus.VALIDATED`. Une facture émise devient dès lors non modifiable et annulable par avoir uniquement (`Invoice.isEditable` / `isCancellableByCreditNote`).
+4. **Boutons actifs tant qu'aucune écriture n'est en cours.** `isSubmitEnabled` reste calculé et testé — il exprime la validité du formulaire — mais ne pilote plus l'activation : un appui sur formulaire incomplet révèle les erreurs au lieu de laisser l'utilisateur devant un bouton grisé sans explication. `submit()` revalide en entrée, la persistance reste protégée.
+
+### Fichiers modifiés
+| Fichier | Nature |
+|---|---|
+| `domain/i18n/StringKey.kt` | Ajout `ACTION_SAVE_DRAFT` ; `FORM_SENDING` renommé `FORM_PROCESSING` (clé utilisée par ce seul écran). |
+| `domain/i18n/AppTranslations.kt` | « Enregistrer le brouillon » / « Save draft » ; `ACTION_SUBMIT_INVOICE` reformulé en « Valider et émettre » / « Validate and issue » (les deux actions persistant désormais, « Émettre et Persister » devenait ambigu) ; « Traitement en cours… » / « Processing… ». |
+| `presentation/invoiceform/InvoiceFormIntent.kt` | `Submit` remplacé par `SaveDraft` et `ValidateAndIssue`, documentées avec leur statut cible. |
+| `presentation/invoiceform/InvoiceFormUiState.kt` | `isSubmitting` dérivé de `submissionStatus` ; `isFormEnabled` réexprimé en `!isSubmitting` ; `isSubmitEnabled` documenté comme indicateur de validité, non de pilotage des boutons. |
+| `presentation/invoiceform/InvoiceFormViewModel.kt` | `processIntent` route les deux intentions vers `submit(targetStatus)` ; `buildInvoice` prend le statut cible ; garde-fou contre le double appui (`if (isSubmitting) return`). |
+| `presentation/invoiceform/InvoiceFormScreen.kt` | Deux boutons — `OutlinedButton` brouillon (tag `SAVE_DRAFT_BUTTON`) et `Button` émission (tag `SUBMIT_BUTTON` conservé) —, tous deux `enabled = !uiState.isSubmitting` ; indicateur de progression affiné (`strokeWidth = 2.dp`) et libellé `FORM_PROCESSING`. |
+
+### Fichiers de test modifiés
+| Fichier | Cas |
+|---|---|
+| `commonTest/…/InvoiceFormViewModelTest.kt` | 6 cas d'état : `isSubmitting` faux au départ ; vrai pendant l'écriture puis faux au succès, pour chacune des deux actions ; retour à faux en cas d'échec ; jamais activé quand la validation rejette ; second appui ignoré pendant une écriture. 2 cas de statut : `SaveDraft` persiste en `DRAFT` et reste modifiable, `ValidateAndIssue` persiste en `VALIDATED`, verrouille la facture et l'ouvre à l'annulation par avoir. Les 6 usages de `Submit` remappés sur `ValidateAndIssue`. |
+| `commonTest/…/InvoiceFormScreenTest.kt` + `androidUnitTest/…/InvoiceFormScreenRobolectricTest.kt` | `initialState_submitButtonIsDisabled` devient `initialState_bothActionsAreOfferedAndClickable` (nouvelle sémantique) ; nouveau cas `clickingIssueOnEmptyForm_revealsErrorsWithoutSubmitting`, dupliqué côté Robolectric conformément à la convention du projet — les tests UI de `commonTest` servent `iosTest` et ne s'exécutent pas sous `testDebugUnitTest`. |
+
+### Tests
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **226/226 verts**, 0 échec / 0 erreur (217 → 226).
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+
+### Vérification sur émulateur — `Pixel_5_API_35`
+| Vérification | Résultat |
+|---|---|
+| Rendu des deux actions, hiérarchie visuelle (outlined / filled) | ✅ « Enregistrer le brouillon » et « Valider et émettre » |
+| Les deux boutons actifs sur formulaire vierge | ✅ |
+| Appui sur « Valider et émettre » avec formulaire vide | ✅ Toutes les erreurs révélées, aucune persistance — le chemin `submitAttempted` est enfin atteignable |
+| Glyphe du bouton brouillon | ⚠️ puis ✅ — `🖫` (U+1F5AB) rendait un tofu, absent des polices Android ; remplacé par `💾` |
+| Écriture effective en statut `VALIDATED` | ⏸️ **Non vérifiée sur device** — deux tentatives de saisie pilotée par `adb` ont dérivé sur les coordonnées de champ. Couverte par `validateAndIssue_persistsAsValidated_andLocksTheInvoice` et par la chaîne de persistance de `SqlDelightInvoiceRepositoryTest`. |
+
+### Points d'attention transmis
+- **L'indicateur de progression est en pratique invisible avec le dépôt local.** L'écriture SQLDelight est synchrone et sous-frame : l'état `Loading` ne dure pas assez pour être perçu. Le `CircularProgressIndicator` et le libellé « Traitement en cours… » ne prendront leur sens qu'une fois l'émission adossée au backend Ktor. Le garde-fou anti-double-appui du ViewModel, lui, reste utile dès maintenant.
+- **`isSubmitEnabled` n'est plus consommé par l'écran.** Il reste calculé, documenté et testé comme indicateur de validité du formulaire — utile pour un futur récapitulatif ou un badge d'état, mais il n'a plus de rôle de pilotage.
+- **Le libellé du bouton d'émission a changé** (« Émettre et Persister » → « Valider et émettre »). Le commentaire de `LocalLedgerRepository` cite encore l'ancien libellé ; sans impact fonctionnel.
+- **Vérification device à compléter** : émission réelle en statut Validée, et affichage du badge « Validée » dans la liste et les filtres (le compteur « Validées » était à 0 sur toutes les passes de recette, faute de chemin pour produire ce statut — ce lot le rend enfin possible).

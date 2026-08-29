@@ -66,6 +66,7 @@ object InvoiceFormTags {
     const val TOTAL_VAT = "invoice_form_total_vat"
     const val TOTAL_TTC = "invoice_form_total_ttc"
     const val FACTURX_TOGGLE = "invoice_form_facturx_toggle"
+    const val SAVE_DRAFT_BUTTON = "invoice_form_save_draft_button"
     const val SUBMIT_BUTTON = "invoice_form_submit_button"
     const val LOADING_INDICATOR = "invoice_form_loading_indicator"
     const val SUCCESS_MESSAGE = "invoice_form_success_message"
@@ -270,9 +271,20 @@ internal fun InvoiceFormContent(
             SubmissionStatus.Idle -> Unit
         }
 
+        // Les deux actions restent cliquables tant qu'aucune écriture n'est en cours : sur un
+        // formulaire incomplet, l'appui révèle toutes les erreurs au lieu de griser sans explication.
+        OutlinedButton(
+            onClick = { onIntent(InvoiceFormIntent.SaveDraft) },
+            enabled = !uiState.isSubmitting,
+            modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.SAVE_DRAFT_BUTTON },
+        ) {
+            // 💾 et non 🖫 (U+1F5AB) : ce dernier est absent des polices Android et rend un tofu.
+            Text("💾  ${tr(StringKey.ACTION_SAVE_DRAFT)}")
+        }
+
         Button(
-            onClick = { onIntent(InvoiceFormIntent.Submit) },
-            enabled = uiState.isSubmitEnabled,
+            onClick = { onIntent(InvoiceFormIntent.ValidateAndIssue) },
+            enabled = !uiState.isSubmitting,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.SUBMIT_BUTTON },
         ) {
@@ -561,8 +573,8 @@ private fun LoadingIndicator() {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(20.dp))
-        Text(tr(StringKey.FORM_SENDING))
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(tr(StringKey.FORM_PROCESSING))
     }
 }
 

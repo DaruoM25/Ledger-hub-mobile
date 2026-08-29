@@ -5,6 +5,7 @@ import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
@@ -48,11 +49,11 @@ class InvoiceFormViewModel(
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
 
     fun processIntent(intent: InvoiceFormIntent) {
-        if (intent is InvoiceFormIntent.Submit) {
-            submit()
-            return
+        when (intent) {
+            InvoiceFormIntent.SaveDraft -> submit(InvoiceStatus.DRAFT)
+            InvoiceFormIntent.ValidateAndIssue -> submit(InvoiceStatus.VALIDATED)
+            else -> _uiState.update { current -> revalidate(applyChange(current, intent)) }
         }
-        _uiState.update { current -> revalidate(applyChange(current, intent)) }
     }
 
     private fun applyChange(current: InvoiceFormUiState, intent: InvoiceFormIntent): InvoiceFormUiState =
@@ -114,7 +115,8 @@ class InvoiceFormViewModel(
                     )
                 }
 
-            InvoiceFormIntent.Submit -> current
+            // Les deux intentions d'écriture sont interceptées en amont par processIntent.
+            InvoiceFormIntent.SaveDraft, InvoiceFormIntent.ValidateAndIssue -> current
         }
 
     /** Marque [field] comme saisi — ses erreurs deviennent affichables (voir [InvoiceFormUiState.visibleErrors]). */
@@ -185,9 +187,10 @@ class InvoiceFormViewModel(
         return InvoiceLine(label = label, quantity = quantity, unitPriceHt = Money(unitPriceCents), vatRate = vatRate)
     }
 
-    private fun buildInvoice(state: InvoiceFormUiState): Invoice = Invoice(
+    private fun buildInvoice(state: InvoiceFormUiState, status: InvoiceStatus): Invoice = Invoice(
         number = state.invoiceNumber,
         issueDate = state.issueDate,
+        status = status,
         issuer = CabinetIdentity.party,
         recipient = Party(
             name = state.clientName,
@@ -208,8 +211,17 @@ class InvoiceFormViewModel(
         facturX = state.generateFacturX,
     )
 
-    private fun submit() {
-        // Une tentative d'émission révèle toutes les erreurs, y compris sur les champs jamais
+    /**
+     * Chemin d'écriture commun aux deux actions. [targetStatus] est la seule différence :
+     * [InvoiceStatus.DRAFT] pour un enregistrement, [InvoiceStatus.VALIDATED] pour une émission.
+     *
+     * Une écriture déjà en cours est ignorée : le garde-fou complète la désactivation des boutons
+     * côté écran et couvre le double appui rapide.
+     */
+    private fun submit(targetStatus: InvoiceStatus) {
+        if (_uiState.value.isSubmitting) return
+
+        // Une tentative d'écriture révèle toutes les erreurs, y compris sur les champs jamais
         // saisis : l'utilisateur doit voir ce qui bloque, même sans avoir touché au formulaire.
         val revalidated = revalidate(_uiState.value).copy(submitAttempted = true)
         val hasLineErrors = revalidated.lines.any { it.errors.isNotEmpty() }
@@ -218,7 +230,7 @@ class InvoiceFormViewModel(
             return
         }
 
-        val invoice = buildInvoice(revalidated)
+        val invoice = buildInvoice(revalidated, targetStatus)
         _uiState.value = revalidated.copy(submissionStatus = SubmissionStatus.Loading)
 
         scope.launch {
