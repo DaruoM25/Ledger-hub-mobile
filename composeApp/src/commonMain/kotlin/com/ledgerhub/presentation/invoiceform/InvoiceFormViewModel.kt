@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.invoiceform
 
 import com.ledgerhub.data.invoice.MockInvoiceRepository
+import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
@@ -24,16 +25,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
+private val EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
 
 /**
  * ViewModel du formulaire de facture — PATTERN UDF/MVVM.
  * La validation reste synchrone (locale) ; seule la soumission via [SubmitInvoiceUseCase]
- * est asynchrone (délai réseau simulé par [MockInvoiceRepository] à ce stade).
+ * est asynchrone. Le calcul des totaux réutilise **exclusivement** le moteur domaine
+ * ([totalHtOf] / [totalVatOf] / [totalTtcOf] → `computeVatBreakdown`, arithmétique Long au centime).
  *
- * @param submitInvoiceUseCase injecté pour permettre les tests avec un mock configurable
- *   (succès/échec) — le défaut construit un [MockInvoiceRepository] tant qu'aucun backend
- *   réel (Ktor) n'est branché.
- * @param dispatcher injecté pour permettre les tests sans dépendance au thread réel.
+ * @param submitInvoiceUseCase injecté pour les tests (succès/échec configurables).
+ * @param dispatcher injecté pour les tests sans dépendance au thread réel.
  */
 class InvoiceFormViewModel(
     private val submitInvoiceUseCase: SubmitInvoiceUseCase = SubmitInvoiceUseCase(MockInvoiceRepository()),
@@ -41,7 +42,7 @@ class InvoiceFormViewModel(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
-    // L'état initial doit lui aussi refléter les erreurs de validation (formulaire vide = invalide) :
+    // L'état initial reflète aussi les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
     private val _uiState = MutableStateFlow(revalidate(InvoiceFormUiState()))
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
@@ -56,14 +57,24 @@ class InvoiceFormViewModel(
 
     private fun applyChange(current: InvoiceFormUiState, intent: InvoiceFormIntent): InvoiceFormUiState =
         when (intent) {
-            is InvoiceFormIntent.InvoiceNumberChanged -> current.copy(invoiceNumber = intent.value)
-            is InvoiceFormIntent.IssueDateChanged -> current.copy(issueDate = intent.value)
-            is InvoiceFormIntent.IssuerNameChanged -> current.copy(issuerName = intent.value)
-            is InvoiceFormIntent.IssuerSirenChanged -> current.copy(issuerSiren = intent.value)
-            is InvoiceFormIntent.IssuerSiretChanged -> current.copy(issuerSiret = intent.value)
-            is InvoiceFormIntent.RecipientNameChanged -> current.copy(recipientName = intent.value)
-            is InvoiceFormIntent.RecipientSirenChanged -> current.copy(recipientSiren = intent.value)
-            is InvoiceFormIntent.RecipientSiretChanged -> current.copy(recipientSiret = intent.value)
+            is InvoiceFormIntent.InvoiceNumberChanged ->
+                current.copy(invoiceNumber = intent.value).touch(InvoiceFormField.INVOICE_NUMBER)
+
+            is InvoiceFormIntent.IssueDateChanged ->
+                current.copy(issueDate = intent.value).touch(InvoiceFormField.ISSUE_DATE)
+
+            is InvoiceFormIntent.DueDateChanged ->
+                current.copy(dueDate = intent.value).touch(InvoiceFormField.DUE_DATE)
+
+            is InvoiceFormIntent.ClientNameChanged ->
+                current.copy(clientName = intent.value).touch(InvoiceFormField.CLIENT_NAME)
+
+            is InvoiceFormIntent.ClientSiretChanged ->
+                current.copy(clientSiret = intent.value).touch(InvoiceFormField.CLIENT_SIRET)
+
+            is InvoiceFormIntent.ClientEmailChanged ->
+                current.copy(clientEmail = intent.value).touch(InvoiceFormField.CLIENT_EMAIL)
+            is InvoiceFormIntent.ToggleFacturX -> current.copy(generateFacturX = intent.enabled)
 
             InvoiceFormIntent.AddLine ->
                 current.copy(lines = current.lines + InvoiceLineFormState())
@@ -87,6 +98,14 @@ class InvoiceFormViewModel(
                                     quantity = intent.quantity,
                                     unitPriceHt = intent.unitPriceHt,
                                     vatRate = intent.vatRate,
+                                    // L'intention porte les trois champs à chaque frappe : seuls
+                                    // ceux dont la valeur change comptent comme réellement saisis.
+                                    touched = line.touched +
+                                        listOfNotNull(
+                                            InvoiceLineField.LABEL.takeIf { intent.label != line.label },
+                                            InvoiceLineField.QUANTITY.takeIf { intent.quantity != line.quantity },
+                                            InvoiceLineField.UNIT_PRICE.takeIf { intent.unitPriceHt != line.unitPriceHt },
+                                        ),
                                 )
                             } else {
                                 line
@@ -98,40 +117,38 @@ class InvoiceFormViewModel(
             InvoiceFormIntent.Submit -> current
         }
 
+    /** Marque [field] comme saisi — ses erreurs deviennent affichables (voir [InvoiceFormUiState.visibleErrors]). */
+    private fun InvoiceFormUiState.touch(field: InvoiceFormField): InvoiceFormUiState =
+        copy(touchedFields = touchedFields + field)
+
     private fun revalidate(state: InvoiceFormUiState): InvoiceFormUiState {
-        val errors = mutableMapOf<InvoiceFormField, String>()
+        val errors = mutableMapOf<InvoiceFormField, ValidationErrorKey>()
 
         if (state.invoiceNumber.isBlank()) {
-            errors[InvoiceFormField.INVOICE_NUMBER] = "Le numéro de facture est requis"
+            errors[InvoiceFormField.INVOICE_NUMBER] = ValidationErrorKey.INVOICE_NUMBER_REQUIRED
         }
         if (!ISO_DATE_REGEX.matches(state.issueDate)) {
-            errors[InvoiceFormField.ISSUE_DATE] = "Date attendue au format AAAA-MM-JJ"
+            errors[InvoiceFormField.ISSUE_DATE] = ValidationErrorKey.DATE_FORMAT_INVALID
         }
-        if (state.issuerName.isBlank()) {
-            errors[InvoiceFormField.ISSUER_NAME] = "Le nom de l'émetteur est requis"
+        if (!ISO_DATE_REGEX.matches(state.dueDate)) {
+            errors[InvoiceFormField.DUE_DATE] = ValidationErrorKey.DATE_FORMAT_INVALID
         }
-        (FiscalValidation.validateSiren(state.issuerSiren) as? ValidationResult.Invalid)?.let {
-            errors[InvoiceFormField.ISSUER_SIREN] = it.reason
+        if (state.clientName.isBlank()) {
+            errors[InvoiceFormField.CLIENT_NAME] = ValidationErrorKey.CLIENT_NAME_REQUIRED
         }
-        (FiscalValidation.validateSiret(state.issuerSiret) as? ValidationResult.Invalid)?.let {
-            errors[InvoiceFormField.ISSUER_SIRET] = it.reason
+        // Exigence explicite : SIRET valide = exactement 14 chiffres (voir FiscalValidation).
+        if (FiscalValidation.validateSiret(state.clientSiret) is ValidationResult.Invalid) {
+            errors[InvoiceFormField.CLIENT_SIRET] = ValidationErrorKey.CLIENT_SIRET_INVALID
         }
-        if (state.recipientName.isBlank()) {
-            errors[InvoiceFormField.RECIPIENT_NAME] = "Le nom du destinataire est requis"
-        }
-        (FiscalValidation.validateSiren(state.recipientSiren) as? ValidationResult.Invalid)?.let {
-            errors[InvoiceFormField.RECIPIENT_SIREN] = it.reason
-        }
-        (FiscalValidation.validateSiret(state.recipientSiret) as? ValidationResult.Invalid)?.let {
-            errors[InvoiceFormField.RECIPIENT_SIRET] = it.reason
+        if (!EMAIL_REGEX.matches(state.clientEmail.trim())) {
+            errors[InvoiceFormField.CLIENT_EMAIL] = ValidationErrorKey.CLIENT_EMAIL_INVALID
         }
 
         val validatedLines = state.lines.map(::validateLine)
 
         // Seules les lignes sans erreur contribuent aux totaux affichés — une ligne invalide
-        // ne doit ni fausser le total ni empêcher l'affichage de celui des lignes correctes,
-        // mais bloque tout de même la soumission globale (voir isSubmitEnabled).
-        val validDomainLines = validatedLines.mapNotNull { line -> if (line.errors.isEmpty()) line.toDomainOrNull() else null }
+        // ne fausse pas le total mais bloque la soumission globale (voir isSubmitEnabled).
+        val validDomainLines = validatedLines.mapNotNull { line -> line.toDomainOrNull() }
 
         return state.copy(
             errors = errors,
@@ -143,18 +160,18 @@ class InvoiceFormViewModel(
     }
 
     private fun validateLine(line: InvoiceLineFormState): InvoiceLineFormState {
-        val lineErrors = mutableMapOf<InvoiceLineField, String>()
+        val lineErrors = mutableMapOf<InvoiceLineField, ValidationErrorKey>()
 
         if (line.label.isBlank()) {
-            lineErrors[InvoiceLineField.LABEL] = "Le libellé est requis"
+            lineErrors[InvoiceLineField.LABEL] = ValidationErrorKey.LINE_LABEL_REQUIRED
         }
         val quantity = line.quantity.toIntOrNull()
         if (quantity == null || quantity <= 0) {
-            lineErrors[InvoiceLineField.QUANTITY] = "La quantité doit être un entier positif"
+            lineErrors[InvoiceLineField.QUANTITY] = ValidationErrorKey.LINE_QUANTITY_INVALID
         }
         val unitPriceCents = parseAmountToCents(line.unitPriceHt)
         if (unitPriceCents == null || unitPriceCents <= 0) {
-            lineErrors[InvoiceLineField.UNIT_PRICE] = "Le prix unitaire HT doit être un montant positif"
+            lineErrors[InvoiceLineField.UNIT_PRICE] = ValidationErrorKey.LINE_UNIT_PRICE_INVALID
         }
 
         return line.copy(errors = lineErrors)
@@ -171,8 +188,14 @@ class InvoiceFormViewModel(
     private fun buildInvoice(state: InvoiceFormUiState): Invoice = Invoice(
         number = state.invoiceNumber,
         issueDate = state.issueDate,
-        issuer = Party(state.issuerName, state.issuerSiren, state.issuerSiret),
-        recipient = Party(state.recipientName, state.recipientSiren, state.recipientSiret),
+        issuer = CabinetIdentity.party,
+        recipient = Party(
+            name = state.clientName,
+            // Le SIREN est les 9 premiers chiffres du SIRET (règle INSEE) — déjà validé à 14 chiffres.
+            siren = state.clientSiret.take(9),
+            siret = state.clientSiret,
+            email = state.clientEmail.trim(),
+        ),
         lines = state.lines.map { line ->
             InvoiceLine(
                 label = line.label,
@@ -181,10 +204,14 @@ class InvoiceFormViewModel(
                 vatRate = line.vatRate,
             )
         },
+        dueDate = state.dueDate,
+        facturX = state.generateFacturX,
     )
 
     private fun submit() {
-        val revalidated = revalidate(_uiState.value)
+        // Une tentative d'émission révèle toutes les erreurs, y compris sur les champs jamais
+        // saisis : l'utilisateur doit voir ce qui bloque, même sans avoir touché au formulaire.
+        val revalidated = revalidate(_uiState.value).copy(submitAttempted = true)
         val hasLineErrors = revalidated.lines.any { it.errors.isNotEmpty() }
         if (revalidated.errors.isNotEmpty() || hasLineErrors) {
             _uiState.value = revalidated

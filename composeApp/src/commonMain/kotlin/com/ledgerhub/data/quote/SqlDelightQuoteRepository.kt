@@ -25,10 +25,11 @@ class SqlDelightQuoteRepository(
 
     override suspend fun submitQuote(quote: Quote): Result<Unit> = runCatching {
         database.transaction {
-            database.customerQueries.insertOrReplace(
+            database.customerQueries.insertIfAbsent(
                 siret = quote.recipient.siret,
                 siren = quote.recipient.siren,
                 name = quote.recipient.name,
+                email = quote.recipient.email,
             )
             database.quoteQueries.insertOrReplace(
                 number = quote.number,
@@ -60,7 +61,7 @@ class SqlDelightQuoteRepository(
 
     private fun QuoteRow.toDomain(): Quote {
         val recipient = database.customerQueries.selectBySiret(recipientSiret).executeAsOneOrNull()
-            ?.let { Party(name = it.name, siren = it.siren, siret = it.siret) }
+            ?.let { Party(name = it.name, siren = it.siren, siret = it.siret, email = it.email) }
             ?: Party(name = "", siren = "", siret = recipientSiret)
         val lines = database.quoteLineQueries.selectByQuoteNumber(number).executeAsList().map { it.toDomain() }
         return Quote(

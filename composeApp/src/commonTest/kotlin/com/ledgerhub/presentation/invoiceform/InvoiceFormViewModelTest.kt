@@ -19,20 +19,16 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class InvoiceFormViewModelTest {
 
-    private val validIssuerSiren = "123456789"
-    private val validIssuerSiret = "12345678900012"
-    private val validRecipientSiren = "987654321"
-    private val validRecipientSiret = "98765432100045"
+    private val validClientSiret = "98765432100045"
 
+    /** Renseigne l'en-tête (client + détails facture) avec des valeurs valides. */
     private fun fillHeader(viewModel: InvoiceFormViewModel) {
         viewModel.processIntent(InvoiceFormIntent.InvoiceNumberChanged("F-2026-001"))
         viewModel.processIntent(InvoiceFormIntent.IssueDateChanged("2026-08-03"))
-        viewModel.processIntent(InvoiceFormIntent.IssuerNameChanged("Vendeur SARL"))
-        viewModel.processIntent(InvoiceFormIntent.IssuerSirenChanged(validIssuerSiren))
-        viewModel.processIntent(InvoiceFormIntent.IssuerSiretChanged(validIssuerSiret))
-        viewModel.processIntent(InvoiceFormIntent.RecipientNameChanged("Client SAS"))
-        viewModel.processIntent(InvoiceFormIntent.RecipientSirenChanged(validRecipientSiren))
-        viewModel.processIntent(InvoiceFormIntent.RecipientSiretChanged(validRecipientSiret))
+        viewModel.processIntent(InvoiceFormIntent.DueDateChanged("2026-09-03"))
+        viewModel.processIntent(InvoiceFormIntent.ClientNameChanged("Client SAS"))
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged(validClientSiret))
+        viewModel.processIntent(InvoiceFormIntent.ClientEmailChanged("compta@client-sas.fr"))
     }
 
     private fun fillLine(
@@ -61,23 +57,43 @@ class InvoiceFormViewModelTest {
         assertEquals(1, state.lines.size)
         assertFalse(state.isSubmitEnabled)
         assertTrue(state.errors.isNotEmpty())
+        assertTrue(state.generateFacturX) // Factur-X activé par défaut
         assertEquals(SubmissionStatus.Idle, state.submissionStatus)
     }
 
-    // ── Validation SIREN/SIRET (en-tête) ────────────────────────────────────
-
-    @Test
-    fun invalidSiren_producesFieldError() {
-        val viewModel = InvoiceFormViewModel()
-        viewModel.processIntent(InvoiceFormIntent.IssuerSirenChanged("123"))
-        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.ISSUER_SIREN])
-    }
+    // ── Validation client (en-tête) ──────────────────────────────────────────
 
     @Test
     fun invalidSiret_producesFieldError() {
         val viewModel = InvoiceFormViewModel()
-        viewModel.processIntent(InvoiceFormIntent.RecipientSiretChanged("abc"))
-        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.RECIPIENT_SIRET])
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged("123")) // pas 14 chiffres
+        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_SIRET])
+    }
+
+    @Test
+    fun validSiret_exactly14Digits_clearsError() {
+        val viewModel = InvoiceFormViewModel()
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged("1234567890123"))  // 13 -> erreur
+        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_SIRET])
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged("12345678901234")) // 14 -> ok
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_SIRET])
+    }
+
+    @Test
+    fun invalidEmail_producesFieldError() {
+        val viewModel = InvoiceFormViewModel()
+        viewModel.processIntent(InvoiceFormIntent.ClientEmailChanged("pas-un-email"))
+        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_EMAIL])
+        viewModel.processIntent(InvoiceFormIntent.ClientEmailChanged("valide@client.fr"))
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_EMAIL])
+    }
+
+    @Test
+    fun blankDueDate_producesFieldError() {
+        val viewModel = InvoiceFormViewModel()
+        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
+        viewModel.processIntent(InvoiceFormIntent.DueDateChanged("2026-09-30"))
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
     }
 
     // ── Multi-lignes : ajout ─────────────────────────────────────────────────
@@ -101,7 +117,7 @@ class InvoiceFormViewModelTest {
         fillLine(viewModel, 2, "Livre", "1", "20.00", VatRate.TAUX_REDUIT)         // 20.00 HT, TVA 5.5%
 
         val state = viewModel.uiState.value
-        // HT = 100 + 50 + 20 = 170.00 ; TVA = (150 * 20%) + (20 * 5.5%) = 30.00 + 1.10 = 31.10 ; TTC = 201.10
+        // HT = 170.00 ; TVA = (150 * 20%) + (20 * 5.5%) = 30.00 + 1.10 = 31.10 ; TTC = 201.10
         assertEquals(17000L, state.totalHt.cents)
         assertEquals(3110L, state.totalVat.cents)
         assertEquals(20110L, state.totalTtc.cents)
@@ -163,11 +179,10 @@ class InvoiceFormViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isSubmitEnabled)
         assertNotNull(state.lines[1].errors[InvoiceLineField.LABEL])
-        // La ligne valide contribue seule au total affiché (la ligne invalide est neutre, pas fausse).
-        assertEquals(10000L, state.totalHt.cents)
+        assertEquals(10000L, state.totalHt.cents) // la ligne valide contribue seule
     }
 
-    // ── Soumission invalide : ne déclenche aucun appel au repository ──────────
+    // ── Soumission invalide : aucun appel au repository ──────────────────────
 
     @Test
     fun submit_withInvalidForm_staysIdle_doesNotProduceInvoice() {
@@ -193,7 +208,7 @@ class InvoiceFormViewModelTest {
         assertEquals(SubmissionStatus.Idle, viewModel.uiState.value.submissionStatus)
     }
 
-    // ── Cycle de vie de la soumission : Idle -> Loading -> Success (multi-lignes) ──
+    // ── Cycle de soumission : Idle -> Loading -> Success (multi-lignes) ───────
 
     @Test
     fun submit_withValidMultiLineForm_transitionsThroughLoadingToSuccess() = runTest {
@@ -207,14 +222,12 @@ class InvoiceFormViewModelTest {
 
         viewModel.processIntent(InvoiceFormIntent.Submit)
 
-        // Juste après Submit (avant la fin du délai réseau simulé) : Loading, formulaire verrouillé.
         runCurrent()
         assertEquals(SubmissionStatus.Loading, viewModel.uiState.value.submissionStatus)
         assertFalse(viewModel.uiState.value.isFormEnabled)
         assertFalse(viewModel.uiState.value.isSubmitEnabled)
         assertNull(viewModel.uiState.value.submittedInvoice)
 
-        // Une fois le délai simulé écoulé : Success, formulaire déverrouillé, facture à 2 lignes produite.
         advanceUntilIdle()
         val state = viewModel.uiState.value
         assertEquals(SubmissionStatus.Success, state.submissionStatus)
@@ -223,9 +236,32 @@ class InvoiceFormViewModelTest {
         assertNotNull(invoice)
         assertEquals(2, invoice.lines.size)
         assertEquals(12000L, invoice.totalHt.cents) // 100.00 + 20.00
+        // L'émetteur est l'identité fixe du cabinet ; le client saisi devient le destinataire.
+        assertEquals(CabinetIdentity.party, invoice.issuer)
+        assertEquals("Client SAS", invoice.recipient.name)
+        assertEquals(validClientSiret, invoice.recipient.siret)
+        assertEquals("compta@client-sas.fr", invoice.recipient.email)
+        assertEquals("2026-09-03", invoice.dueDate)
+        assertTrue(invoice.facturX)
     }
 
-    // ── Cycle de vie de la soumission : Idle -> Loading -> Error ──────────────
+    @Test
+    fun toggleFacturXOff_isCarriedToSubmittedInvoice() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val useCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 0L))
+        val viewModel = InvoiceFormViewModel(submitInvoiceUseCase = useCase, dispatcher = dispatcher)
+        fillValidSingleLineForm(viewModel)
+        viewModel.processIntent(InvoiceFormIntent.ToggleFacturX(false))
+
+        viewModel.processIntent(InvoiceFormIntent.Submit)
+        advanceUntilIdle()
+
+        val invoice = viewModel.uiState.value.submittedInvoice
+        assertNotNull(invoice)
+        assertFalse(invoice.facturX)
+    }
+
+    // ── Cycle de soumission : Idle -> Loading -> Error ───────────────────────
 
     @Test
     fun submit_whenRepositoryFails_transitionsThroughLoadingToError() = runTest {
@@ -245,5 +281,71 @@ class InvoiceFormViewModelTest {
         assertIs<SubmissionStatus.Error>(state.submissionStatus)
         assertTrue(state.isFormEnabled)
         assertNull(state.submittedInvoice)
+    }
+
+    // ── Révélation progressive des erreurs (anomalie D-02, recette du 29/08/2026) ────────────
+
+    @Test
+    fun freshForm_computesErrorsButPresentsNone() {
+        val state = InvoiceFormViewModel().uiState.value
+
+        // La validation tourne bien : le formulaire vierge reste non soumettable…
+        assertTrue(state.errors.isNotEmpty())
+        assertFalse(state.isSubmitEnabled)
+        // …mais rien n'est encore présenté à l'utilisateur, qui n'a rien saisi.
+        assertTrue(state.visibleErrors.isEmpty())
+        assertTrue(state.lines.single().visibleErrors(revealAll = false).isEmpty())
+    }
+
+    @Test
+    fun editingOneField_revealsOnlyThatFieldsError() {
+        val viewModel = InvoiceFormViewModel()
+
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged("123"))
+
+        val visible = viewModel.uiState.value.visibleErrors
+        assertEquals(setOf(InvoiceFormField.CLIENT_SIRET), visible.keys)
+    }
+
+    @Test
+    fun correctingATouchedField_clearsItsVisibleError() {
+        val viewModel = InvoiceFormViewModel()
+
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged("123"))
+        viewModel.processIntent(InvoiceFormIntent.ClientSiretChanged(validClientSiret))
+
+        assertFalse(viewModel.uiState.value.visibleErrors.containsKey(InvoiceFormField.CLIENT_SIRET))
+    }
+
+    @Test
+    fun submitAttemptOnEmptyForm_revealsEveryError() {
+        val viewModel = InvoiceFormViewModel()
+
+        viewModel.processIntent(InvoiceFormIntent.Submit)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.submitAttempted)
+        assertEquals(state.errors, state.visibleErrors)
+        assertEquals(
+            state.lines.single().errors,
+            state.lines.single().visibleErrors(revealAll = state.submitAttempted),
+        )
+    }
+
+    @Test
+    fun editingALine_revealsOnlyTheChangedLineField() {
+        val viewModel = InvoiceFormViewModel()
+
+        // L'utilisateur saisit un libellé puis l'efface : ce champ devient « touché » et invalide.
+        // Le prix unitaire, lui, n'a jamais été saisi.
+        fillLine(viewModel, index = 0, label = "Conseil", quantity = "1", unitPriceHt = "")
+        fillLine(viewModel, index = 0, label = "", quantity = "1", unitPriceHt = "")
+
+        val line = viewModel.uiState.value.lines.single()
+        assertEquals(
+            setOf(InvoiceLineField.LABEL),
+            line.visibleErrors(revealAll = false).keys,
+        )
+        assertTrue(line.errors.containsKey(InvoiceLineField.UNIT_PRICE)) // calculée, mais pas présentée
     }
 }

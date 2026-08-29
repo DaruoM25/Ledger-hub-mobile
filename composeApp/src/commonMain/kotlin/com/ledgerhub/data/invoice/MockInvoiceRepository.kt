@@ -61,12 +61,21 @@ class MockInvoiceRepository(
         fun sampleInvoice(number: String, status: InvoiceStatus, issueDate: String, unitPriceHtCents: Long) = Invoice(
             number = number,
             issueDate = issueDate,
-            issuer = Party("Vendeur SARL", "123456789", "12345678900012"),
-            recipient = Party("Client SAS", "987654321", "98765432100045"),
+            issuer = Party("Vendeur SARL", "123456789", "12345678900012", "contact@vendeur-sarl.fr"),
+            recipient = Party("Client SAS", "987654321", "98765432100045", "compta@client-sas.fr"),
             lines = listOf(
                 InvoiceLine("Prestation de conseil", quantity = 1, unitPriceHt = Money(unitPriceHtCents), vatRate = VatRate.TAUX_NORMAL)
             ),
             status = status,
+            // Échéance de paiement simplifiée pour le jeu de démo : même quantième, mois suivant.
+            dueDate = nextMonth(issueDate),
         )
+
+        /** "2026-03-05" -> "2026-04-05". Suffisant pour un jeu de données de démonstration (pas de calcul calendaire réel). */
+        private fun nextMonth(isoDate: String): String {
+            val (year, month, day) = isoDate.split("-").map { it.toInt() }
+            val (nextYear, nextMonth) = if (month == 12) year + 1 to 1 else year to month + 1
+            return "$nextYear-${nextMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
+        }
     }
 }

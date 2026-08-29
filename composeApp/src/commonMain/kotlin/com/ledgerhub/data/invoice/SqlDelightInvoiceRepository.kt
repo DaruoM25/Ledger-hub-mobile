@@ -27,10 +27,13 @@ class SqlDelightInvoiceRepository(
 
     override suspend fun submitInvoice(invoice: Invoice): Result<Unit> = runCatching {
         database.transaction {
-            database.customerQueries.insertOrReplace(
+            // Ne crée la fiche client que si le SIRET est inconnu : émettre une facture ne doit
+            // jamais réécrire l'identité d'un client déjà enregistré (voir Customer.sq).
+            database.customerQueries.insertIfAbsent(
                 siret = invoice.recipient.siret,
                 siren = invoice.recipient.siren,
                 name = invoice.recipient.name,
+                email = invoice.recipient.email,
             )
             database.invoiceQueries.insertOrReplace(
                 number = invoice.number,
@@ -42,6 +45,12 @@ class SqlDelightInvoiceRepository(
                 issuerSiren = invoice.issuer.siren,
                 issuerSiret = invoice.issuer.siret,
                 recipientSiret = invoice.recipient.siret,
+                // Copie gelée du destinataire — immutabilité de la facture émise.
+                recipientName = invoice.recipient.name,
+                recipientEmail = invoice.recipient.email,
+                dueDate = invoice.dueDate,
+                // SQLite n'a pas de type booléen — 1/0 en INTEGER, reconverti dans toDomain().
+                facturX = if (invoice.facturX) 1L else 0L,
             )
             // Remplacement intégral des lignes — plus simple et moins sujet aux bugs qu'un diff
             // ligne à ligne, pour un volume de lignes par facture qui reste faible en pratique.
@@ -63,9 +72,22 @@ class SqlDelightInvoiceRepository(
     }
 
     private fun InvoiceRow.toDomain(): Invoice {
-        val recipient = database.customerQueries.selectBySiret(recipientSiret).executeAsOneOrNull()
-            ?.let { Party(name = it.name, siren = it.siren, siret = it.siret) }
-            ?: Party(name = "", siren = "", siret = recipientSiret)
+        // Priorité à la copie gelée portée par la facture : c'est elle qui fait foi une fois la
+        // facture émise. La fiche Customer ne sert plus qu'aux factures héritées (colonne vide),
+        // écrites avant l'introduction du gel du destinataire.
+        val recipient = if (recipientName.isNotEmpty()) {
+            Party(
+                name = recipientName,
+                // Règle INSEE : le SIREN est le préfixe à 9 chiffres du SIRET.
+                siren = recipientSiret.take(9),
+                siret = recipientSiret,
+                email = recipientEmail,
+            )
+        } else {
+            database.customerQueries.selectBySiret(recipientSiret).executeAsOneOrNull()
+                ?.let { Party(name = it.name, siren = it.siren, siret = it.siret, email = it.email) }
+                ?: Party(name = "", siren = "", siret = recipientSiret)
+        }
         val lines = database.invoiceLineQueries.selectByInvoiceNumber(number).executeAsList().map { it.toDomain() }
         return Invoice(
             number = number,
@@ -75,6 +97,8 @@ class SqlDelightInvoiceRepository(
             lines = lines,
             status = InvoiceStatus.valueOf(status),
             sourceQuoteId = sourceQuoteId,
+            dueDate = dueDate,
+            facturX = facturX == 1L,
         )
     }
 

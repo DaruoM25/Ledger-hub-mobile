@@ -33,6 +33,8 @@ data class DashboardAnalytics(
     val collectedRevenue: Money,
     val pendingRevenue: Money,
     val overdueRevenue: Money,
+    /** Nombre total de factures émises par l'utilisateur, tous statuts confondus — 3ᵉ KPI du tableau de bord. */
+    val issuedCount: Int,
     val monthlyRevenue: List<MonthlyRevenue>,
     val recentDocuments: List<RecentDocument>,
 )
@@ -97,6 +99,7 @@ fun computeDashboardAnalytics(
         collectedRevenue = collectedRevenue,
         pendingRevenue = pendingRevenue,
         overdueRevenue = overdueRevenue,
+        issuedCount = invoices.size,
         monthlyRevenue = monthlyRevenue,
         recentDocuments = recentDocuments,
     )

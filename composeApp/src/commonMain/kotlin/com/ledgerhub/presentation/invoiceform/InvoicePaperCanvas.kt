@@ -43,10 +43,10 @@ import com.ledgerhub.domain.invoice.parseAmountToCents
 /** Tags de test — contrat partagé entre l'aperçu WYSIWYG (UI) et les tests. */
 object InvoicePaperCanvasTags {
     const val CANVAS = "invoice_paper_canvas"
-    const val ISSUER_NAME = "invoice_paper_issuer_name"
-    const val ISSUER_SIRET = "invoice_paper_issuer_siret"
-    const val RECIPIENT_NAME = "invoice_paper_recipient_name"
-    const val RECIPIENT_SIRET = "invoice_paper_recipient_siret"
+    const val CABINET_NAME = "invoice_paper_cabinet_name"
+    const val CABINET_SIRET = "invoice_paper_cabinet_siret"
+    const val CLIENT_NAME = "invoice_paper_client_name"
+    const val CLIENT_SIRET = "invoice_paper_client_siret"
     const val TOTAL_HT = "invoice_paper_total_ht"
     const val TOTAL_VAT = "invoice_paper_total_vat"
     const val TOTAL_TTC = "invoice_paper_total_ttc"
@@ -114,7 +114,7 @@ private fun PaperHeader(
     onIntent: (InvoiceFormIntent) -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        // Header gauche : logo placeholder + coordonnées émetteur, éditables en place.
+        // Header gauche : émetteur = identité fixe du cabinet (non éditable, comme sur le Web).
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(
                 modifier = Modifier
@@ -124,23 +124,19 @@ private fun PaperHeader(
             ) {
                 Text("🏢")
             }
-            PaperField(
-                value = uiState.issuerName,
-                tag = InvoicePaperCanvasTags.ISSUER_NAME,
-                enabled = enabled,
-                textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                onValueChange = { onIntent(InvoiceFormIntent.IssuerNameChanged(it)) },
+            Text(
+                text = CabinetIdentity.party.name,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.CABINET_NAME },
             )
-            PaperField(
-                value = uiState.issuerSiret,
-                tag = InvoicePaperCanvasTags.ISSUER_SIRET,
-                enabled = enabled,
-                textStyle = MaterialTheme.typography.bodySmall.copy(color = PaperMutedText),
-                onValueChange = { onIntent(InvoiceFormIntent.IssuerSiretChanged(it)) },
+            Text(
+                text = CabinetIdentity.party.siret,
+                style = MaterialTheme.typography.bodySmall.copy(color = PaperMutedText),
+                modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.CABINET_SIRET },
             )
         }
 
-        // Header droit : encart destinataire, bordé pour le distinguer visuellement de l'émetteur.
+        // Header droit : encart client, éditable en place, bordé pour le distinguer de l'émetteur.
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -150,18 +146,18 @@ private fun PaperHeader(
         ) {
             Text("Facturé à", style = MaterialTheme.typography.labelSmall, color = PaperMutedText)
             PaperField(
-                value = uiState.recipientName,
-                tag = InvoicePaperCanvasTags.RECIPIENT_NAME,
+                value = uiState.clientName,
+                tag = InvoicePaperCanvasTags.CLIENT_NAME,
                 enabled = enabled,
                 textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                onValueChange = { onIntent(InvoiceFormIntent.RecipientNameChanged(it)) },
+                onValueChange = { onIntent(InvoiceFormIntent.ClientNameChanged(it)) },
             )
             PaperField(
-                value = uiState.recipientSiret,
-                tag = InvoicePaperCanvasTags.RECIPIENT_SIRET,
+                value = uiState.clientSiret,
+                tag = InvoicePaperCanvasTags.CLIENT_SIRET,
                 enabled = enabled,
                 textStyle = MaterialTheme.typography.bodySmall.copy(color = PaperMutedText),
-                onValueChange = { onIntent(InvoiceFormIntent.RecipientSiretChanged(it)) },
+                onValueChange = { onIntent(InvoiceFormIntent.ClientSiretChanged(it)) },
             )
         }
     }

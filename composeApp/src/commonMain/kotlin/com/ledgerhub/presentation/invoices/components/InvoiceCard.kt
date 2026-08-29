@@ -21,10 +21,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceStatus
-import com.ledgerhub.presentation.invoices.displayLabel
-import com.ledgerhub.presentation.invoices.formatEuros
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
+import com.ledgerhub.presentation.i18n.formatIsoDate
+import com.ledgerhub.presentation.i18n.tr
+import com.ledgerhub.presentation.invoices.format
+import com.ledgerhub.presentation.invoices.labelKey
 import com.ledgerhub.presentation.invoices.tagColor
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
@@ -72,7 +76,10 @@ fun InvoiceCard(
             }
 
             Text(invoice.recipient.name, style = MaterialTheme.typography.bodyMedium)
-            Text("Émise le ${invoice.issueDate}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "${tr(StringKey.LIST_ISSUED_ON)} ${formatIsoDate(invoice.issueDate, LocalAppLanguage.current)}",
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -81,7 +88,7 @@ fun InvoiceCard(
             ) {
                 FacturXBadge()
                 Text(
-                    text = invoice.totalTtc.formatEuros(),
+                    text = invoice.totalTtc.format(LocalAppLanguage.current),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -93,37 +100,39 @@ fun InvoiceCard(
 /** Pastille de statut réutilisable (liste + détail). [tag] permet de la cibler en test. */
 @Composable
 internal fun StatusTag(status: InvoiceStatus, tag: String) {
+    val label = tr(status.labelKey())
     Surface(
         color = status.tagColor(),
         contentColor = Color.White,
         shape = RoundedCornerShape(50),
         modifier = Modifier.semantics {
             testTag = tag
-            contentDescription = "Statut : ${status.displayLabel()}"
+            contentDescription = label
         },
     ) {
         Text(
-            text = status.displayLabel(),
+            text = label,
             modifier = Modifier.padding(PaddingValues(horizontal = 10.dp, vertical = 4.dp)),
             style = MaterialTheme.typography.labelMedium,
         )
     }
 }
 
-/** Badge vert "Conforme Factur-X 2026". [tag] par défaut = celui de la carte de liste. */
+/** Badge vert de conformité Factur-X. [tag] par défaut = celui de la carte de liste. */
 @Composable
 internal fun FacturXBadge(tag: String = InvoiceCardTags.FACTURX_BADGE) {
+    val label = tr(StringKey.FACTURX_BADGE)
     Surface(
         color = Color(0xFFE8F5E9),
         contentColor = Color(0xFF1B5E20),
         shape = RoundedCornerShape(50),
         modifier = Modifier.semantics {
             testTag = tag
-            contentDescription = FACTURX_BADGE_LABEL
+            contentDescription = label
         },
     ) {
         Text(
-            text = FACTURX_BADGE_LABEL,
+            text = label,
             modifier = Modifier.padding(PaddingValues(horizontal = 10.dp, vertical = 4.dp)),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,

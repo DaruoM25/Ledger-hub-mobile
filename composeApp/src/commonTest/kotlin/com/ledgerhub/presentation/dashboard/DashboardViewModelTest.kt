@@ -38,7 +38,8 @@ class DashboardViewModelTest {
         // Le mock pré-remplit plusieurs factures Payées sur 6 mois distincts (voir MockInvoiceRepository).
         assertTrue(state.collectedRevenueCents > 0)
         assertTrue(state.pendingRevenueCents > 0)
-        assertEquals(0L, state.overdueRevenueCents) // aucune date d'échéance en v1 — voir DashboardAnalytics.kt
+        assertEquals(0L, state.overdueRevenueCents) // aucun calcul de retard câblé — voir DashboardAnalytics.kt
+        assertEquals(8, state.issuedCount) // MockInvoiceRepository sème 8 factures (F-2026-101..108)
         assertEquals(6, state.monthlyRevenue.size)
         assertEquals(3, state.recentDocuments.size)
     }

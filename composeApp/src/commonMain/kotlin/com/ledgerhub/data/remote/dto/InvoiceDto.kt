@@ -20,6 +20,8 @@ data class InvoicePartyDto(
     val name: String,
     val siren: String,
     val siret: String,
+    /** Coordonnée de contact — défaut vide pour tolérer les payloads serveur qui ne l'envoient pas encore. */
+    val email: String = "",
 )
 
 /** Ligne de facturation distante — nommage API "item", mappée vers [InvoiceLine] côté domaine. */
@@ -57,9 +59,13 @@ data class InvoiceDto(
     val items: List<InvoiceItemDto>,
     val taxSummary: List<TaxSummaryDto> = emptyList(),
     val sourceQuoteId: String? = null,
+    /** Date d'échéance de paiement (AAAA-MM-JJ) — défaut vide si absente du payload. */
+    val dueDate: String = "",
+    /** Format légal Factur-X exigé pour cette facture — défaut `true` (conformité 2026 par défaut). */
+    val facturX: Boolean = true,
 )
 
-fun InvoicePartyDto.toDomain(): Party = Party(name = name, siren = siren, siret = siret)
+fun InvoicePartyDto.toDomain(): Party = Party(name = name, siren = siren, siret = siret, email = email)
 
 fun InvoiceItemDto.toDomain(): InvoiceLine = InvoiceLine(
     label = label,
@@ -76,4 +82,6 @@ fun InvoiceDto.toDomain(): Invoice = Invoice(
     lines = items.map { it.toDomain() },
     status = InvoiceStatus.valueOf(status),
     sourceQuoteId = sourceQuoteId,
+    dueDate = dueDate,
+    facturX = facturX,
 )

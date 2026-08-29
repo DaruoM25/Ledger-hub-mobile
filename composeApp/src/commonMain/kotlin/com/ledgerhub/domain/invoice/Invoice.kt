@@ -9,6 +9,16 @@ data class Invoice(
     val status: InvoiceStatus = InvoiceStatus.DRAFT,
     /** Numéro du devis d'origine si cette facture a été générée par conversion — piste d'audit fiscale. */
     val sourceQuoteId: String? = null,
+    /**
+     * Date d'échéance de paiement (AAAA-MM-JJ). Optionnel (défaut vide) tant que tout le parc de
+     * factures héritées n'en porte pas ; le formulaire de saisie la renseigne systématiquement.
+     */
+    val dueDate: String = "",
+    /**
+     * `true` si la facture doit être générée/archivée au format légal Factur-X (JSON + PDF unifié).
+     * Défaut `true` : la conformité 2026 est la norme, le formulaire permet de la désactiver au cas par cas.
+     */
+    val facturX: Boolean = true,
 ) {
     init {
         require(lines.isNotEmpty()) { "Une facture doit contenir au moins une ligne de facturation" }

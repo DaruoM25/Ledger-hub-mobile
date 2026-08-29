@@ -1,15 +1,16 @@
 package com.ledgerhub.presentation.invoiceform
 
-/** Identifie un champ du formulaire pour lui associer un message d'erreur. */
+/**
+ * Identifie un champ d'en-tête du formulaire pour lui associer un message d'erreur.
+ * Parité Web : une seule partie saisie (le client) ; l'émetteur est l'identité fixe du cabinet
+ * (voir [CabinetIdentity]).
+ */
 enum class InvoiceFormField {
+    CLIENT_NAME,
+    CLIENT_SIRET,
+    CLIENT_EMAIL,
     INVOICE_NUMBER,
     ISSUE_DATE,
-    ISSUER_NAME,
-    ISSUER_SIREN,
-    ISSUER_SIRET,
-    RECIPIENT_NAME,
-    RECIPIENT_SIREN,
-    RECIPIENT_SIRET,
-    // Les erreurs de ligne (libellé/quantité/prix) vivent désormais dans
-    // InvoiceLineFormState.errors (par ligne), pas ici (en-tête).
+    DUE_DATE,
+    // Les erreurs de ligne (libellé/quantité/prix) vivent dans InvoiceLineFormState.errors (par ligne).
 }

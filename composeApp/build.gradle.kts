@@ -102,7 +102,30 @@ kotlin {
             // disque. Indisponible côté iosTest (native) : voir SqlDelightInvoiceRepositoryTest.
             implementation(libs.sqldelight.sqlite.driver)
         }
+
+        /**
+         * androidInstrumentedTest — tests d'interface exécutés sur un émulateur/appareil Android réel
+         * (`connectedDebugAndroidTest`). `compose.uiTest` fournit `runComposeUiTest` on-device ;
+         * le runner AndroidX et `ui-test-manifest` (voir bloc `dependencies` ci-dessous) fournissent
+         * l'Activity hôte. Le pilote SQLDelight Android sert à construire une base en mémoire dans le test.
+         */
+        androidInstrumentedTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            @OptIn(ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.core)
+            implementation(libs.androidx.test.junit)
+            implementation(libs.sqldelight.android.driver)
+        }
     }
+}
+
+// ui-test-manifest — Activity vide requise par `runComposeUiTest` sur appareil (variante debug only).
+// `compose.uiTestManifest` n'est pas exposé par le DSL Compose Multiplatform 1.7.3 → coordonnée AndroidX brute.
+dependencies {
+    debugImplementation(libs.compose.ui.test.manifest)
 }
 
 // ── SQLDelight — schémas .sq lus depuis commonMain/sqldelight, code généré en commonMain ──
@@ -125,6 +148,7 @@ android {
         targetSdk      = 35
         versionCode    = 1
         versionName    = "0.1.0-shipaton"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     packaging {

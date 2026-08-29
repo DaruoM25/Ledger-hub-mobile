@@ -13,6 +13,9 @@ data class DashboardUiState(
     val collectedRevenueCents: Long get() = analytics?.collectedRevenue?.cents ?: 0L
     val pendingRevenueCents: Long get() = analytics?.pendingRevenue?.cents ?: 0L
     val overdueRevenueCents: Long get() = analytics?.overdueRevenue?.cents ?: 0L
+
+    /** Nombre total de factures émises (3ᵉ KPI) — voir [DashboardAnalytics.issuedCount]. */
+    val issuedCount: Int get() = analytics?.issuedCount ?: 0
     val monthlyRevenue: List<MonthlyRevenue> get() = analytics?.monthlyRevenue ?: emptyList()
     val recentDocuments: List<RecentDocument> get() = analytics?.recentDocuments ?: emptyList()
 }

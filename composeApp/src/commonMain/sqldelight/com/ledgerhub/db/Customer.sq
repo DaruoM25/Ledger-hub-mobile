@@ -2,12 +2,28 @@
 CREATE TABLE Customer (
     siret TEXT NOT NULL PRIMARY KEY,
     siren TEXT NOT NULL,
-    name TEXT NOT NULL
+    name TEXT NOT NULL,
+    -- Coordonnée de contact du client — mention Factur-X 2026. DEFAULT '' pour les clients hérités.
+    email TEXT NOT NULL DEFAULT ''
 );
 
-insertOrReplace:
-INSERT OR REPLACE INTO Customer(siret, siren, name)
-VALUES (?, ?, ?);
+-- Crée la fiche client si le SIRET est inconnu, sinon NE TOUCHE À RIEN.
+-- Un INSERT OR REPLACE écrasait la raison sociale enregistrée dès qu'une nouvelle facture
+-- réutilisait un SIRET connu sous un autre nom, et réécrivait ainsi l'historique déjà émis.
+-- La mise à jour délibérée d'une fiche client relève d'une action dédiée (écran Clients),
+-- pas d'un effet de bord de l'émission — voir updateIdentity.
+-- OR IGNORE plutôt que la syntaxe UPSERT : le dialecte SQLDelight du projet est SQLite 3.18,
+-- antérieur à ON CONFLICT DO NOTHING. Sémantique identique sur un conflit de clé primaire.
+insertIfAbsent:
+INSERT OR IGNORE INTO Customer(siret, siren, name, email)
+VALUES (?, ?, ?, ?);
+
+-- Mise à jour explicite d'une fiche client existante. Sans effet sur les factures déjà émises,
+-- qui portent leur propre copie gelée du destinataire (voir Invoice.recipientName).
+updateIdentity:
+UPDATE Customer
+SET siren = ?, name = ?, email = ?
+WHERE siret = ?;
 
 selectAll:
 SELECT * FROM Customer;

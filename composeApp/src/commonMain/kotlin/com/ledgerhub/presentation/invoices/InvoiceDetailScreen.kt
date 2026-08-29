@@ -27,11 +27,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.VatBreakdown
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
+import com.ledgerhub.presentation.i18n.formatIsoDate
+import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.components.FacturXBadge
 import com.ledgerhub.presentation.invoices.components.StatusTag
+import com.ledgerhub.presentation.invoices.format
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
 object InvoiceDetailScreenTags {
@@ -117,9 +122,11 @@ private fun InvoiceBody(
     }
     FacturXBadge(tag = InvoiceDetailScreenTags.FACTURX_BADGE)
 
+    val lang = LocalAppLanguage.current
+
     Text("Émetteur : ${invoice.issuer.name} — SIREN ${invoice.issuer.siren}")
     Text("Destinataire : ${invoice.recipient.name} — SIREN ${invoice.recipient.siren}")
-    Text("Date d'émission : ${invoice.issueDate}")
+    Text("${tr(StringKey.DETAIL_ISSUE_DATE)} : ${formatIsoDate(invoice.issueDate, lang)}")
 
     HorizontalDivider()
 
@@ -132,11 +139,11 @@ private fun InvoiceBody(
 
     HorizontalDivider()
 
-    TotalRow("Total HT", invoice.totalHt.formatEuros(), InvoiceDetailScreenTags.TOTAL_HT)
-    TotalRow("TVA", invoice.totalVat.formatEuros(), InvoiceDetailScreenTags.TOTAL_VAT)
+    TotalRow("Total HT", invoice.totalHt.format(lang), InvoiceDetailScreenTags.TOTAL_HT)
+    TotalRow("TVA", invoice.totalVat.format(lang), InvoiceDetailScreenTags.TOTAL_VAT)
     TotalRow(
         label = "Total TTC",
-        value = invoice.totalTtc.formatEuros(),
+        value = invoice.totalTtc.format(lang),
         tag = InvoiceDetailScreenTags.TOTAL_TTC,
         emphasize = true,
     )
@@ -171,6 +178,7 @@ private fun InvoiceBody(
 
 @Composable
 private fun VatRow(line: VatBreakdown) {
+    val lang = LocalAppLanguage.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -178,8 +186,8 @@ private fun VatRow(line: VatBreakdown) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text("Base ${line.rate.label}", style = MaterialTheme.typography.bodyMedium)
-        Text(line.baseHt.formatEuros(), style = MaterialTheme.typography.bodyMedium)
-        Text("TVA ${line.vatAmount.formatEuros()}", style = MaterialTheme.typography.bodyMedium)
+        Text(line.baseHt.format(lang), style = MaterialTheme.typography.bodyMedium)
+        Text("TVA ${line.vatAmount.format(lang)}", style = MaterialTheme.typography.bodyMedium)
     }
 }
 

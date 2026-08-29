@@ -129,4 +129,96 @@ class SqlDelightInvoiceRepositoryTest {
 
         assertNull(repository.fetchInvoices().getOrThrow().single().sourceQuoteId)
     }
+
+    // ── Immutabilité du destinataire (anomalie D-03, recette du 29/08/2026) ──────────────────
+
+    @Test
+    fun emittingUnderKnownSiret_withDifferentName_leavesEarlierInvoicesUntouched() = runTest {
+        val repository = SqlDelightInvoiceRepository(newDatabase(), userEmail = "qa@ledgerhub.app")
+        repository.submitInvoice(invoice(number = "F-2026-001"))
+
+        // Même SIRET, raison sociale et contact différents — cas qui réécrivait l'historique.
+        repository.submitInvoice(
+            invoice(number = "F-2026-002").copy(
+                recipient = Party("Renommée SAS", "987654321", "98765432100045", "nouveau@renommee.fr"),
+            ),
+        )
+
+        val byNumber = repository.fetchInvoices().getOrThrow().associateBy { it.number }
+        assertEquals("Client SAS", byNumber.getValue("F-2026-001").recipient.name)
+        assertEquals("Renommée SAS", byNumber.getValue("F-2026-002").recipient.name)
+    }
+
+    @Test
+    fun recipientEmail_isFrozenOnTheInvoice_notReadBackFromTheCustomerRecord() = runTest {
+        val repository = SqlDelightInvoiceRepository(newDatabase(), userEmail = "qa@ledgerhub.app")
+        repository.submitInvoice(
+            invoice(number = "F-2026-001").copy(
+                recipient = Party("Client SAS", "987654321", "98765432100045", "contact@client.fr"),
+            ),
+        )
+        repository.submitInvoice(
+            invoice(number = "F-2026-002").copy(
+                recipient = Party("Client SAS", "987654321", "98765432100045", "compta@client.fr"),
+            ),
+        )
+
+        val byNumber = repository.fetchInvoices().getOrThrow().associateBy { it.number }
+        assertEquals("contact@client.fr", byNumber.getValue("F-2026-001").recipient.email)
+        assertEquals("compta@client.fr", byNumber.getValue("F-2026-002").recipient.email)
+    }
+
+    @Test
+    fun customerRecord_isNeverOverwrittenByAnEmission() = runTest {
+        val database = newDatabase()
+        val repository = SqlDelightInvoiceRepository(database, userEmail = "qa@ledgerhub.app")
+        repository.submitInvoice(invoice(number = "F-2026-001"))
+        repository.submitInvoice(
+            invoice(number = "F-2026-002").copy(
+                recipient = Party("Renommée SAS", "987654321", "98765432100045", "nouveau@renommee.fr"),
+            ),
+        )
+
+        val customer = database.customerQueries.selectBySiret("98765432100045").executeAsOne()
+        assertEquals("Client SAS", customer.name)
+    }
+
+    @Test
+    fun legacyInvoiceWithoutFrozenRecipient_fallsBackToTheCustomerRecord() = runTest {
+        val database = newDatabase()
+        // Écriture directe façon « facture héritée » : colonnes de gel laissées vides.
+        database.customerQueries.insertIfAbsent(
+            siret = "98765432100045",
+            siren = "987654321",
+            name = "Client Historique SARL",
+            email = "legacy@client.fr",
+        )
+        database.invoiceQueries.insertOrReplace(
+            number = "F-2025-900",
+            issueDate = "2025-11-02",
+            status = InvoiceStatus.PAID.name,
+            sourceQuoteId = null,
+            userEmail = "qa@ledgerhub.app",
+            issuerName = issuer.name,
+            issuerSiren = issuer.siren,
+            issuerSiret = issuer.siret,
+            recipientSiret = "98765432100045",
+            recipientName = "",
+            recipientEmail = "",
+            dueDate = "2025-12-02",
+            facturX = 1L,
+        )
+        database.invoiceLineQueries.insert(
+            invoiceNumber = "F-2025-900",
+            label = "Conseil",
+            quantity = 1L,
+            unitPriceHtCents = 10000L,
+            vatRate = VatRate.TAUX_NORMAL.name,
+        )
+
+        val fetched = SqlDelightInvoiceRepository(database, userEmail = "qa@ledgerhub.app")
+            .fetchInvoices().getOrThrow().single()
+        assertEquals("Client Historique SARL", fetched.recipient.name)
+        assertEquals("legacy@client.fr", fetched.recipient.email)
+    }
 }

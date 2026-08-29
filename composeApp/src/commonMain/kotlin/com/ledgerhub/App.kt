@@ -1,30 +1,53 @@
 package com.ledgerhub
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository
+import com.ledgerhub.domain.i18n.AppLanguage
+import com.ledgerhub.domain.i18n.StringKey
+import com.ledgerhub.presentation.components.LangToggle
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
+import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.data.invoice.SqlDelightInvoiceRepository
 import com.ledgerhub.data.quote.SqlDelightQuoteRepository
+import com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository
+import com.ledgerhub.data.repository.LocalLedgerRepository
 import com.ledgerhub.db.LedgerHubDatabase
-import com.ledgerhub.domain.creditnote.SubmitCreditNoteUseCase
 import com.ledgerhub.domain.dashboard.GetDashboardAnalyticsUseCase
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
@@ -33,48 +56,50 @@ import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
-import com.ledgerhub.domain.quote.ConvertQuoteToInvoiceUseCase
-import com.ledgerhub.presentation.auth.LoginScreen
-import com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreen
-import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
+import com.ledgerhub.presentation.dashboard.DashboardIntent
 import com.ledgerhub.presentation.dashboard.DashboardScreen
 import com.ledgerhub.presentation.dashboard.DashboardViewModel
-import com.ledgerhub.presentation.invoicedetail.InvoiceDetailScreen
-import com.ledgerhub.presentation.invoicedetail.InvoiceDetailViewModel
 import com.ledgerhub.presentation.invoiceform.InvoiceFormScreen
 import com.ledgerhub.presentation.invoiceform.InvoiceFormViewModel
-import com.ledgerhub.presentation.quotes.QuotesView
-import com.ledgerhub.presentation.quotes.QuotesViewModel
+import com.ledgerhub.presentation.invoices.InvoiceDetailScreen
+import com.ledgerhub.presentation.invoices.InvoiceDetailViewModel
+import com.ledgerhub.presentation.invoices.InvoiceListIntent
+import com.ledgerhub.presentation.invoices.InvoiceListScreen
+import com.ledgerhub.presentation.invoices.InvoiceListViewModel
+import com.ledgerhub.presentation.placeholder.ClientsScreen
+import com.ledgerhub.presentation.placeholder.SettingsScreen
+import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /** Compte utilisateur courant, en dur tant qu'il n'y a pas de flux d'authentification (v1). */
 private const val CURRENT_USER_EMAIL_PLACEHOLDER = "demo@ledgerhub.app"
 
-/** Numéro de la facture de démonstration semée au premier lancement — voir câblage temporaire ci-dessous. */
-private const val DEMO_INVOICE_NUMBER = "F-2026-DEMO"
+/** Seuil de largeur Material 3 « expanded » : au-delà, sidebar permanente ; en-deçà, barre du bas. */
+private val ExpandedWidthThreshold = 840.dp
 
-/**
- * Écrans accessibles depuis le câblage temporaire de validation manuelle — voir [App]. Chacun est
- * branché sur les MÊMES repositories SQLDelight, donc toute donnée créée dans un écran (ex : une
- * facture Payée créée via [INVOICE_FORM]) est immédiatement visible dans les autres (ex : au
- * [DASHBOARD]).
- */
-private enum class DemoDestination(val label: String) {
-    AVOIR("Avoir"),
-    DASHBOARD("Tableau de bord"),
-    INVOICE_FORM("Facture"),
-    QUOTES("Devis"),
-    LOGIN("Connexion"),
+/** Destinations du shell de navigation — parité Web (sidebar / barre du bas). Libellés traduits via [titleKey]. */
+private enum class Destination(val titleKey: StringKey, val glyph: String) {
+    OVERVIEW(StringKey.NAV_OVERVIEW, "▦"),
+    INVOICES(StringKey.NAV_INVOICES, "🧾"),
+    CLIENTS(StringKey.NAV_CLIENTS, "👥"),
+    SETTINGS(StringKey.NAV_SETTINGS, "⚙️"),
+}
+
+/** Écran affiché par-dessus les onglets (formulaire de création, détail d'une facture). */
+private sealed interface Overlay {
+    data object None : Overlay
+    data object CreateInvoice : Overlay
+    data class InvoiceDetail(val number: String) : Overlay
 }
 
 /**
  * Point d'entrée Compose Multiplatform commun — appelé depuis androidMain et iosMain.
- * [database] est construite côté plateforme (MainActivity / MainViewController) via l'actual
- * [com.ledgerhub.db.DatabaseDriverFactory], qui a besoin d'un Context sur Android.
+ * [database] est construite côté plateforme (MainActivity / MainViewController).
  *
- * CÂBLAGE TEMPORAIRE DE VALIDATION MANUELLE : en l'absence de navigation réelle, une rangée
- * d'onglets bascule entre les écrans listés dans [DemoDestination] — voir cet enum pour le détail
- * du partage des repositories. À remplacer par un vrai flux de navigation au démarrage du module
- * Dashboard.
+ * Shell responsive : barre de navigation en bas sur mobile portrait (Compact), sidebar permanente
+ * + canvas central sur tablette/paysage (Expanded ≥ [ExpandedWidthThreshold]). Les quatre écrans
+ * partagent les MÊMES repositories SQLDelight, donc toute facture émise via le formulaire est
+ * immédiatement visible dans « Factures » et sur le tableau de bord (voir [LocalLedgerRepository]).
  */
 @Composable
 fun App(database: LedgerHubDatabase) {
@@ -87,84 +112,104 @@ fun App(database: LedgerHubDatabase) {
     val quoteRepository = remember(database) {
         SqlDelightQuoteRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
     }
+    val ledgerRepository = remember(invoiceRepository) { LocalLedgerRepository(invoiceRepository) }
 
-    var demoInvoice by remember { mutableStateOf<Invoice?>(null) }
-    var showCreditNoteForm by remember { mutableStateOf(false) }
-    var destination by remember { mutableStateOf(DemoDestination.AVOIR) }
+    // ViewModels des onglets — créés une fois, conservés entre les changements d'onglet.
+    val dashboardViewModel = remember {
+        DashboardViewModel(
+            GetDashboardAnalyticsUseCase(invoiceRepository, creditNoteRepository, quoteRepository),
+        )
+    }
+    val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository) }
 
+    // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
+    // encore vide au tout premier lancement. On relance explicitement la lecture s'il a semé —
+    // sans quoi le tableau de bord et la liste restent à zéro jusqu'au redémarrage suivant.
     LaunchedEffect(invoiceRepository) {
-        val existing = invoiceRepository.fetchInvoices().getOrDefault(emptyList())
-            .firstOrNull { it.number == DEMO_INVOICE_NUMBER }
-        demoInvoice = existing ?: buildDemoInvoice().also { invoiceRepository.submitInvoice(it) }
+        if (seedDemoDataIfEmpty(invoiceRepository)) {
+            dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
+            invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
+        }
     }
 
-    MaterialTheme {
-        // .statusBarsPadding() — QA manuelle sur émulateur (campagne 1) : la barre de statut
-        // système (136px de haut sur Pixel_5_API_35) chevauchait la rangée d'onglets ci-dessous,
-        // interceptant silencieusement les taps dans sa moitié supérieure. Appliqué au conteneur
-        // racine plutôt qu'à la seule Row des onglets, pour que tout futur contenu ajouté en haut
-        // de cet écran hérite automatiquement de la même protection.
-        Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(16.dp, 16.dp, 16.dp, 0.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                DemoDestination.entries.forEach { entry ->
-                    if (entry == destination) {
-                        Button(onClick = { destination = entry }) { Text(entry.label) }
-                    } else {
-                        OutlinedButton(onClick = { destination = entry }) { Text(entry.label) }
-                    }
-                }
-            }
+    var destination by remember { mutableStateOf(Destination.OVERVIEW) }
+    var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
+    // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
+    var language by remember { mutableStateOf(AppLanguage.FR) }
 
-            when (destination) {
-                DemoDestination.DASHBOARD -> DashboardScreen(
-                    viewModel = remember {
-                        DashboardViewModel(
-                            GetDashboardAnalyticsUseCase(
-                                invoiceRepository = invoiceRepository,
-                                creditNoteRepository = creditNoteRepository,
-                                quoteRepository = quoteRepository,
+    val onCreateInvoice = { overlay = Overlay.CreateInvoice }
+    val onBackToTabs = {
+        overlay = Overlay.None
+        // La liste et le tableau de bord peuvent avoir de nouvelles données après une émission.
+        invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
+        dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
+    }
+
+    LedgerHubTheme {
+        CompositionLocalProvider(LocalAppLanguage provides language) {
+            Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val expanded = maxWidth >= ExpandedWidthThreshold
+
+                    if (expanded) {
+                        Row(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                            LedgerSidebar(
+                                selected = destination,
+                                language = language,
+                                onSelect = { destination = it; overlay = Overlay.None },
+                                onCreateInvoice = onCreateInvoice,
+                                onSelectLanguage = { language = it },
                             )
-                        )
-                    }
-                )
-
-                DemoDestination.INVOICE_FORM -> InvoiceFormScreen(
-                    viewModel = remember {
-                        InvoiceFormViewModel(submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository))
-                    }
-                )
-
-                DemoDestination.QUOTES -> QuotesView(
-                    viewModel = remember {
-                        QuotesViewModel(
-                            quoteRepository = quoteRepository,
-                            convertQuoteToInvoiceUseCase = ConvertQuoteToInvoiceUseCase(),
-                            submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
-                        )
-                    }
-                )
-
-                DemoDestination.LOGIN -> LoginScreen()
-
-                DemoDestination.AVOIR -> {
-                    val invoice = demoInvoice
-                    when {
-                        invoice == null -> Unit // Semis initial de la facture de démo en cours.
-                        showCreditNoteForm -> CreditNoteFormScreen(
-                            viewModel = remember(invoice) {
-                                CreditNoteFormViewModel(
-                                    sourceInvoice = invoice,
-                                    submitCreditNoteUseCase = SubmitCreditNoteUseCase(creditNoteRepository),
+                            Box(modifier = Modifier.weight(1f).padding(16.dp)) {
+                                Card(
+                                    modifier = Modifier.fillMaxSize(),
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                ) {
+                                    ShellContent(
+                                        destination = destination,
+                                        overlay = overlay,
+                                        onCreateInvoice = onCreateInvoice,
+                                        onBack = onBackToTabs,
+                                        onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
+                                        invoiceRepository = invoiceRepository,
+                                        ledgerRepository = ledgerRepository,
+                                        dashboardViewModel = dashboardViewModel,
+                                        invoiceListViewModel = invoiceListViewModel,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Scaffold(
+                            containerColor = MaterialTheme.colorScheme.background,
+                            topBar = {
+                                LedgerHeader(language = language, onSelectLanguage = { language = it })
+                            },
+                            bottomBar = {
+                                if (overlay is Overlay.None) {
+                                    LedgerBottomBar(
+                                        selected = destination,
+                                        onSelect = { destination = it },
+                                    )
+                                }
+                            },
+                        ) { inner ->
+                            Box(modifier = Modifier.fillMaxSize().padding(inner)) {
+                                ShellContent(
+                                    destination = destination,
+                                    overlay = overlay,
+                                    onCreateInvoice = onCreateInvoice,
+                                    onBack = onBackToTabs,
+                                    onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
+                                    invoiceRepository = invoiceRepository,
+                                    ledgerRepository = ledgerRepository,
+                                    dashboardViewModel = dashboardViewModel,
+                                    invoiceListViewModel = invoiceListViewModel,
                                 )
                             }
-                        )
-                        else -> InvoiceDetailScreen(
-                            viewModel = remember(invoice) { InvoiceDetailViewModel(invoice, creditNoteRepository) },
-                            onCreateCreditNoteClick = { showCreditNoteForm = true },
-                        )
+                        }
                     }
                 }
             }
@@ -172,14 +217,214 @@ fun App(database: LedgerHubDatabase) {
     }
 }
 
-private fun buildDemoInvoice(): Invoice = Invoice(
-    number = DEMO_INVOICE_NUMBER,
-    issueDate = "2026-08-01",
-    issuer = Party("Vendeur SARL", "123456789", "12345678900012"),
-    recipient = Party("Client SAS", "987654321", "98765432100045"),
-    lines = listOf(
-        InvoiceLine("Prestation de conseil", quantity = 2, unitPriceHt = Money(50000), vatRate = VatRate.TAUX_NORMAL),
-        InvoiceLine("Formation", quantity = 1, unitPriceHt = Money(20000), vatRate = VatRate.TAUX_REDUIT),
-    ),
-    status = InvoiceStatus.VALIDATED,
-)
+/** En-tête mobile : nom de l'app + sélecteur de langue (le « Header » demandé par l'US-02, côté mobile). */
+@Composable
+private fun LedgerHeader(language: AppLanguage, onSelectLanguage: (AppLanguage) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(tr(StringKey.APP_NAME), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        LangToggle(current = language, onSelect = onSelectLanguage)
+    }
+}
+
+@Composable
+private fun ShellContent(
+    destination: Destination,
+    overlay: Overlay,
+    onCreateInvoice: () -> Unit,
+    onBack: () -> Unit,
+    onOpenInvoice: (String) -> Unit,
+    invoiceRepository: SqlDelightInvoiceRepository,
+    ledgerRepository: LocalLedgerRepository,
+    dashboardViewModel: DashboardViewModel,
+    invoiceListViewModel: InvoiceListViewModel,
+) {
+    when (overlay) {
+        Overlay.CreateInvoice -> {
+            val formViewModel = remember { InvoiceFormViewModel(SubmitInvoiceUseCase(invoiceRepository)) }
+            DisposableEffect(Unit) { onDispose { formViewModel.onCleared() } }
+            OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_DASHBOARD), onBack = onBack) {
+                InvoiceFormScreen(viewModel = formViewModel)
+            }
+        }
+
+        is Overlay.InvoiceDetail -> {
+            val detailViewModel = remember(overlay.number) {
+                InvoiceDetailViewModel(overlay.number, ledgerRepository)
+            }
+            DisposableEffect(overlay.number) { onDispose { detailViewModel.onCleared() } }
+            OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_INVOICES), onBack = onBack) {
+                InvoiceDetailScreen(viewModel = detailViewModel)
+            }
+        }
+
+        Overlay.None -> when (destination) {
+            Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
+                CreateInvoiceAction(onCreateInvoice)
+                DashboardScreen(viewModel = dashboardViewModel)
+            }
+
+            Destination.INVOICES -> Column(modifier = Modifier.fillMaxSize()) {
+                CreateInvoiceAction(onCreateInvoice)
+                InvoiceListScreen(viewModel = invoiceListViewModel, onInvoiceClick = onOpenInvoice)
+            }
+
+            Destination.CLIENTS -> ClientsScreen()
+            Destination.SETTINGS -> SettingsScreen()
+        }
+    }
+}
+
+@Composable
+private fun OverlayScaffold(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 0.dp)) {
+            Text("←  $title")
+        }
+        content()
+    }
+}
+
+@Composable
+private fun CreateInvoiceAction(onCreateInvoice: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(20.dp, 16.dp, 20.dp, 0.dp),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        Button(onClick = onCreateInvoice) { Text("＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}") }
+    }
+}
+
+@Composable
+private fun LedgerBottomBar(selected: Destination, onSelect: (Destination) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        Destination.entries.forEach { entry ->
+            NavigationBarItem(
+                selected = entry == selected,
+                onClick = { onSelect(entry) },
+                icon = { Text(entry.glyph) },
+                label = { Text(tr(entry.titleKey), style = MaterialTheme.typography.labelSmall) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LedgerSidebar(
+    selected: Destination,
+    language: AppLanguage,
+    onSelect: (Destination) -> Unit,
+    onCreateInvoice: () -> Unit,
+    onSelectLanguage: (AppLanguage) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(248.dp)
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp, 8.dp, 8.dp, 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                tr(StringKey.APP_NAME),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            LangToggle(current = language, onSelect = onSelectLanguage)
+        }
+        Destination.entries.forEach { entry ->
+            val isSelected = entry == selected
+            Surface(
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                } else {
+                    Color.Transparent
+                },
+                contentColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onSelect(entry) },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(entry.glyph)
+                    Text(tr(entry.titleKey), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        Button(
+            onClick = onCreateInvoice,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+        ) {
+            Text("＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}")
+        }
+        Text(
+            tr(StringKey.SIDEBAR_COMPLIANCE),
+            style = MaterialTheme.typography.labelSmall,
+            color = LedgerHubColors.SecondaryText,
+            modifier = Modifier.padding(8.dp),
+        )
+    }
+}
+
+// ── Jeu de démonstration ─────────────────────────────────────────────────────────
+
+/**
+ * Sème quelques factures au premier lancement (base vide) pour que le tableau de bord et la liste
+ * ne s'affichent pas vides en QA manuelle. Aucun effet si des factures existent déjà.
+ *
+ * @return `true` si des factures ont effectivement été semées — l'appelant doit alors redéclencher
+ *   la lecture des écrans, qui ont chargé la base avant que le semis ne se termine.
+ */
+private suspend fun seedDemoDataIfEmpty(repository: SqlDelightInvoiceRepository): Boolean {
+    val existing = repository.fetchInvoices().getOrDefault(emptyList())
+    if (existing.isNotEmpty()) return false
+    demoInvoices().forEach { repository.submitInvoice(it) }
+    return true
+}
+
+private fun demoInvoices(): List<Invoice> {
+    val client = Party("Boulangerie Moreau SARL", "784102336", "78410233600021", "compta@boulangerie-moreau.fr")
+    fun demo(number: String, status: InvoiceStatus, issueDate: String, dueDate: String, unitPriceHtCents: Long, rate: VatRate) = Invoice(
+        number = number,
+        issueDate = issueDate,
+        issuer = Party("Cabinet LedgerHub", "820329331", "82032933100027", "facturation@ledgerhub.app"),
+        recipient = client,
+        lines = listOf(InvoiceLine("Prestation de conseil", quantity = 1, unitPriceHt = Money(unitPriceHtCents), vatRate = rate)),
+        status = status,
+        dueDate = dueDate,
+    )
+    return listOf(
+        demo("FAC-2026-0142", InvoiceStatus.PAID, "2026-02-24", "2026-03-24", 104_000, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0141", InvoiceStatus.PAID, "2026-03-22", "2026-04-22", 390_000, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0140", InvoiceStatus.PAID, "2026-04-20", "2026-05-20", 800_000, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0139", InvoiceStatus.PAID, "2026-05-18", "2026-06-18", 192_500, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0138", InvoiceStatus.PAID, "2026-06-15", "2026-07-15", 618_800, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0137", InvoiceStatus.SENT, "2026-07-12", "2026-08-12", 220_000, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0136", InvoiceStatus.DRAFT, "2026-07-28", "2026-08-28", 73_400, VatRate.TAUX_NORMAL),
+    )
+}

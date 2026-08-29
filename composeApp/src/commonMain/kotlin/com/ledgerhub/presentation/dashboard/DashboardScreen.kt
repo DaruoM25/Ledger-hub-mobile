@@ -1,8 +1,12 @@
 package com.ledgerhub.presentation.dashboard
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,21 +30,28 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.dashboard.RecentDocument
-import com.ledgerhub.presentation.invoicedetail.badgeColor as invoiceStatusBadgeColor
-import com.ledgerhub.presentation.invoicedetail.label as invoiceStatusLabel
-import com.ledgerhub.presentation.quotes.badgeColor as quoteStatusBadgeColor
-import com.ledgerhub.presentation.quotes.label as quoteStatusLabel
+import com.ledgerhub.domain.i18n.StringKey
+import com.ledgerhub.domain.invoice.InvoiceStatus
+import com.ledgerhub.domain.quote.QuoteStatus
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
+import com.ledgerhub.presentation.i18n.formatIsoDate
+import com.ledgerhub.presentation.i18n.tr
+import com.ledgerhub.presentation.invoices.formatMoney
+import com.ledgerhub.presentation.theme.InvoiceStatusTone
+import com.ledgerhub.presentation.theme.statusColors
 
-/** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
+/** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest / Robolectric). */
 object DashboardTags {
     const val SCREEN = "dashboard_screen"
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
     const val LOAD_ERROR = "dashboard_load_error"
     const val COLLECTED_CARD = "dashboard_kpi_collected"
     const val PENDING_CARD = "dashboard_kpi_pending"
-    const val OVERDUE_CARD = "dashboard_kpi_overdue"
+    const val ISSUED_CARD = "dashboard_kpi_issued"
     const val REVENUE_CHART = "dashboard_revenue_chart"
     const val RECENT_ACTIVITY_LIST = "dashboard_recent_activity_list"
     const val RECENT_ACTIVITY_EMPTY = "dashboard_recent_activity_empty"
@@ -64,14 +75,23 @@ internal fun DashboardContent(uiState: DashboardUiState) {
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .semantics { testTag = DashboardTags.SCREEN }
-            .padding(16.dp),
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text("Tableau de bord", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                tr(StringKey.NAV_OVERVIEW),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                tr(StringKey.DASHBOARD_SUBTITLE),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         when {
-            // Le premier chargement (aucune donnée encore reçue) affiche un indicateur plein écran ;
-            // un rechargement ultérieur avec des données déjà présentes ne masque pas tout l'écran.
             uiState.isLoading && uiState.analytics == null -> LoadingRow()
 
             uiState.loadErrorMessage != null -> Text(
@@ -84,18 +104,9 @@ internal fun DashboardContent(uiState: DashboardUiState) {
             )
 
             else -> {
-                KpiCardsRow(uiState)
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Chiffre d'affaires (6 derniers mois)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    RevenueBarChart(data = uiState.monthlyRevenue)
-                }
-
-                RecentActivitySection(documents = uiState.recentDocuments)
+                KpiColumn(uiState)
+                RevenueSection(uiState)
+                RecentInvoicesSection(documents = uiState.recentDocuments)
             }
         }
     }
@@ -106,126 +117,249 @@ private fun LoadingRow() {
     Row(
         modifier = Modifier.semantics { testTag = DashboardTags.LOADING_INDICATOR },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         CircularProgressIndicator(modifier = Modifier.size(20.dp))
-        Text("Chargement du tableau de bord…")
+        Text(tr(StringKey.DASHBOARD_LOADING))
     }
 }
 
+// ── KPI ──────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun KpiCardsRow(uiState: DashboardUiState) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun KpiColumn(uiState: DashboardUiState) {
+    val lang = LocalAppLanguage.current
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         KpiCard(
-            modifier = Modifier.weight(1f),
             tag = DashboardTags.COLLECTED_CARD,
-            title = "Encaissé",
-            amountCents = uiState.collectedRevenueCents,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            title = tr(StringKey.KPI_REVENUE_TITLE),
+            value = formatMoney(uiState.collectedRevenueCents, lang),
+            caption = tr(StringKey.KPI_REVENUE_CAPTION),
+            glyph = "📈",
+            accent = MaterialTheme.colorScheme.primaryContainer,
         )
         KpiCard(
-            modifier = Modifier.weight(1f),
             tag = DashboardTags.PENDING_CARD,
-            title = "En attente",
-            amountCents = uiState.pendingRevenueCents,
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            title = tr(StringKey.KPI_PENDING_TITLE),
+            value = formatMoney(uiState.pendingRevenueCents, lang),
+            caption = tr(StringKey.KPI_PENDING_CAPTION),
+            glyph = "⏳",
+            accent = MaterialTheme.colorScheme.tertiaryContainer,
         )
         KpiCard(
-            modifier = Modifier.weight(1f),
-            tag = DashboardTags.OVERDUE_CARD,
-            title = "En retard",
-            amountCents = uiState.overdueRevenueCents,
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            tag = DashboardTags.ISSUED_CARD,
+            title = tr(StringKey.KPI_ISSUED_TITLE),
+            value = uiState.issuedCount.toString(),
+            caption = tr(StringKey.KPI_ISSUED_CAPTION),
+            glyph = "🧾",
+            accent = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
         )
     }
 }
 
 @Composable
 private fun KpiCard(
-    modifier: Modifier,
     tag: String,
     title: String,
-    amountCents: Long,
-    containerColor: Color,
-    contentColor: Color,
+    value: String,
+    caption: String,
+    glyph: String,
+    accent: Color,
 ) {
-    Card(
-        modifier = modifier.semantics { testTag = tag },
-        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium)
+    OutlinedSurfaceCard(modifier = Modifier.fillMaxWidth().semantics { testTag = tag }) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    value,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    caption,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(accent, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(glyph)
+            }
+        }
+    }
+}
+
+// ── Graphe CA ────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun RevenueSection(uiState: DashboardUiState) {
+    OutlinedSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Le montant ne se replie jamais : c'est le titre et le sous-titre qui cèdent la place.
+            // Sans cela, un CA à cinq chiffres passait à la ligne et recouvrait le sous-titre.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp)) {
+                    Text(
+                        tr(StringKey.KPI_REVENUE_TITLE),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        tr(StringKey.REVENUE_SECTION_SUBTITLE),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    formatMoney(uiState.monthlyRevenue.sumOf { it.amount.cents }, LocalAppLanguage.current),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            RevenueChart(data = uiState.monthlyRevenue)
+        }
+    }
+}
+
+// ── Factures récentes ────────────────────────────────────────────────────────────
+
+@Composable
+private fun RecentInvoicesSection(documents: List<RecentDocument>) {
+    OutlinedSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                text = "${formatCents(amountCents)} €",
+                tr(StringKey.RECENT_INVOICES_TITLE),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
+            if (documents.isEmpty()) {
+                Text(
+                    tr(StringKey.RECENT_EMPTY),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { testTag = DashboardTags.RECENT_ACTIVITY_EMPTY },
+                )
+            } else {
+                RecentHeaderRow()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { testTag = DashboardTags.RECENT_ACTIVITY_LIST },
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    documents.forEach { RecentDocumentRow(it) }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun RecentActivitySection(documents: List<RecentDocument>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Activité récente", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        if (documents.isEmpty()) {
-            Text(
-                "Aucun document pour le moment",
-                modifier = Modifier.semantics { testTag = DashboardTags.RECENT_ACTIVITY_EMPTY },
-            )
-        } else {
-            Column(
-                modifier = Modifier.semantics { testTag = DashboardTags.RECENT_ACTIVITY_LIST },
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                documents.forEach { document -> RecentDocumentRow(document) }
-            }
-        }
+private fun RecentHeaderRow() {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        HeaderCell(tr(StringKey.COL_INVOICE_NO), 1.4f)
+        HeaderCell(tr(StringKey.COL_CLIENT), 1.6f)
+        HeaderCell(tr(StringKey.COL_DATE), 1.1f)
+        HeaderCell(tr(StringKey.COL_TTC), 1f, alignEnd = true)
     }
+}
+
+@Composable
+private fun RowScope.HeaderCell(text: String, weight: Float, alignEnd: Boolean = false) {
+    Text(
+        text = text,
+        modifier = Modifier.weight(weight),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+    )
 }
 
 @Composable
 private fun RecentDocumentRow(document: RecentDocument) {
-    val (kindLabel, statusText, statusColor) = when (document) {
-        is RecentDocument.InvoiceDocument -> Triple(
-            "Facture",
-            document.invoice.status.invoiceStatusLabel(),
-            document.invoice.status.invoiceStatusBadgeColor(),
+    val lang = LocalAppLanguage.current
+    val row: RowData = when (document) {
+        is RecentDocument.InvoiceDocument -> RowData(
+            client = document.invoice.recipient.name,
+            ttcCents = document.invoice.totalTtc.cents,
+            statusKey = document.invoice.status.statusKey(),
+            tone = document.invoice.status.tone(),
         )
-        is RecentDocument.QuoteDocument -> Triple(
-            "Devis",
-            document.quote.status.quoteStatusLabel(),
-            document.quote.status.quoteStatusBadgeColor(),
+        is RecentDocument.QuoteDocument -> RowData(
+            client = document.quote.recipient.name,
+            ttcCents = document.quote.totalTtc.cents,
+            statusKey = document.quote.status.statusKey(),
+            tone = document.quote.status.tone(),
         )
     }
 
-    Card(modifier = Modifier.fillMaxWidth().semantics { testTag = DashboardTags.recentDocumentTag(document.number) }) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text("$kindLabel ${document.number}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Text(document.issueDate, style = MaterialTheme.typography.bodySmall)
-            }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = DashboardTags.recentDocumentTag(document.number) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            document.number,
+            modifier = Modifier.weight(1.4f),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(row.client, modifier = Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
+        Text(
+            formatIsoDate(document.issueDate, lang),
+            modifier = Modifier.weight(1.1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+            Text(
+                formatMoney(row.ttcCents, lang),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
             StatusBadge(
                 tag = DashboardTags.recentDocumentStatusBadgeTag(document.number),
-                text = statusText,
-                color = statusColor,
+                text = tr(row.statusKey),
+                tone = row.tone,
             )
         }
     }
 }
 
+private data class RowData(
+    val client: String,
+    val ttcCents: Long,
+    val statusKey: StringKey,
+    val tone: InvoiceStatusTone,
+)
+
 @Composable
-private fun StatusBadge(tag: String, text: String, color: Color) {
+private fun StatusBadge(tag: String, text: String, tone: InvoiceStatusTone) {
+    val (bg, fg) = statusColors(tone)
     Surface(
-        color = color,
-        contentColor = Color.White,
+        color = bg,
+        contentColor = fg,
         shape = RoundedCornerShape(50),
         modifier = Modifier.semantics {
             testTag = tag
@@ -234,17 +368,51 @@ private fun StatusBadge(tag: String, text: String, color: Color) {
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
         )
     }
 }
 
-/** Formate des centimes (positifs ou négatifs) en chaîne décimale (ex: -1250 -> "-12.50"). */
-private fun formatCents(cents: Long): String {
-    val sign = if (cents < 0) "-" else ""
-    val absCents = kotlin.math.abs(cents)
-    val whole = absCents / 100
-    val fraction = (absCents % 100).toString().padStart(2, '0')
-    return "$sign$whole.$fraction"
+// ── Primitives ───────────────────────────────────────────────────────────────────
+
+/** Carte "panneau" du thème sombre : fond [MaterialTheme.colorScheme.surface], fine bordure, coins 16 dp. */
+@Composable
+private fun OutlinedSurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        content()
+    }
+}
+
+private fun InvoiceStatus.tone(): InvoiceStatusTone = when (this) {
+    InvoiceStatus.PAID -> InvoiceStatusTone.PAID
+    InvoiceStatus.SENT, InvoiceStatus.VALIDATED -> InvoiceStatusTone.PENDING
+    InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED -> InvoiceStatusTone.DRAFT
+}
+
+private fun QuoteStatus.tone(): InvoiceStatusTone = when (this) {
+    QuoteStatus.ACCEPTED -> InvoiceStatusTone.PAID
+    QuoteStatus.SENT -> InvoiceStatusTone.PENDING
+    QuoteStatus.DRAFT, QuoteStatus.REJECTED -> InvoiceStatusTone.DRAFT
+}
+
+private fun InvoiceStatus.statusKey(): StringKey = when (this) {
+    InvoiceStatus.DRAFT -> StringKey.STATUS_DRAFT
+    InvoiceStatus.VALIDATED -> StringKey.STATUS_VALIDATED
+    InvoiceStatus.SENT -> StringKey.STATUS_SENT
+    InvoiceStatus.PAID -> StringKey.STATUS_PAID
+    InvoiceStatus.CANCELLED -> StringKey.STATUS_CANCELLED
+}
+
+private fun QuoteStatus.statusKey(): StringKey = when (this) {
+    QuoteStatus.DRAFT -> StringKey.STATUS_DRAFT
+    QuoteStatus.SENT -> StringKey.STATUS_SENT
+    QuoteStatus.ACCEPTED -> StringKey.STATUS_VALIDATED
+    QuoteStatus.REJECTED -> StringKey.STATUS_CANCELLED
 }

@@ -1,23 +1,32 @@
 package com.ledgerhub.presentation.invoiceform
 
+import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.Money
 
-/** État immuable du formulaire — pattern UDF. Les champs sont stockés en texte brut (saisie utilisateur). */
+/**
+ * État immuable du formulaire — pattern UDF. Les champs sont stockés en texte brut (saisie
+ * utilisateur). Parité Web : une seule section « Informations Client » (le destinataire) ;
+ * l'émetteur est l'identité fixe du cabinet ([CabinetIdentity]).
+ */
 data class InvoiceFormUiState(
     val invoiceNumber: String = "",
     val issueDate: String = "",
-    val issuerName: String = "",
-    val issuerSiren: String = "",
-    val issuerSiret: String = "",
-    val recipientName: String = "",
-    val recipientSiren: String = "",
-    val recipientSiret: String = "",
+    val dueDate: String = "",
+    val clientName: String = "",
+    val clientSiret: String = "",
+    val clientEmail: String = "",
     val lines: List<InvoiceLineFormState> = listOf(InvoiceLineFormState()),
-    val errors: Map<InvoiceFormField, String> = emptyMap(),
+    val errors: Map<InvoiceFormField, ValidationErrorKey> = emptyMap(),
+    /** Champs déjà saisis par l'utilisateur — conditionne l'affichage des erreurs, pas leur calcul. */
+    val touchedFields: Set<InvoiceFormField> = emptySet(),
+    /** Passe à `true` à la première tentative d'émission : toutes les erreurs sont alors révélées. */
+    val submitAttempted: Boolean = false,
     val totalHt: Money = Money.ZERO,
     val totalVat: Money = Money.ZERO,
     val totalTtc: Money = Money.ZERO,
+    /** Toggle « Générer au format légal Factur-X » — activé par défaut (conformité 2026). */
+    val generateFacturX: Boolean = true,
     val submittedInvoice: Invoice? = null,
     val submissionStatus: SubmissionStatus = SubmissionStatus.Idle,
 ) {
@@ -29,4 +38,12 @@ data class InvoiceFormUiState(
 
     val isSubmitEnabled: Boolean
         get() = errors.isEmpty() && lines.all { it.errors.isEmpty() } && isFormEnabled
+
+    /**
+     * Erreurs effectivement présentées à l'écran. La validation, elle, tourne en permanence sur
+     * la totalité des champs (voir [errors]) : un formulaire vierge reste donc non soumettable,
+     * mais s'affiche neutre tant que l'utilisateur n'a rien saisi ni tenté d'émettre.
+     */
+    val visibleErrors: Map<InvoiceFormField, ValidationErrorKey>
+        get() = if (submitAttempted) errors else errors.filterKeys { it in touchedFields }
 }

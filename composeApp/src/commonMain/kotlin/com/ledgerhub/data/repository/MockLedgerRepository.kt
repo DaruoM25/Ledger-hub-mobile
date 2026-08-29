@@ -61,13 +61,14 @@ class MockLedgerRepository(
         ) = Invoice(
             number = number,
             issueDate = issueDate,
-            issuer = Party("Ledger Studio SARL", "123456789", "12345678900012"),
-            recipient = Party("Client Démo SAS", "987654321", "98765432100045"),
+            issuer = Party("Ledger Studio SARL", "123456789", "12345678900012", "facturation@ledger-studio.fr"),
+            recipient = Party("Client Démo SAS", "987654321", "98765432100045", "compta@client-demo.fr"),
             lines = listOf(
                 InvoiceLine("Prestation de conseil", quantity = 1, unitPriceHt = Money(unitPriceHtCents), vatRate = vatRate),
                 InvoiceLine("Frais de dossier", quantity = 2, unitPriceHt = Money(4_500), vatRate = VatRate.TAUX_NORMAL),
             ),
             status = status,
+            dueDate = "2026-09-30",
         )
     }
 }

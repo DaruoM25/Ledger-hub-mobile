@@ -36,9 +36,9 @@ class DashboardScreenRobolectricTest {
             onAllNodesWithTag(DashboardTags.COLLECTED_CARD).fetchSemanticsNodes().isNotEmpty()
         }
 
-        onNodeWithTag(DashboardTags.COLLECTED_CARD).assertIsDisplayed()
-        onNodeWithTag(DashboardTags.PENDING_CARD).assertIsDisplayed()
-        onNodeWithTag(DashboardTags.OVERDUE_CARD).assertIsDisplayed()
+        onNodeWithTag(DashboardTags.COLLECTED_CARD).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.PENDING_CARD).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.ISSUED_CARD).performScrollTo().assertIsDisplayed()
         onNodeWithTag(DashboardTags.REVENUE_CHART).performScrollTo().assertIsDisplayed()
     }
 

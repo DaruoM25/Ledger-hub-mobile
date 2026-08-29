@@ -43,8 +43,23 @@ class DashboardAnalyticsTest {
         assertEquals(Money.ZERO, analytics.collectedRevenue)
         assertEquals(Money.ZERO, analytics.pendingRevenue)
         assertEquals(Money.ZERO, analytics.overdueRevenue)
+        assertEquals(0, analytics.issuedCount)
         assertEquals(emptyList(), analytics.monthlyRevenue)
         assertEquals(emptyList(), analytics.recentDocuments)
+    }
+
+    @Test
+    fun issuedCount_countsEveryInvoice_regardlessOfStatus() {
+        val invoices = listOf(
+            invoice("F-100", InvoiceStatus.DRAFT),
+            invoice("F-101", InvoiceStatus.SENT),
+            invoice("F-102", InvoiceStatus.PAID),
+            invoice("F-103", InvoiceStatus.CANCELLED),
+        )
+
+        val analytics = computeDashboardAnalytics(invoices = invoices, creditNotes = emptyList())
+
+        assertEquals(4, analytics.issuedCount)
     }
 
     @Test

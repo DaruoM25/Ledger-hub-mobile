@@ -30,12 +30,12 @@ class InvoiceFormScreenTest {
     }
 
     @Test
-    fun typingInvalidSiren_displaysFieldError() = runComposeUiTest {
+    fun typingInvalidSiret_displaysFieldError() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        onNodeWithTag(InvoiceFormTags.ISSUER_SIREN).performScrollTo().performTextInput("123")
+        onNodeWithTag(InvoiceFormTags.CLIENT_SIRET).performScrollTo().performTextInput("123")
 
-        onNodeWithTag(InvoiceFormTags.errorTagFor(InvoiceFormField.ISSUER_SIREN))
+        onNodeWithTag(InvoiceFormTags.errorTagFor(InvoiceFormField.CLIENT_SIRET))
             .performScrollTo()
             .assertIsDisplayed()
     }

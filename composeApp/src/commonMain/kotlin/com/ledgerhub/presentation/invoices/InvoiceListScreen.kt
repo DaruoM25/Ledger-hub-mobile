@@ -28,7 +28,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
+import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.components.InvoiceCard
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
@@ -70,7 +72,7 @@ internal fun InvoiceListView(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "Factures",
+            tr(StringKey.NAV_INVOICES),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
@@ -83,7 +85,7 @@ internal fun InvoiceListView(
 
         when (val content = uiState.content) {
             InvoiceListContent.Loading -> LoadingState()
-            is InvoiceListContent.Error -> ErrorState(content.message) { onIntent(InvoiceListIntent.Retry) }
+            is InvoiceListContent.Error -> ErrorState { onIntent(InvoiceListIntent.Retry) }
             InvoiceListContent.Empty -> EmptyState()
             is InvoiceListContent.Success -> InvoiceList(content.invoices, onInvoiceClick)
         }
@@ -104,7 +106,7 @@ private fun FilterRow(
     ) {
         InvoiceStatusFilter.entries.forEach { filter ->
             FilterPill(
-                label = "${filter.label} (${counts[filter] ?: 0})",
+                label = "${tr(filter.labelKey())} (${counts[filter] ?: 0})",
                 isSelected = filter == selected,
                 tag = InvoiceListTags.filterChip(filter),
                 onClick = { onSelected(filter) },
@@ -146,12 +148,13 @@ private fun LoadingState() {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         CircularProgressIndicator()
-        Text("Chargement des factures…")
+        Text(tr(StringKey.LIST_LOADING))
     }
 }
 
 @Composable
-private fun ErrorState(message: String, onRetry: () -> Unit) {
+private fun ErrorState(onRetry: () -> Unit) {
+    val message = tr(StringKey.TOAST_INVOICES_LOAD_FAILED)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -166,7 +169,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             onClick = onRetry,
             modifier = Modifier.semantics { testTag = InvoiceListTags.RETRY_BUTTON },
         ) {
-            Text("Réessayer")
+            Text(tr(StringKey.LIST_RETRY))
         }
     }
 }
@@ -174,7 +177,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 @Composable
 private fun EmptyState() {
     Text(
-        "Aucune facture à afficher.",
+        tr(StringKey.LIST_EMPTY),
         modifier = Modifier
             .fillMaxWidth()
             .semantics { testTag = InvoiceListTags.EMPTY },

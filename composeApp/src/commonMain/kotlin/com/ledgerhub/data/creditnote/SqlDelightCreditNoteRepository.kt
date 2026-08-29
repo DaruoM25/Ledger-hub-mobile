@@ -24,10 +24,11 @@ class SqlDelightCreditNoteRepository(
 
     override suspend fun submitCreditNote(creditNote: CreditNote): Result<Unit> = runCatching {
         database.transaction {
-            database.customerQueries.insertOrReplace(
+            database.customerQueries.insertIfAbsent(
                 siret = creditNote.recipient.siret,
                 siren = creditNote.recipient.siren,
                 name = creditNote.recipient.name,
+                email = creditNote.recipient.email,
             )
             database.creditNoteQueries.insertOrReplace(
                 number = creditNote.number,
@@ -53,7 +54,7 @@ class SqlDelightCreditNoteRepository(
 
     private fun CreditNoteRow.toDomain(): CreditNote {
         val recipient = database.customerQueries.selectBySiret(recipientSiret).executeAsOneOrNull()
-            ?.let { Party(name = it.name, siren = it.siren, siret = it.siret) }
+            ?.let { Party(name = it.name, siren = it.siren, siret = it.siret, email = it.email) }
             ?: Party(name = "", siren = "", siret = recipientSiret)
         return CreditNote(
             number = number,
