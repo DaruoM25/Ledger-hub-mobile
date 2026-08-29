@@ -312,3 +312,308 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 - **Factures héritées.** Le repli sur la fiche `Customer` couvre les lignes écrites avant le gel ; il disparaîtra naturellement quand plus aucune facture n'aura `recipientName` vide. Une reprise de données pourra figer rétroactivement l'identité si la question se pose avant la première diffusion.
 - **Pas d'outillage de migration.** Le premier build diffusé devra soit repartir d'une base neuve, soit introduire `.sqm` + `verifyMigrations` — décision à prendre avant toute distribution externe.
 - **Zones non couvertes par cette contre-visite** (inchangées depuis la recette du 29/08) : layout étendu ≥ 840 dp (sidebar permanente) et parcours d'avoir depuis « Annuler par un avoir ».
+
+---
+
+## Prompt 3 — UX du formulaire : état de soumission, actions Brouillon / Émission, dates dynamiques
+- **Date :** 2026-08-29
+- **Branche :** `feature/prompt-03-ux-form-dates`
+- **Statut :** ✅ Clos — 226/226 tests unitaires verts (+9), APK `BUILD SUCCESSFUL`, rendu des deux actions vérifié sur émulateur
+- **Objectif :** Exposer l'état de soumission au formulaire de facture, distinguer l'enregistrement en brouillon de l'émission validée, et confirmer le formatage des dates selon la locale active.
+
+### Constat d'audit préalable (Étape 1)
+1. **Le point « dates » était déjà satisfait.** `formatIsoDate` est branché sur les trois surfaces concernées — `InvoiceCard` (liste), `DashboardScreen` (documents récents) et `InvoiceDetailScreen` — toutes via `LocalAppLanguage`, avec `DateFormatTest` en garde-fou. Comportement confirmé sur émulateur lors de la recette du 29/08 (`28/07/2026` en FR, `Jul 28, 2026` en EN). **Aucune modification de code n'était nécessaire.**
+2. **L'état de soumission existait déjà**, porté par `submissionStatus: SubmissionStatus` (`Idle` / `Loading` / `Success` / `Error`) et son dérivé `isFormEnabled`.
+3. **`SaveDraft` et `ValidateAndIssue` n'existaient pas.** Le formulaire n'avait qu'un `Submit`, persistant toujours en `DRAFT`, et un seul bouton. La spécification en évoque deux : c'était un manque fonctionnel réel, aucune facture ne pouvant sortir de l'état Brouillon depuis le formulaire.
+4. **Défaut de conception mis au jour.** Le bouton était `enabled = uiState.isSubmitEnabled`, qui exige un formulaire valide. `Submit` ne pouvant donc jamais partir sur un formulaire invalide, `submitAttempted` ne passait jamais à `true` depuis l'interface : **la révélation de toutes les erreurs livrée avec D-02 était inatteignable en pratique**. Le `enabled = !uiState.isSubmitting` demandé par la spécification corrige exactement cela.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Date EN conservée en `MMM d, yyyy`** (`Jun 24, 2026`). La spécification suggérait `MM/DD/YYYY`, ce qui reviendrait sur la décision du Sprint 2 US-02 ; le format retenu relève du « format international » admis par le prompt et lève l'ambiguïté jour/mois sur une pièce comptable.
+2. **`isSubmitting` en propriété dérivée**, `submissionStatus == Loading`, et non champ stocké. L'écran obtient l'API demandée (`uiState.isSubmitting`) sans second état à maintenir cohérent à chaque transition.
+3. **Deux actions réelles** plutôt qu'un habillage du `Submit` unique : `SaveDraft` → `InvoiceStatus.DRAFT`, `ValidateAndIssue` → `InvoiceStatus.VALIDATED`. Une facture émise devient dès lors non modifiable et annulable par avoir uniquement (`Invoice.isEditable` / `isCancellableByCreditNote`).
+4. **Boutons actifs tant qu'aucune écriture n'est en cours.** `isSubmitEnabled` reste calculé et testé — il exprime la validité du formulaire — mais ne pilote plus l'activation : un appui sur formulaire incomplet révèle les erreurs au lieu de laisser l'utilisateur devant un bouton grisé sans explication. `submit()` revalide en entrée, la persistance reste protégée.
+
+### Fichiers modifiés
+| Fichier | Nature |
+|---|---|
+| `domain/i18n/StringKey.kt` | Ajout `ACTION_SAVE_DRAFT` ; `FORM_SENDING` renommé `FORM_PROCESSING` (clé utilisée par ce seul écran). |
+| `domain/i18n/AppTranslations.kt` | « Enregistrer le brouillon » / « Save draft » ; `ACTION_SUBMIT_INVOICE` reformulé en « Valider et émettre » / « Validate and issue » (les deux actions persistant désormais, « Émettre et Persister » devenait ambigu) ; « Traitement en cours… » / « Processing… ». |
+| `presentation/invoiceform/InvoiceFormIntent.kt` | `Submit` remplacé par `SaveDraft` et `ValidateAndIssue`, documentées avec leur statut cible. |
+| `presentation/invoiceform/InvoiceFormUiState.kt` | `isSubmitting` dérivé de `submissionStatus` ; `isFormEnabled` réexprimé en `!isSubmitting` ; `isSubmitEnabled` documenté comme indicateur de validité, non de pilotage des boutons. |
+| `presentation/invoiceform/InvoiceFormViewModel.kt` | `processIntent` route les deux intentions vers `submit(targetStatus)` ; `buildInvoice` prend le statut cible ; garde-fou contre le double appui (`if (isSubmitting) return`). |
+| `presentation/invoiceform/InvoiceFormScreen.kt` | Deux boutons — `OutlinedButton` brouillon (tag `SAVE_DRAFT_BUTTON`) et `Button` émission (tag `SUBMIT_BUTTON` conservé) —, tous deux `enabled = !uiState.isSubmitting` ; indicateur de progression affiné (`strokeWidth = 2.dp`) et libellé `FORM_PROCESSING`. |
+
+### Fichiers de test modifiés
+| Fichier | Cas |
+|---|---|
+| `commonTest/…/InvoiceFormViewModelTest.kt` | 6 cas d'état : `isSubmitting` faux au départ ; vrai pendant l'écriture puis faux au succès, pour chacune des deux actions ; retour à faux en cas d'échec ; jamais activé quand la validation rejette ; second appui ignoré pendant une écriture. 2 cas de statut : `SaveDraft` persiste en `DRAFT` et reste modifiable, `ValidateAndIssue` persiste en `VALIDATED`, verrouille la facture et l'ouvre à l'annulation par avoir. Les 6 usages de `Submit` remappés sur `ValidateAndIssue`. |
+| `commonTest/…/InvoiceFormScreenTest.kt` + `androidUnitTest/…/InvoiceFormScreenRobolectricTest.kt` | `initialState_submitButtonIsDisabled` devient `initialState_bothActionsAreOfferedAndClickable` (nouvelle sémantique) ; nouveau cas `clickingIssueOnEmptyForm_revealsErrorsWithoutSubmitting`, dupliqué côté Robolectric conformément à la convention du projet — les tests UI de `commonTest` servent `iosTest` et ne s'exécutent pas sous `testDebugUnitTest`. |
+
+### Tests
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **226/226 verts**, 0 échec / 0 erreur (217 → 226).
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+
+### Vérification sur émulateur — `Pixel_5_API_35`
+| Vérification | Résultat |
+|---|---|
+| Rendu des deux actions, hiérarchie visuelle (outlined / filled) | ✅ « Enregistrer le brouillon » et « Valider et émettre » |
+| Les deux boutons actifs sur formulaire vierge | ✅ |
+| Appui sur « Valider et émettre » avec formulaire vide | ✅ Toutes les erreurs révélées, aucune persistance — le chemin `submitAttempted` est enfin atteignable |
+| Glyphe du bouton brouillon | ⚠️ puis ✅ — `🖫` (U+1F5AB) rendait un tofu, absent des polices Android ; remplacé par `💾` |
+| Écriture effective en statut `VALIDATED` | ⏸️ **Non vérifiée sur device** — deux tentatives de saisie pilotée par `adb` ont dérivé sur les coordonnées de champ. Couverte par `validateAndIssue_persistsAsValidated_andLocksTheInvoice` et par la chaîne de persistance de `SqlDelightInvoiceRepositoryTest`. |
+
+### Points d'attention transmis
+- **L'indicateur de progression est en pratique invisible avec le dépôt local.** L'écriture SQLDelight est synchrone et sous-frame : l'état `Loading` ne dure pas assez pour être perçu. Le `CircularProgressIndicator` et le libellé « Traitement en cours… » ne prendront leur sens qu'une fois l'émission adossée au backend Ktor. Le garde-fou anti-double-appui du ViewModel, lui, reste utile dès maintenant.
+- **`isSubmitEnabled` n'est plus consommé par l'écran.** Il reste calculé, documenté et testé comme indicateur de validité du formulaire — utile pour un futur récapitulatif ou un badge d'état, mais il n'a plus de rôle de pilotage.
+- **Le libellé du bouton d'émission a changé** (« Émettre et Persister » → « Valider et émettre »). Le commentaire de `LocalLedgerRepository` cite encore l'ancien libellé ; sans impact fonctionnel.
+- **Vérification device à compléter** : émission réelle en statut Validée, et affichage du badge « Validée » dans la liste et les filtres (le compteur « Validées » était à 0 sur toutes les passes de recette, faute de chemin pour produire ce statut — ce lot le rend enfin possible).
+
+---
+
+## US-04 — Réactivité i18n à chaud et verrouillage fiscal de l'édition
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-04-clients-actions-settings`
+- **Statut :** ✅ Clos — 237/237 tests unitaires verts (+11), APK `BUILD SUCCESSFUL`, cadenas de liste vérifié sur émulateur
+- **Objectif :** Garantir par le test la réactivité du formatage monétaire et temporel à la bascule de langue, et rendre lisible l'immutabilité des factures non-brouillon dans l'interface.
+
+### Constat d'audit préalable (Étape 1)
+1. **Le formatage monétaire était déjà exactement conforme.** `formatMoney` produit `25 263,60 €` en FR (espace insécable U+00A0, virgule décimale, symbole suffixé) et `€25,263.60` en EN, en arithmétique entière `Long`. La réactivité passe par `LocalAppLanguage`, un `compositionLocalOf` : tout composable lecteur recompose à la bascule. **Rien à corriger — le point 1 relevait de la couverture de test, pas du code.**
+2. **La date FR ne correspondait pas à l'exemple du prompt.** Format en place : `24/06/2026`, contre `24 juin 2026` attendu. Seules les abréviations de mois existent au dictionnaire ; la forme longue FR aurait demandé 12 clés supplémentaires.
+3. **Le verrouillage d'édition était déjà correct côté logique**, absent côté affordance : `enabled = uiState.canEdit`, dérivé de `Invoice.isEditable` (vrai pour `DRAFT` seul). Une facture `VALIDATED` ou `PAID` avait donc déjà son bouton désactivé, sans cadenas ni atténuation.
+4. **`InvoiceCard` n'expose aucun point d'entrée « Modifier »** — carte simplement cliquable vers le détail. Rien à désactiver.
+5. **Aucun accès à l'état mutable du formulaire n'existe aujourd'hui** : `onEditClick` a une valeur par défaut `{}` et n'est câblé nulle part dans `App.kt`. L'exigence est satisfaite par absence de fonctionnalité, non par un garde-fou — distinction qui comptera quand le parcours d'édition sera ouvert.
+6. **Le seul test de réactivité i18n existant, `LanguageUiTest`, est en `androidInstrumentedTest`** : il exige `connectedDebugAndroidTest` et un émulateur, donc ne tourne ni en local ni en CI. Un équivalent Robolectric apportait une couverture réelle.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Date FR maintenue en `24/06/2026`.** Troisième divergence consécutive entre un prompt et la décision du Sprint 2 US-02 : tranchée définitivement en faveur du format numérique — compact pour des cartes de liste denses, et usage dominant sur les pièces comptables françaises.
+2. **Cadenas informatif sur `InvoiceCard`** plutôt qu'un bouton « Modifier » désactivé. Inventer une action sans destination aurait été trompeur : le parcours d'édition n'existe pas. Le cadenas renseigne sur l'immutabilité avant même d'ouvrir le détail.
+3. **Traduction des libellés d'action du détail.** « Modifier la facture », « Annuler par un avoir » et la bannière de lecture seule étaient codés en dur — exclus du lot i18n du Sprint 2. Les laisser aurait produit une zone mêlant textes traduits et textes figés, juste à côté des nouveaux libellés de verrouillage.
+4. **`isFiscallyLocked` distinct de `isLocked`.** Le premier vise tout statut hors Brouillon et pilote l'affordance ; le second reste réservé à l'annulation et à sa bannière. La règle métier, elle, n'est jamais recalculée dans la présentation : elle reste portée par `Invoice.isEditable`.
+
+### Fichiers modifiés
+| Fichier | Nature |
+|---|---|
+| `domain/i18n/StringKey.kt` | Ajout `ACTION_EDIT_INVOICE`, `ACTION_CANCEL_BY_CREDIT_NOTE`, `DETAIL_CANCELLED_READ_ONLY`, `INVOICE_LOCKED_HINT`. |
+| `domain/i18n/AppTranslations.kt` | Les quatre clés en FR et EN — « Facture émise — non modifiable » / « Issued invoice — locked ». |
+| `presentation/invoices/InvoiceDetailUiState.kt` | Ajout `isFiscallyLocked`, dérivé de `Invoice.isEditable`. |
+| `presentation/invoices/InvoiceDetailScreen.kt` | Bouton d'édition : cadenas 🔒 dans le libellé, `alpha 0.4` et `contentDescription` explicative quand la facture est verrouillée ; mention d'aide sous le bouton (tag `LOCKED_HINT`) hors cas d'annulation, qui garde sa bannière. Les trois libellés codés en dur passent par `tr()`. |
+| `presentation/invoices/components/InvoiceCard.kt` | Cadenas à côté du numéro pour toute facture non modifiable, avec `contentDescription` et tag `lockTag(number)`. |
+
+### Fichiers de test créés
+| Fichier | Cas |
+|---|---|
+| `androidUnitTest/…/i18n/LocalizationReactivityTest.kt` | 4 cas. L'arbre n'est monté qu'une fois ; seule la valeur de `LocalAppLanguage` change. Montant reformaté `25 263,60 €` → `€25,263.60`, date `Émise le 24/06/2026` → `Issued on Jun 24, 2026`, retour au français restituant les deux, et pastille de statut retraduite « Payée » → « Paid ». Le test échoue si une valeur est figée à la première composition. |
+| `androidUnitTest/…/invoices/InvoiceImmutabilityUiTest.kt` | 7 cas, à partir d'une facture **persistée puis relue** en base (SQLDelight / `JdbcSqliteDriver` en mémoire) : `VALIDATED` et `PAID` exposent `isEditable = false` et `canDelete = false`, `DRAFT` reste modifiable ; l'écran de détail d'une facture verrouillée présente un bouton désactivé, ne remonte aucun `onEditClick` au clic et affiche la mention de verrouillage ; la carte de liste porte le cadenas sur une facture émise et pas sur un brouillon. |
+
+### Tests
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **237/237 verts**, 0 échec / 0 erreur (226 → 237).
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+- **Émulateur** `Pixel_5_API_35` : cadenas présent sur `FAC-2026-0137` (Envoyée), absent sur les deux brouillons — conforme.
+
+### Matrice RCA — incidents rencontrés
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `assertHasNoClickAction` échoue sur le bouton d'édition désactivé | Compose **conserve** l'action `OnClick` sur un nœud désactivé et se contente de le marquer `[Disabled]` — l'absence d'action n'est donc pas le bon critère | Assertion remplacée par un `performClick` suivi de la vérification que le callback n'a pas été invoqué : on teste l'effet, pas la structure sémantique |
+| 2 | `onNodeWithTag` introuvable sur le cadenas et la pastille de statut | `InvoiceCard` est `clickable`, donc fusionne ses descendants sémantiques : un tag porté par un enfant n'est pas visible dans l'arbre fusionné | `useUnmergedTree = true` sur ces recherches |
+| 3 | `LOCKED_HINT` « not displayed » | L'écran de détail défile ; la mention était hors du viewport de test | `performScrollTo()` avant l'assertion |
+| 4 | Helper de test : `onNodeWith…` non résolus | Le lambda passé à `runWithLanguageSwitch` n'avait pas le receiver `ComposeUiTest` | Type du paramètre passé en `ComposeUiTest.((AppLanguage) -> Unit) -> Unit` |
+
+### Points d'attention transmis
+- **L'immutabilité côté interface reste une affordance, pas une barrière.** Aujourd'hui elle tient parce qu'aucun parcours d'édition n'existe. Le jour où `onEditClick` sera câblé, il faudra un garde-fou en amont — refus côté ViewModel ou use case — car un bouton désactivé ne protège que du clic, pas d'un chemin de navigation alternatif.
+- **`Invoice.isEditable` est l'unique source de la règle.** Les trois points d'affichage (`canEdit`, `isFiscallyLocked`, cadenas de la carte) en dérivent sans la recalculer ; toute évolution du périmètre des statuts modifiables se fait dans le domaine.
+- **Zones toujours en français en dur** dans le détail : « Émetteur », « Destinataire », « Ventilation TVA », « Total HT / TVA / Total TTC ». Hors périmètre de ce lot, mais la zone reste partiellement bilingue.
+- **Le format de date FR est désormais arbitré** (`24/06/2026`) après trois demandes divergentes. À traiter comme acquis dans les prompts suivants.
+
+---
+
+# Bilan de Recette Manuelle & Automatisée — US-04
+
+## 1. En-tête
+
+| Champ | Valeur |
+|---|---|
+| **US** | US-04 — Réactivité i18n à chaud & verrouillage fiscal de l'édition |
+| **Date de recette** | 2026-08-29 |
+| **Cible — émulateur** | AVD `Pixel_5_API_35` |
+| **Cible — OS / API** | Android 15 · API 35 · image `google_apis` x86_64 · rendu `swiftshader_indirect` |
+| **Application** | `com.ledgerhub.app.debug` (`composeApp-debug.apk`) |
+| **Branche** | `feature/US-04-clients-actions-settings` |
+| **Commit SHA** | `d5749a2fa5de4ce0786742691ed1490e9ff873e7` (`d5749a2`) |
+| **Commit parent** | `7c9424a` — Prompt 3, actions Brouillon / Émission |
+| **Méthode** | Pilotage `adb` (taps, saisie, captures), `uiautomator dump` pour le rendu Compose, `sqlite3` sur la base applicative, suite Gradle pour l'automatisé |
+
+## 2. Tableau de Recette
+
+### 2.1 Recette manuelle sur émulateur
+
+| Réf Cas | Intitulé / Action | Résultat Attendu | Résultat Obtenu | Verdict |
+|---|---|---|---|---|
+| RM-01 | Formatage monétaire FR — liste des factures | Espace insécable, virgule décimale, symbole € suffixé | `2 640,00 €`, `1 140,90 €`, `880,80 €` | **CONFORME** |
+| RM-02 | Formatage monétaire EN — détail, après bascule à chaud | Symbole € préfixé, virgule milliers, point décimal | `€2,200.00` · `€440.00` · `€2,640.00` | **CONFORME** |
+| RM-03 | Date FR — carte de liste | Format numérique arbitré `JJ/MM/AAAA` | `Émise le 12/07/2026` | **CONFORME** |
+| RM-04 | Date EN — détail, après bascule à chaud | `MMM d, yyyy` | `Issue date : Jul 12, 2026` | **CONFORME** |
+| RM-05 | Bascule FR → EN en mémoire, sans redémarrage | Montants, dates, libellés et statuts reformatés instantanément | Écran de détail intégralement recomposé au tap ; `Envoyée` → `Sent`, `Conforme Factur-X 2026` → `Factur-X 2026 compliant` | **CONFORME** |
+| RM-06 | Cadenas de liste — facture Envoyée | Cadenas visible à côté du numéro | 🔒 présent sur `FAC-2026-0137` | **CONFORME** |
+| RM-07 | Cadenas de liste — brouillons | Aucun cadenas | Absent sur `FAC-2026-0300` et `FAC-2026-0136` | **CONFORME** |
+| RM-08 | Détail d'une facture Envoyée — bouton d'édition | Désactivé, atténué, icône de cadenas | `🔒 Modifier la facture` nettement atténué et non cliquable | **CONFORME** |
+| RM-09 | Détail — mention de verrouillage | Explication du motif sous le bouton | `Facture émise — non modifiable` | **CONFORME** |
+| RM-10 | Détail — action d'annulation | Reste active (seule sortie légale) | `Annuler par un avoir` actif | **CONFORME** |
+| RM-11 | Nouveaux libellés en EN | Traduits, réactifs à la bascule | `Edit invoice` · `Issued invoice — locked` · `Cancel with a credit note` | **CONFORME** |
+| RM-12 | Filtre de statut « Envoyées » | Restitue la seule facture Envoyée | 1 résultat, `FAC-2026-0137` | **CONFORME** |
+| RM-13 | Stabilité sur le parcours complet | Aucun crash, ANR ni exception | Buffer `crash`, `FATAL`/`ANR`, exceptions applicatives : tous vides | **CONFORME** |
+| RM-14 | Détail en mode EN — libellés du corps | Ensemble de l'écran traduit | `Émetteur`, `Destinataire`, `Ventilation TVA`, `Total HT`, `TVA`, `Total TTC`, `Base 20 %` restent en français | **ÉCART** (connu, hors périmètre — voir §4, A-03) |
+
+### 2.2 Recette automatisée — `testDebugUnitTest`
+
+| Réf Cas | Intitulé / Action | Résultat Attendu | Résultat Obtenu | Verdict |
+|---|---|---|---|---|
+| RA-01 | `LocalizationReactivityTest` — montant reformaté à chaud | `25 263,60 €` → `€25,263.60`, arbre monté une seule fois | Vert | **CONFORME** |
+| RA-02 | `LocalizationReactivityTest` — date reformatée à chaud | `Émise le 24/06/2026` → `Issued on Jun 24, 2026` | Vert | **CONFORME** |
+| RA-03 | `LocalizationReactivityTest` — retour au français | Les deux formats FR restitués | Vert | **CONFORME** |
+| RA-04 | `LocalizationReactivityTest` — pastille de statut retraduite | `Payée` → `Paid` | Vert | **CONFORME** |
+| RA-05 | `InvoiceImmutabilityUiTest` — facture `VALIDATED` persistée puis relue | `isEditable = false`, `canDelete = false`, `isCancellableByCreditNote = true` | Vert | **CONFORME** |
+| RA-06 | `InvoiceImmutabilityUiTest` — facture `PAID` persistée puis relue | `isEditable = false`, `canDelete = false` | Vert | **CONFORME** |
+| RA-07 | `InvoiceImmutabilityUiTest` — facture `DRAFT` persistée puis relue | Reste modifiable et supprimable | Vert | **CONFORME** |
+| RA-08 | `InvoiceImmutabilityUiTest` — détail `VALIDATED` | Bouton désactivé, clic sans effet, mention affichée | Vert | **CONFORME** |
+| RA-09 | `InvoiceImmutabilityUiTest` — détail `PAID` | Bouton désactivé, clic sans effet | Vert | **CONFORME** |
+| RA-10 | `InvoiceImmutabilityUiTest` — détail `DRAFT` | Bouton actif | Vert | **CONFORME** |
+| RA-11 | `InvoiceImmutabilityUiTest` — cadenas de carte | Présent sur `VALIDATED`, absent sur `DRAFT` | Vert | **CONFORME** |
+| RA-12 | Suite complète de non-régression | Aucune régression sur les 35 classes de test | 237/237 verts | **CONFORME** |
+
+### 2.3 Cas non couverts par cette recette
+
+| Réf | Intitulé | Motif |
+|---|---|---|
+| NC-01 | Verrouillage d'une facture au statut `VALIDATED` **sur émulateur** | Aucune facture Validée en base (`Validées (0)`) — le statut n'est atteignable que via l'action « Valider et émettre » livrée en `7c9424a`, dont l'émission bout-en-bout sur device n'a pas abouti. Couvert par RA-05 et RA-08. |
+| NC-02 | Layout étendu ≥ 840 dp (sidebar permanente) | Non exercé sur aucune passe depuis la recette du 29/08 |
+| NC-03 | Parcours d'avoir complet depuis « Annuler par un avoir » | Seul le point d'entrée est observé |
+
+## 3. Tableau de bord Métriques
+
+| Métrique | Valeur | Delta |
+|---|---|---|
+| **Tests unitaires + Robolectric — total** | **237 / 237 verts** | **+11** (226 → 237) |
+| Échecs / erreurs | 0 | — |
+| Classes de test exécutées | 35 | +2 |
+| `LocalizationReactivityTest` (Robolectric) | 4 cas | +4 (nouveau) |
+| `InvoiceImmutabilityUiTest` (Robolectric) | 7 cas | +7 (nouveau) |
+| **APK — `./gradlew assembleDebug`** | **`BUILD SUCCESSFUL`** | — |
+| **Crash logcat (buffer `crash`)** | **0** | — |
+| **ANR applicatif** | **0** | — |
+| Exceptions applicatives (`FATAL` / `AndroidRuntime`) | 0 | — |
+| Fichiers de production modifiés | 5 | — |
+| Fichiers de test créés | 2 | — |
+
+## 4. Fiche des anomalies & arbitrages validés
+
+### 4.1 Arbitrages produit (validés par le PO en Étape 1)
+
+| Réf | Sujet | Décision retenue | Justification |
+|---|---|---|---|
+| AR-01 | Format de date FR — `24 juin 2026` demandé vs `24/06/2026` en place | **`24/06/2026` maintenu**, arbitré définitivement | Troisième divergence consécutive entre prompt et décision Sprint 2 US-02. Format numérique compact adapté aux cartes de liste denses, usage dominant sur les pièces comptables françaises. Économise 12 clés de mois complets. |
+| AR-02 | `InvoiceCard` n'a aucun bouton « Modifier » à désactiver | **Cadenas informatif**, pas de bouton inventé | Créer une action « Modifier » sur la carte l'aurait dotée d'une destination inexistante : le parcours d'édition n'est pas implémenté. Le cadenas renseigne avant l'ouverture du détail. |
+| AR-03 | Libellés d'action du détail codés en dur en français | **Traduits via `tr()`** | Sans cela, la zone aurait mêlé les nouveaux libellés de verrouillage (traduits) et les anciens (figés). Le reste du corps prosaïque reste hors périmètre → **écart RM-14**. |
+
+### 4.2 Anomalies rencontrées en cours d'implémentation
+
+| Réf | Cause | Correctif | Preuve de non-régression |
+|---|---|---|---|
+| A-01 | `assertHasNoClickAction` échouait sur le bouton d'édition désactivé : **Compose conserve l'action `OnClick`** sur un nœud désactivé et se contente de le marquer `[Disabled]`. L'absence d'action n'est donc pas le bon critère de verrouillage. | Assertion remplacée par un `performClick` suivi de la vérification que le callback `onEditClick` n'a pas été invoqué — on teste l'effet, pas la structure sémantique. | RA-08 et RA-09 verts ; RM-08 confirme visuellement l'état désactivé sur device. |
+| A-02 | `onNodeWithTag` ne trouvait ni le cadenas ni la pastille de statut : `InvoiceCard` est `clickable`, donc **fusionne ses descendants sémantiques** ; un tag porté par un enfant est invisible dans l'arbre fusionné. | `useUnmergedTree = true` sur ces recherches. | RA-04 et RA-11 verts ; RM-06 et RM-07 confirment le rendu réel. |
+| A-03 | Mention de verrouillage rapportée « not displayed » : l'écran de détail défile, la mention était hors du viewport de test. | `performScrollTo()` avant l'assertion. | RA-08 vert ; RM-09 confirme l'affichage sur device. |
+| A-04 | Helper de test : les `onNodeWith…` n'étaient pas résolus — le lambda passé à `runWithLanguageSwitch` n'exposait pas le receiver `ComposeUiTest`. | Paramètre typé `ComposeUiTest.((AppLanguage) -> Unit) -> Unit`. | RA-01 à RA-04 verts. |
+
+### 4.3 Constats d'audit — code déjà conforme avant intervention
+
+| Réf | Constat | Conséquence |
+|---|---|---|
+| C-01 | `formatMoney` produisait déjà `25 263,60 €` / `€25,263.60` en arithmétique entière `Long` | Aucune modification : le point 1 de la spécification relevait de la **couverture de test**, pas du code. |
+| C-02 | `canEdit` dérivait déjà de `Invoice.isEditable` — bouton déjà désactivé hors Brouillon | Seule l'**affordance** manquait (cadenas, atténuation, explication). |
+| C-03 | `onEditClick` a une valeur par défaut vide et n'est câblé nulle part dans `App.kt` | « Aucun accès à l'état mutable » est satisfait **par absence de fonctionnalité**, pas par un garde-fou — voir §5. |
+| C-04 | Le seul test de réactivité i18n, `LanguageUiTest`, est en `androidInstrumentedTest` | Il exige `connectedDebugAndroidTest` et un émulateur : il ne tourne ni en local ni en CI. L'équivalent Robolectric ajouté comble ce trou. |
+
+## 5. Conformité Factur-X & Immutabilité — verdict final
+
+**Verdict : CONFORME**, sous une réserve d'architecture explicitée ci-dessous.
+
+| Exigence | État | Preuve |
+|---|---|---|
+| Une facture émise n'est plus modifiable | ✅ | `Invoice.isEditable` restreint la modification au seul statut `DRAFT` ; vérifié sur facture **persistée puis relue en base** (RA-05, RA-06) |
+| Une facture émise n'est plus supprimable | ✅ | `canDelete` faux pour `VALIDATED` et `PAID` (RA-05, RA-06) |
+| Seule sortie légale : l'avoir | ✅ | `isCancellableByCreditNote` vrai, action restée active (RA-05, RM-10) |
+| L'identité du destinataire est gelée à l'émission | ✅ | Acquis du lot D-03 (`recipientName` / `recipientEmail` figés sur la ligne `Invoice`, `INSERT OR IGNORE` sur `Customer`) |
+| Le verrouillage est lisible par l'utilisateur | ✅ | Cadenas en liste et au détail, atténuation, mention explicative, description d'accessibilité (RM-06 à RM-09) |
+| La règle n'est jamais dupliquée dans la présentation | ✅ | `canEdit`, `isFiscallyLocked` et le cadenas de carte dérivent tous de `Invoice.isEditable` |
+| Mention de conformité Factur-X 2026 | ✅ | Badge présent en liste et au détail, traduit dans les deux langues (RM-05) |
+
+**Réserve — l'immutabilité est aujourd'hui une affordance, pas une barrière.** Elle tient parce qu'aucun parcours d'édition n'existe (C-03). Le jour où `onEditClick` sera câblé, un bouton désactivé ne protégera que du clic : il faudra **un refus en amont, côté ViewModel ou use case**, pour couvrir tout chemin de navigation alternatif (deep link, restauration d'état, écran Clients). À traiter comme prérequis de l'US d'édition, et non comme une amélioration ultérieure.
+
+**Réserve secondaire — le statut `VALIDATED` n'a pas été exercé sur device** (NC-01), faute de facture Validée en base : la couverture repose sur l'automatisé. À reprendre dès qu'une émission « Valider et émettre » aura abouti bout-en-bout sur l'émulateur.
+
+---
+
+## US-04 (Partie 2) — CRUD Clients & Paramètres fiscaux
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-04-clients-actions-settings`
+- **Statut :** ✅ Clos — 292/292 tests unitaires verts (+55), APK `BUILD SUCCESSFUL`, parcours CRUD et Snackbar vérifiés sur émulateur
+- **Objectif :** Remplacer les placeholders Clients et Paramètres par des écrans réels connectés à SQLDelight.
+
+### Constat d'audit préalable (Étape 1)
+1. **La table `Customer` existait déjà** avec `insertIfAbsent`, `updateIdentity`, `selectAll`, `selectBySiret`, `deleteBySiret`. La requête `updateIdentity`, ajoutée avec D-03 et restée inutilisée faute d'écran, trouve enfin son point d'entrée : cette US ferme la boucle signalée à l'audit D-03.
+2. **`Party` modélise déjà exactement la fiche client** (nom, SIREN, SIRET, email) — même forme que la table. Réutilisé plutôt que d'introduire un type `Client` en doublon.
+3. **Aucune table de paramètres n'existait** — `TaxSettings` créée, mono-ligne (`CHECK (id = 1)`).
+4. **Les taux de TVA sont figés dans l'enum de domaine `VatRate`**, en points de base, et alimentent `computeVatBreakdown`. Deux écarts avec la spécification : le code porte **cinq** taux (20 %, 10 %, 5,5 %, **2,1 %**, Exonéré) là où le prompt en cite quatre et nomme « 0 % » ce que le domaine appelle « Exonéré ».
+5. **La suppression d'un client touchait l'intégrité fiscale** : `Invoice.recipientSiret` porte une clé étrangère vers `Customer(siret)` et l'application n'active pas `PRAGMA foreign_keys` — une suppression serait passée sans erreur, en laissant des références orphelines.
+6. **`CabinetIdentity` était codé en dur** et servait d'émetteur à toute facture : sans branchement, l'écran Paramètres serait resté décoratif.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Taux de référence + taux par défaut.** Les cinq taux légaux sont présentés en lecture seule ; seul le taux pré-sélectionné à la saisie d'une ligne se configure. Rendre les valeurs éditables aurait permis d'émettre des factures à taux non conforme et imposé de transformer `VatRate` en donnée persistée — refonte de `computeVatBreakdown` et de ses tests. Le taux particulier à 2,1 % est conservé : c'est un taux français réel.
+2. **Suppression bloquée si des factures référencent la fiche.** Message nommant le nombre de factures concernées ; requête `Invoice.countByRecipientSiret` ajoutée. Les clients sans facture restent supprimables. Cohérent avec l'immutabilité déjà en place : on ne retire pas une pièce du dossier fiscal.
+3. **Les paramètres alimentent réellement les factures.** `InvoiceFormViewModel` reçoit l'émetteur et le taux par défaut ; `CabinetIdentity` n'est plus qu'un repli tant que rien n'est enregistré. L'aperçu WYSIWYG lit le même émetteur, désormais porté par `InvoiceFormUiState.issuer`.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `sqldelight/…/TaxSettings.sq` | Table mono-ligne + `select` / `upsert`. |
+| `domain/client/ClientRepository.kt` | Contrat CRUD sur `Party`, plus `ClientInUseException` et `DuplicateClientException`. |
+| `domain/settings/TaxSettings.kt` | Modèle, valeurs par défaut, `issuerParty`, contrat `TaxSettingsRepository`. |
+| `data/client/SqlDelightClientRepository.kt` | CRUD SQLDelight, refus de doublon et garde-fou de suppression, tous deux en transaction. |
+| `data/settings/SqlDelightTaxSettingsRepository.kt` | Chargement avec repli sur les valeurs par défaut, `upsert`. |
+| `presentation/components/InputFilters.kt` | Filtres de saisie partagés — extraits du formulaire de facture où ils étaient privés. |
+| `presentation/clients/ClientsUiState.kt` · `ClientsViewModel.kt` · `ClientsScreen.kt` | Écran Clients complet (liste, dialogue d'ajout/édition, confirmation de suppression). |
+| `presentation/settings/TaxSettingsViewModel.kt` · `TaxSettingsScreen.kt` | Écran Paramètres fiscaux avec Snackbar. |
+
+### Fichiers modifiés
+| Fichier | Nature |
+|---|---|
+| `sqldelight/…/Invoice.sq` | Ajout `countByRecipientSiret` — garde-fou de suppression. |
+| `domain/invoice/FiscalValidation.kt` | Ajout `validateEmail`, `validateCompanyName`, `validateVatNumber` : les deux nouveaux écrans réutilisent les règles du formulaire de facture, jamais une seconde implémentation. |
+| `presentation/invoiceform/InvoiceFormViewModel.kt` | Nouveaux paramètres `issuer` et `defaultVatRate` ; `buildInvoice` lit `state.issuer` ; toute nouvelle ligne naît au taux configuré. |
+| `presentation/invoiceform/InvoiceFormUiState.kt` | Ajout `issuer`. |
+| `presentation/invoiceform/InvoiceFormScreen.kt` | Filtres de saisie déplacés vers `InputFilters.kt`. |
+| `presentation/invoiceform/InvoicePaperCanvas.kt` | L'aperçu lit `uiState.issuer` au lieu de `CabinetIdentity`. |
+| `App.kt` | Câblage des deux dépôts et ViewModels ; les paramètres sont relus à chaque changement d'onglet, ce qui propage une modification sans coupler les ViewModels entre eux. |
+| `domain/i18n/StringKey.kt` · `AppTranslations.kt` | 32 clés nouvelles, FR et EN. |
+
+### Tests
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **292/292 verts**, 0 échec / 0 erreur (237 → 292).
+  - `ClientsViewModelTest` — 15 cas (dépôt en mémoire aux mêmes règles que SQLDelight)
+  - `ClientsScreenRobolectricTest` — 9 cas
+  - `TaxSettingsViewModelTest` — 11 cas
+  - `TaxSettingsScreenRobolectricTest` — 10 cas
+  - `SqlDelightClientRepositoryTest` — 7 cas
+  - `SqlDelightTaxSettingsRepositoryTest` — 3 cas
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+
+### Matrice RCA — incidents rencontrés
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `no such table: TaxSettings` sur l'installation existante | **La dette de migration signalée à l'audit D-03 se matérialise** : `Schema.create` ne s'exécute que sur une base neuve, et le projet n'a aucun `.sqm`. Le `runCatching` du dépôt masquait l'erreur, l'écran affichait les valeurs par défaut et l'enregistrement échouait silencieusement. | Réinstallation à froid pour la recette, conformément à la procédure retenue en D-03. **La dette reste ouverte** — voir points d'attention. |
+| 2 | `successMessage_isPresentedInASnackbar_thenConsumed` en échec | La consommation du message intervient **après** la fermeture du Snackbar (`showSnackbar` suspend le temps de l'affichage) : l'assertion d'immédiateté était fausse, pas le code. | Test scindé — l'affichage est vérifié à l'écran, la consommation au niveau du ViewModel. |
+
+### Points d'attention transmis
+- **La dette de migration SQLDelight est désormais avérée, plus seulement théorique.** Tout ajout de table ou de colonne casse silencieusement les installations existantes : le `runCatching` des dépôts transforme l'erreur SQL en repli sur les valeurs par défaut, sans rien signaler. Avant toute distribution — et idéalement avant le prochain changement de schéma — il faut introduire `.sqm` + `verifyMigrations`, ou faire échouer bruyamment un schéma incompatible.
+- **Messages utilisateur des deux nouveaux écrans en français en dur.** « Client ajouté », « Suppression impossible : … », et les motifs rendus par `FiscalValidation`, ne passent pas par `tr()`. Le formulaire de facture, lui, utilise `ValidationErrorKey`. Incohérence assumée pour ce lot : la généraliser demande d'introduire des clés pour tous les motifs du domaine.
+- **Le SIRET est verrouillé en édition** : il est la clé primaire et l'identité métier. Changer de SIRET revient à créer une autre fiche — comportement volontaire, signalé à l'utilisateur par une mention sous le champ.
+- **Les puces de taux non sélectionnées manquent de contraste** en thème sombre (gris sombre sur fond sombre). Lisible mais perfectible ; à reprendre avec le Design System.
+- **La suppression d'un client sans facture n'a pas été exercée sur émulateur** : le seul client supprimable est celui créé pendant la recette, et la vérification s'est arrêtée après la création. Couverte par `ClientsViewModelTest` et `SqlDelightClientRepositoryTest`.

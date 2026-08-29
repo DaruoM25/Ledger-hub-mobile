@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +52,7 @@ object InvoiceDetailScreenTags {
     const val TOTAL_VAT = "invoices_detail_total_vat"
     const val TOTAL_TTC = "invoices_detail_total_ttc"
     const val EDIT_BUTTON = "invoices_detail_edit_button"
+    const val LOCKED_HINT = "invoices_detail_locked_hint"
     const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
     const val LOCKED_BANNER = "invoices_detail_locked_banner"
     fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
@@ -156,14 +158,31 @@ private fun InvoiceBody(
 
     // Verrouillage des actions selon le statut fiscal : les boutons restent visibles
     // (repère pédagogique) mais sont désactivés hors des cas métier autorisés.
+    // Une facture émise porte en plus un cadenas et une atténuation, pour que l'inaccessibilité
+    // se lise comme une règle fiscale et non comme un défaut de l'application.
+    val locked = uiState.isFiscallyLocked
+    val editLabel = tr(StringKey.ACTION_EDIT_INVOICE)
+    val lockedHint = tr(StringKey.INVOICE_LOCKED_HINT)
     Button(
         onClick = { onEditClick(invoice) },
         enabled = uiState.canEdit,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { testTag = InvoiceDetailScreenTags.EDIT_BUTTON },
+            .alpha(if (locked) LOCKED_ACTION_ALPHA else 1f)
+            .semantics {
+                testTag = InvoiceDetailScreenTags.EDIT_BUTTON
+                if (locked) contentDescription = lockedHint
+            },
     ) {
-        Text("Modifier la facture")
+        Text(if (locked) "🔒  $editLabel" else editLabel)
+    }
+    if (locked && !uiState.isLocked) {
+        Text(
+            lockedHint,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.LOCKED_HINT },
+        )
     }
     OutlinedButton(
         onClick = { onCreateCreditNoteClick(invoice) },
@@ -172,9 +191,12 @@ private fun InvoiceBody(
             .fillMaxWidth()
             .semantics { testTag = InvoiceDetailScreenTags.CREDIT_NOTE_BUTTON },
     ) {
-        Text("Annuler par un avoir")
+        Text(tr(StringKey.ACTION_CANCEL_BY_CREDIT_NOTE))
     }
 }
+
+/** Atténuation appliquée à une action neutralisée par l'immutabilité fiscale. */
+private const val LOCKED_ACTION_ALPHA = 0.4f
 
 @Composable
 private fun VatRow(line: VatBreakdown) {
@@ -208,6 +230,7 @@ private fun TotalRow(label: String, value: String, tag: String, emphasize: Boole
 
 @Composable
 private fun LockedBanner() {
+    val readOnlyLabel = tr(StringKey.DETAIL_CANCELLED_READ_ONLY)
     Surface(
         color = Color(0xFFFFEBEE),
         contentColor = Color(0xFFB71C1C),
@@ -216,11 +239,11 @@ private fun LockedBanner() {
             .fillMaxWidth()
             .semantics {
                 testTag = InvoiceDetailScreenTags.LOCKED_BANNER
-                contentDescription = "Facture annulée — lecture seule"
+                contentDescription = readOnlyLabel
             },
     ) {
         Text(
-            "Facture annulée — lecture seule",
+            readOnlyLabel,
             modifier = Modifier.padding(12.dp),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,

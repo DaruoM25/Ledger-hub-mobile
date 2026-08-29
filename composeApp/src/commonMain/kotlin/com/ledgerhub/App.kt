@@ -46,7 +46,9 @@ import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.data.invoice.SqlDelightInvoiceRepository
 import com.ledgerhub.data.quote.SqlDelightQuoteRepository
 import com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository
+import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
+import com.ledgerhub.data.settings.SqlDelightTaxSettingsRepository
 import com.ledgerhub.db.LedgerHubDatabase
 import com.ledgerhub.domain.dashboard.GetDashboardAnalyticsUseCase
 import com.ledgerhub.domain.invoice.Invoice
@@ -56,6 +58,7 @@ import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.domain.settings.TaxSettings
 import com.ledgerhub.presentation.dashboard.DashboardIntent
 import com.ledgerhub.presentation.dashboard.DashboardScreen
 import com.ledgerhub.presentation.dashboard.DashboardViewModel
@@ -66,8 +69,10 @@ import com.ledgerhub.presentation.invoices.InvoiceDetailViewModel
 import com.ledgerhub.presentation.invoices.InvoiceListIntent
 import com.ledgerhub.presentation.invoices.InvoiceListScreen
 import com.ledgerhub.presentation.invoices.InvoiceListViewModel
-import com.ledgerhub.presentation.placeholder.ClientsScreen
-import com.ledgerhub.presentation.placeholder.SettingsScreen
+import com.ledgerhub.presentation.clients.ClientsScreen
+import com.ledgerhub.presentation.clients.ClientsViewModel
+import com.ledgerhub.presentation.settings.TaxSettingsScreen
+import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubColors
 import com.ledgerhub.presentation.theme.LedgerHubTheme
 
@@ -113,6 +118,8 @@ fun App(database: LedgerHubDatabase) {
         SqlDelightQuoteRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
     }
     val ledgerRepository = remember(invoiceRepository) { LocalLedgerRepository(invoiceRepository) }
+    val clientRepository = remember(database) { SqlDelightClientRepository(database) }
+    val taxSettingsRepository = remember(database) { SqlDelightTaxSettingsRepository(database) }
 
     // ViewModels des onglets — créés une fois, conservés entre les changements d'onglet.
     val dashboardViewModel = remember {
@@ -121,6 +128,8 @@ fun App(database: LedgerHubDatabase) {
         )
     }
     val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository) }
+    val clientsViewModel = remember { ClientsViewModel(clientRepository) }
+    val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
 
     // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
     // encore vide au tout premier lancement. On relance explicitement la lecture s'il a semé —
@@ -133,6 +142,14 @@ fun App(database: LedgerHubDatabase) {
     }
 
     var destination by remember { mutableStateOf(Destination.OVERVIEW) }
+
+    // Les paramètres fiscaux alimentent l'émetteur et le taux par défaut du formulaire de facture.
+    // Relus à chaque changement d'onglet : quitter l'écran Paramètres suffit à les propager, sans
+    // couplage entre les deux ViewModels. La table ne compte qu'une ligne, la lecture est triviale.
+    var taxSettings by remember { mutableStateOf(TaxSettings.Default) }
+    LaunchedEffect(taxSettingsRepository, destination) {
+        taxSettings = taxSettingsRepository.loadSettings().getOrDefault(TaxSettings.Default)
+    }
     var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
     var language by remember { mutableStateOf(AppLanguage.FR) }
@@ -177,6 +194,9 @@ fun App(database: LedgerHubDatabase) {
                                         ledgerRepository = ledgerRepository,
                                         dashboardViewModel = dashboardViewModel,
                                         invoiceListViewModel = invoiceListViewModel,
+                                        clientsViewModel = clientsViewModel,
+                                        taxSettingsViewModel = taxSettingsViewModel,
+                                        taxSettings = taxSettings,
                                     )
                                 }
                             }
@@ -207,6 +227,9 @@ fun App(database: LedgerHubDatabase) {
                                     ledgerRepository = ledgerRepository,
                                     dashboardViewModel = dashboardViewModel,
                                     invoiceListViewModel = invoiceListViewModel,
+                                    clientsViewModel = clientsViewModel,
+                                    taxSettingsViewModel = taxSettingsViewModel,
+                                    taxSettings = taxSettings,
                                 )
                             }
                         }
@@ -244,10 +267,19 @@ private fun ShellContent(
     ledgerRepository: LocalLedgerRepository,
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
+    clientsViewModel: ClientsViewModel,
+    taxSettingsViewModel: TaxSettingsViewModel,
+    taxSettings: TaxSettings,
 ) {
     when (overlay) {
         Overlay.CreateInvoice -> {
-            val formViewModel = remember { InvoiceFormViewModel(SubmitInvoiceUseCase(invoiceRepository)) }
+            val formViewModel = remember(taxSettings) {
+                InvoiceFormViewModel(
+                    submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
+                    issuer = taxSettings.issuerParty,
+                    defaultVatRate = taxSettings.defaultVatRate,
+                )
+            }
             DisposableEffect(Unit) { onDispose { formViewModel.onCleared() } }
             OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_DASHBOARD), onBack = onBack) {
                 InvoiceFormScreen(viewModel = formViewModel)
@@ -275,8 +307,8 @@ private fun ShellContent(
                 InvoiceListScreen(viewModel = invoiceListViewModel, onInvoiceClick = onOpenInvoice)
             }
 
-            Destination.CLIENTS -> ClientsScreen()
-            Destination.SETTINGS -> SettingsScreen()
+            Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
+            Destination.SETTINGS -> TaxSettingsScreen(viewModel = taxSettingsViewModel)
         }
     }
 }

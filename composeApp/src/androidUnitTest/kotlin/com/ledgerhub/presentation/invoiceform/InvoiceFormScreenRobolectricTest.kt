@@ -2,6 +2,7 @@ package com.ledgerhub.presentation.invoiceform
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
+import kotlin.test.assertNull
 
 /**
  * Équivalent Android de [InvoiceFormScreenTest] (commonTest, qui sert iosTest sans modification).
@@ -23,13 +25,29 @@ import kotlin.test.Test
 class InvoiceFormScreenRobolectricTest {
 
     @Test
-    fun initialState_submitButtonIsDisabled() = runComposeUiTest {
+    fun initialState_bothActionsAreOfferedAndClickable() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        // Le formulaire est long/scrollable : le bouton peut être hors du viewport de test
-        // tant qu'on ne le scrolle pas explicitement dans la vue.
+        // Le formulaire est long/scrollable : les boutons peuvent être hors du viewport de test
+        // tant qu'on ne les scrolle pas explicitement dans la vue.
+        // Ils restent actifs sur formulaire vierge : c'est l'appui qui révèle les erreurs.
+        onNodeWithTag(InvoiceFormTags.SAVE_DRAFT_BUTTON).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(InvoiceFormTags.SAVE_DRAFT_BUTTON).assertIsEnabled()
         onNodeWithTag(InvoiceFormTags.SUBMIT_BUTTON).performScrollTo().assertIsDisplayed()
-        onNodeWithTag(InvoiceFormTags.SUBMIT_BUTTON).assertIsNotEnabled()
+        onNodeWithTag(InvoiceFormTags.SUBMIT_BUTTON).assertIsEnabled()
+    }
+
+    @Test
+    fun clickingIssueOnEmptyForm_revealsErrorsWithoutSubmitting() = runComposeUiTest {
+        val viewModel = InvoiceFormViewModel()
+        setContent { InvoiceFormScreen(viewModel = viewModel) }
+
+        onNodeWithTag(InvoiceFormTags.SUBMIT_BUTTON).performScrollTo().performClick()
+
+        onNodeWithTag(InvoiceFormTags.errorTagFor(InvoiceFormField.CLIENT_NAME))
+            .performScrollTo()
+            .assertIsDisplayed()
+        assertNull(viewModel.uiState.value.submittedInvoice)
     }
 
     @Test

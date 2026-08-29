@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -22,7 +23,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -46,6 +46,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.components.filterAmount
+import com.ledgerhub.presentation.components.filterQuantity
+import com.ledgerhub.presentation.components.filterSiret
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.format
@@ -66,6 +69,7 @@ object InvoiceFormTags {
     const val TOTAL_VAT = "invoice_form_total_vat"
     const val TOTAL_TTC = "invoice_form_total_ttc"
     const val FACTURX_TOGGLE = "invoice_form_facturx_toggle"
+    const val SAVE_DRAFT_BUTTON = "invoice_form_save_draft_button"
     const val SUBMIT_BUTTON = "invoice_form_submit_button"
     const val LOADING_INDICATOR = "invoice_form_loading_indicator"
     const val SUCCESS_MESSAGE = "invoice_form_success_message"
@@ -270,9 +274,20 @@ internal fun InvoiceFormContent(
             SubmissionStatus.Idle -> Unit
         }
 
+        // Les deux actions restent cliquables tant qu'aucune écriture n'est en cours : sur un
+        // formulaire incomplet, l'appui révèle toutes les erreurs au lieu de griser sans explication.
+        OutlinedButton(
+            onClick = { onIntent(InvoiceFormIntent.SaveDraft) },
+            enabled = !uiState.isSubmitting,
+            modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.SAVE_DRAFT_BUTTON },
+        ) {
+            // 💾 et non 🖫 (U+1F5AB) : ce dernier est absent des polices Android et rend un tofu.
+            Text("💾  ${tr(StringKey.ACTION_SAVE_DRAFT)}")
+        }
+
         Button(
-            onClick = { onIntent(InvoiceFormIntent.Submit) },
-            enabled = uiState.isSubmitEnabled,
+            onClick = { onIntent(InvoiceFormIntent.ValidateAndIssue) },
+            enabled = !uiState.isSubmitting,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.SUBMIT_BUTTON },
         ) {
@@ -466,38 +481,6 @@ private fun SectionCard(
     }
 }
 
-// ── Filtres de saisie ────────────────────────────────────────────────────────────
-// Ils normalisent la frappe pour éviter les saisies structurellement impossibles ; la validation
-// métier (FiscalValidation, parseAmountToCents) reste seule juge de la conformité.
-
-/** SIRET : 14 chiffres exactement — on ne laisse entrer que des chiffres, et pas un de plus. */
-private fun filterSiret(input: String): String = input.filter { it.isDigit() }.take(SIRET_LENGTH)
-
-/** Quantité : entier positif, borné pour éviter les saisies aberrantes. */
-private fun filterQuantity(input: String): String = input.filter { it.isDigit() }.take(QUANTITY_MAX_DIGITS)
-
-/**
- * Montant : chiffres et un séparateur décimal unique. La virgule et le point sont acceptés
- * (claviers FR et EN), [parseAmountToCents] normalise ensuite.
- */
-private fun filterAmount(input: String): String {
-    val builder = StringBuilder()
-    var separatorSeen = false
-    for (char in input) {
-        when {
-            char.isDigit() -> builder.append(char)
-            (char == ',' || char == '.') && !separatorSeen && builder.isNotEmpty() -> {
-                separatorSeen = true
-                builder.append(char)
-            }
-        }
-    }
-    return builder.toString()
-}
-
-private const val SIRET_LENGTH = 14
-private const val QUANTITY_MAX_DIGITS = 6
-
 /**
  * Champ de saisie du formulaire.
  *
@@ -561,8 +544,8 @@ private fun LoadingIndicator() {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(20.dp))
-        Text(tr(StringKey.FORM_SENDING))
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(tr(StringKey.FORM_PROCESSING))
     }
 }
 

@@ -35,6 +35,7 @@ import com.ledgerhub.presentation.invoices.tagColor
 object InvoiceCardTags {
     fun card(number: String) = "invoice_card_$number"
     fun statusTag(number: String) = "invoice_card_status_$number"
+    fun lockTag(number: String) = "invoice_card_lock_$number"
     const val FACTURX_BADGE = "invoice_card_facturx_badge"
 }
 
@@ -67,11 +68,30 @@ fun InvoiceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = invoice.number,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = invoice.number,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    // La carte n'expose aucune action mutable ; le cadenas annonce simplement
+                    // qu'une fois émise, la facture ne se modifie plus — visible sans ouvrir
+                    // le détail (règle portée par Invoice.isEditable).
+                    if (!invoice.isEditable) {
+                        val lockedHint = tr(StringKey.INVOICE_LOCKED_HINT)
+                        Text(
+                            text = "🔒",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.semantics {
+                                testTag = InvoiceCardTags.lockTag(invoice.number)
+                                contentDescription = lockedHint
+                            },
+                        )
+                    }
+                }
                 StatusTag(invoice.status, InvoiceCardTags.statusTag(invoice.number))
             }
 

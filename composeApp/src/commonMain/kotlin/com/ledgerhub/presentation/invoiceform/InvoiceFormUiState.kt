@@ -3,6 +3,7 @@ package com.ledgerhub.presentation.invoiceform
 import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.Money
+import com.ledgerhub.domain.invoice.Party
 
 /**
  * État immuable du formulaire — pattern UDF. Les champs sont stockés en texte brut (saisie
@@ -16,6 +17,12 @@ data class InvoiceFormUiState(
     val clientName: String = "",
     val clientSiret: String = "",
     val clientEmail: String = "",
+    /**
+     * Émetteur porté par la facture. Alimenté par les paramètres fiscaux enregistrés
+     * ([com.ledgerhub.domain.settings.TaxSettings]) ; [CabinetIdentity] n'en est plus que le repli
+     * tant que rien n'a été enregistré.
+     */
+    val issuer: Party = CabinetIdentity.party,
     val lines: List<InvoiceLineFormState> = listOf(InvoiceLineFormState()),
     val errors: Map<InvoiceFormField, ValidationErrorKey> = emptyMap(),
     /** Champs déjà saisis par l'utilisateur — conditionne l'affichage des erreurs, pas leur calcul. */
@@ -30,12 +37,24 @@ data class InvoiceFormUiState(
     val submittedInvoice: Invoice? = null,
     val submissionStatus: SubmissionStatus = SubmissionStatus.Idle,
 ) {
+    /**
+     * Une écriture est en cours. Propriété **dérivée** de [submissionStatus] et non champ stocké :
+     * une seule source de vérité, impossible à désynchroniser de l'état réel de la soumission.
+     */
+    val isSubmitting: Boolean get() = submissionStatus == SubmissionStatus.Loading
+
     /** Verrouille tous les champs pendant la soumission — évite toute saisie concurrente. */
-    val isFormEnabled: Boolean get() = submissionStatus != SubmissionStatus.Loading
+    val isFormEnabled: Boolean get() = !isSubmitting
 
     /** Une facture doit garder au moins une ligne — la suppression de la dernière est bloquée. */
     val canRemoveLines: Boolean get() = lines.size > 1 && isFormEnabled
 
+    /**
+     * Le formulaire est complet et valide — l'écriture peut aboutir. Les boutons d'action ne
+     * s'appuient **pas** dessus : ils restent cliquables tant qu'aucune écriture n'est en cours,
+     * de sorte qu'un appui sur un formulaire incomplet révèle toutes les erreurs plutôt que de
+     * laisser l'utilisateur devant un bouton grisé sans explication (voir [submitAttempted]).
+     */
     val isSubmitEnabled: Boolean
         get() = errors.isEmpty() && lines.all { it.errors.isEmpty() } && isFormEnabled
 

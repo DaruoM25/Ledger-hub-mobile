@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.invoiceform
 
 import com.ledgerhub.data.invoice.MockInvoiceRepository
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -187,7 +188,7 @@ class InvoiceFormViewModelTest {
     @Test
     fun submit_withInvalidForm_staysIdle_doesNotProduceInvoice() {
         val viewModel = InvoiceFormViewModel()
-        viewModel.processIntent(InvoiceFormIntent.Submit)
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
 
         val state = viewModel.uiState.value
         assertNull(state.submittedInvoice)
@@ -202,7 +203,7 @@ class InvoiceFormViewModelTest {
         fillLine(viewModel, 0, "Conseil valide", "1", "100.00")
         fillLine(viewModel, 1, "", "1", "50.00") // invalide
 
-        viewModel.processIntent(InvoiceFormIntent.Submit)
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
 
         assertNull(viewModel.uiState.value.submittedInvoice)
         assertEquals(SubmissionStatus.Idle, viewModel.uiState.value.submissionStatus)
@@ -220,7 +221,7 @@ class InvoiceFormViewModelTest {
         fillLine(viewModel, 0, "Conseil", "1", "100.00", VatRate.TAUX_NORMAL)
         fillLine(viewModel, 1, "Livre", "1", "20.00", VatRate.TAUX_REDUIT)
 
-        viewModel.processIntent(InvoiceFormIntent.Submit)
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
 
         runCurrent()
         assertEquals(SubmissionStatus.Loading, viewModel.uiState.value.submissionStatus)
@@ -253,7 +254,7 @@ class InvoiceFormViewModelTest {
         fillValidSingleLineForm(viewModel)
         viewModel.processIntent(InvoiceFormIntent.ToggleFacturX(false))
 
-        viewModel.processIntent(InvoiceFormIntent.Submit)
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
         advanceUntilIdle()
 
         val invoice = viewModel.uiState.value.submittedInvoice
@@ -272,7 +273,7 @@ class InvoiceFormViewModelTest {
         val viewModel = InvoiceFormViewModel(submitInvoiceUseCase = useCase, dispatcher = dispatcher)
         fillValidSingleLineForm(viewModel)
 
-        viewModel.processIntent(InvoiceFormIntent.Submit)
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
         runCurrent()
         assertEquals(SubmissionStatus.Loading, viewModel.uiState.value.submissionStatus)
 
@@ -281,6 +282,125 @@ class InvoiceFormViewModelTest {
         assertIs<SubmissionStatus.Error>(state.submissionStatus)
         assertTrue(state.isFormEnabled)
         assertNull(state.submittedInvoice)
+    }
+
+    // ── État de soumission : isSubmitting (Prompt 3) ─────────────────────────────────────────
+
+    @Test
+    fun freshForm_isNotSubmitting() {
+        assertFalse(InvoiceFormViewModel().uiState.value.isSubmitting)
+    }
+
+    @Test
+    fun validateAndIssue_flipsIsSubmittingDuringWrite_thenBackOnSuccess() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val useCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 1_000L))
+        val viewModel = InvoiceFormViewModel(submitInvoiceUseCase = useCase, dispatcher = dispatcher)
+        fillValidSingleLineForm(viewModel)
+        assertFalse(viewModel.uiState.value.isSubmitting)
+
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isSubmitting)
+        assertFalse(viewModel.uiState.value.isFormEnabled)
+
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isSubmitting)
+        assertEquals(SubmissionStatus.Success, viewModel.uiState.value.submissionStatus)
+    }
+
+    @Test
+    fun saveDraft_flipsIsSubmittingDuringWrite_thenBackOnSuccess() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val useCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 1_000L))
+        val viewModel = InvoiceFormViewModel(submitInvoiceUseCase = useCase, dispatcher = dispatcher)
+        fillValidSingleLineForm(viewModel)
+
+        viewModel.processIntent(InvoiceFormIntent.SaveDraft)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isSubmitting)
+
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isSubmitting)
+    }
+
+    @Test
+    fun isSubmitting_returnsToFalse_whenTheWriteFails() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val useCase = SubmitInvoiceUseCase(
+            MockInvoiceRepository(simulatedDelayMillis = 500L, simulateFailure = true)
+        )
+        val viewModel = InvoiceFormViewModel(submitInvoiceUseCase = useCase, dispatcher = dispatcher)
+        fillValidSingleLineForm(viewModel)
+
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isSubmitting)
+
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isSubmitting)
+        assertIs<SubmissionStatus.Error>(viewModel.uiState.value.submissionStatus)
+    }
+
+    @Test
+    fun rejectedByValidation_neverEntersSubmittingState() {
+        val viewModel = InvoiceFormViewModel()
+
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
+
+        assertFalse(viewModel.uiState.value.isSubmitting)
+        assertEquals(SubmissionStatus.Idle, viewModel.uiState.value.submissionStatus)
+    }
+
+    @Test
+    fun secondActionDuringAWrite_isIgnored() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val useCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 1_000L))
+        val viewModel = InvoiceFormViewModel(submitInvoiceUseCase = useCase, dispatcher = dispatcher)
+        fillValidSingleLineForm(viewModel)
+
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
+        runCurrent()
+        // Double appui : l'écriture en cours ne doit pas être doublée ni requalifiée en brouillon.
+        viewModel.processIntent(InvoiceFormIntent.SaveDraft)
+        advanceUntilIdle()
+
+        assertEquals(InvoiceStatus.VALIDATED, viewModel.uiState.value.submittedInvoice?.status)
+    }
+
+    // ── Statut cible par action ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun saveDraft_persistsAsDraft() = runTest {
+        val viewModel = InvoiceFormViewModel(
+            submitInvoiceUseCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 0L)),
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
+        fillValidSingleLineForm(viewModel)
+
+        viewModel.processIntent(InvoiceFormIntent.SaveDraft)
+        advanceUntilIdle()
+
+        val invoice = assertNotNull(viewModel.uiState.value.submittedInvoice)
+        assertEquals(InvoiceStatus.DRAFT, invoice.status)
+        assertTrue(invoice.isEditable)
+    }
+
+    @Test
+    fun validateAndIssue_persistsAsValidated_andLocksTheInvoice() = runTest {
+        val viewModel = InvoiceFormViewModel(
+            submitInvoiceUseCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 0L)),
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
+        fillValidSingleLineForm(viewModel)
+
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
+        advanceUntilIdle()
+
+        val invoice = assertNotNull(viewModel.uiState.value.submittedInvoice)
+        assertEquals(InvoiceStatus.VALIDATED, invoice.status)
+        assertFalse(invoice.isEditable) // immutabilité fiscale
+        assertTrue(invoice.isCancellableByCreditNote)
     }
 
     // ── Révélation progressive des erreurs (anomalie D-02, recette du 29/08/2026) ────────────
@@ -321,7 +441,7 @@ class InvoiceFormViewModelTest {
     fun submitAttemptOnEmptyForm_revealsEveryError() {
         val viewModel = InvoiceFormViewModel()
 
-        viewModel.processIntent(InvoiceFormIntent.Submit)
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
 
         val state = viewModel.uiState.value
         assertTrue(state.submitAttempted)

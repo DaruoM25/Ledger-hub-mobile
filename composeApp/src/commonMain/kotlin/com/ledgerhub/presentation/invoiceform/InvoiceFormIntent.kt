@@ -1,5 +1,6 @@
 package com.ledgerhub.presentation.invoiceform
 
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.VatRate
 
 sealed interface InvoiceFormIntent {
@@ -34,5 +35,17 @@ sealed interface InvoiceFormIntent {
         val vatRate: VatRate,
     ) : InvoiceFormIntent
 
-    data object Submit : InvoiceFormIntent
+    /**
+     * Persiste la facture en **brouillon** ([InvoiceStatus.DRAFT]) : elle reste modifiable et
+     * supprimable. Comme [ValidateAndIssue], l'écriture n'a lieu que si le formulaire est valide ;
+     * sinon la tentative révèle simplement toutes les erreurs.
+     */
+    data object SaveDraft : InvoiceFormIntent
+
+    /**
+     * Valide et émet la facture ([InvoiceStatus.VALIDATED]) : elle devient immuable au sens fiscal
+     * (plus de modification ni de suppression, annulation par avoir uniquement — voir
+     * [Invoice.isEditable][com.ledgerhub.domain.invoice.Invoice.isEditable]).
+     */
+    data object ValidateAndIssue : InvoiceFormIntent
 }

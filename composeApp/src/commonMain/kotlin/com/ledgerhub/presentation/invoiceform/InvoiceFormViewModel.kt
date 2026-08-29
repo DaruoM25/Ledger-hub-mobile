@@ -5,9 +5,11 @@ import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
+import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.domain.invoice.parseAmountToCents
 import com.ledgerhub.domain.invoice.totalHtOf
@@ -39,20 +41,31 @@ private val EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
 class InvoiceFormViewModel(
     private val submitInvoiceUseCase: SubmitInvoiceUseCase = SubmitInvoiceUseCase(MockInvoiceRepository()),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Émetteur issu des paramètres fiscaux enregistrés ; [CabinetIdentity] sert de repli. */
+    issuer: Party = CabinetIdentity.party,
+    /** Taux pré-sélectionné sur toute nouvelle ligne — configurable aux paramètres fiscaux. */
+    private val defaultVatRate: VatRate = VatRate.TAUX_NORMAL,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     // L'état initial reflète aussi les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
-    private val _uiState = MutableStateFlow(revalidate(InvoiceFormUiState()))
+    private val _uiState = MutableStateFlow(
+        revalidate(
+            InvoiceFormUiState(
+                issuer = issuer,
+                lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
+            ),
+        ),
+    )
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
 
     fun processIntent(intent: InvoiceFormIntent) {
-        if (intent is InvoiceFormIntent.Submit) {
-            submit()
-            return
+        when (intent) {
+            InvoiceFormIntent.SaveDraft -> submit(InvoiceStatus.DRAFT)
+            InvoiceFormIntent.ValidateAndIssue -> submit(InvoiceStatus.VALIDATED)
+            else -> _uiState.update { current -> revalidate(applyChange(current, intent)) }
         }
-        _uiState.update { current -> revalidate(applyChange(current, intent)) }
     }
 
     private fun applyChange(current: InvoiceFormUiState, intent: InvoiceFormIntent): InvoiceFormUiState =
@@ -77,7 +90,7 @@ class InvoiceFormViewModel(
             is InvoiceFormIntent.ToggleFacturX -> current.copy(generateFacturX = intent.enabled)
 
             InvoiceFormIntent.AddLine ->
-                current.copy(lines = current.lines + InvoiceLineFormState())
+                current.copy(lines = current.lines + InvoiceLineFormState(vatRate = defaultVatRate))
 
             is InvoiceFormIntent.RemoveLine ->
                 if (current.canRemoveLines && intent.index in current.lines.indices) {
@@ -114,7 +127,8 @@ class InvoiceFormViewModel(
                     )
                 }
 
-            InvoiceFormIntent.Submit -> current
+            // Les deux intentions d'écriture sont interceptées en amont par processIntent.
+            InvoiceFormIntent.SaveDraft, InvoiceFormIntent.ValidateAndIssue -> current
         }
 
     /** Marque [field] comme saisi — ses erreurs deviennent affichables (voir [InvoiceFormUiState.visibleErrors]). */
@@ -185,10 +199,11 @@ class InvoiceFormViewModel(
         return InvoiceLine(label = label, quantity = quantity, unitPriceHt = Money(unitPriceCents), vatRate = vatRate)
     }
 
-    private fun buildInvoice(state: InvoiceFormUiState): Invoice = Invoice(
+    private fun buildInvoice(state: InvoiceFormUiState, status: InvoiceStatus): Invoice = Invoice(
         number = state.invoiceNumber,
         issueDate = state.issueDate,
-        issuer = CabinetIdentity.party,
+        status = status,
+        issuer = state.issuer,
         recipient = Party(
             name = state.clientName,
             // Le SIREN est les 9 premiers chiffres du SIRET (règle INSEE) — déjà validé à 14 chiffres.
@@ -208,8 +223,17 @@ class InvoiceFormViewModel(
         facturX = state.generateFacturX,
     )
 
-    private fun submit() {
-        // Une tentative d'émission révèle toutes les erreurs, y compris sur les champs jamais
+    /**
+     * Chemin d'écriture commun aux deux actions. [targetStatus] est la seule différence :
+     * [InvoiceStatus.DRAFT] pour un enregistrement, [InvoiceStatus.VALIDATED] pour une émission.
+     *
+     * Une écriture déjà en cours est ignorée : le garde-fou complète la désactivation des boutons
+     * côté écran et couvre le double appui rapide.
+     */
+    private fun submit(targetStatus: InvoiceStatus) {
+        if (_uiState.value.isSubmitting) return
+
+        // Une tentative d'écriture révèle toutes les erreurs, y compris sur les champs jamais
         // saisis : l'utilisateur doit voir ce qui bloque, même sans avoir touché au formulaire.
         val revalidated = revalidate(_uiState.value).copy(submitAttempted = true)
         val hasLineErrors = revalidated.lines.any { it.errors.isNotEmpty() }
@@ -218,7 +242,7 @@ class InvoiceFormViewModel(
             return
         }
 
-        val invoice = buildInvoice(revalidated)
+        val invoice = buildInvoice(revalidated, targetStatus)
         _uiState.value = revalidated.copy(submissionStatus = SubmissionStatus.Loading)
 
         scope.launch {
