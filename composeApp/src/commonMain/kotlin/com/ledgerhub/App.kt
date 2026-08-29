@@ -70,6 +70,8 @@ import com.ledgerhub.presentation.invoices.InvoiceListIntent
 import com.ledgerhub.presentation.invoices.InvoiceListScreen
 import com.ledgerhub.presentation.invoices.InvoiceListViewModel
 import com.ledgerhub.presentation.clients.ClientsScreen
+import com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreen
+import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
 import com.ledgerhub.presentation.clients.ClientsViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsScreen
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
@@ -95,6 +97,9 @@ private sealed interface Overlay {
     data object None : Overlay
     data object CreateInvoice : Overlay
     data class InvoiceDetail(val number: String) : Overlay
+
+    /** Émission d'un avoir annulant [invoice] — US-05. */
+    data class CreditNote(val invoice: Invoice) : Overlay
 }
 
 /**
@@ -127,7 +132,7 @@ fun App(database: LedgerHubDatabase) {
             GetDashboardAnalyticsUseCase(invoiceRepository, creditNoteRepository, quoteRepository),
         )
     }
-    val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository) }
+    val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository, creditNoteRepository) }
     val clientsViewModel = remember { ClientsViewModel(clientRepository) }
     val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
 
@@ -155,6 +160,7 @@ fun App(database: LedgerHubDatabase) {
     var language by remember { mutableStateOf(AppLanguage.FR) }
 
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
+    val onCreateCreditNote = { invoice: Invoice -> overlay = Overlay.CreditNote(invoice) }
     val onBackToTabs = {
         overlay = Overlay.None
         // La liste et le tableau de bord peuvent avoir de nouvelles données après une émission.
@@ -192,6 +198,8 @@ fun App(database: LedgerHubDatabase) {
                                         onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
                                         invoiceRepository = invoiceRepository,
                                         ledgerRepository = ledgerRepository,
+                                        creditNoteRepository = creditNoteRepository,
+                                        onCreateCreditNote = onCreateCreditNote,
                                         dashboardViewModel = dashboardViewModel,
                                         invoiceListViewModel = invoiceListViewModel,
                                         clientsViewModel = clientsViewModel,
@@ -225,6 +233,8 @@ fun App(database: LedgerHubDatabase) {
                                     onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
                                     invoiceRepository = invoiceRepository,
                                     ledgerRepository = ledgerRepository,
+                                    creditNoteRepository = creditNoteRepository,
+                                    onCreateCreditNote = onCreateCreditNote,
                                     dashboardViewModel = dashboardViewModel,
                                     invoiceListViewModel = invoiceListViewModel,
                                     clientsViewModel = clientsViewModel,
@@ -265,6 +275,8 @@ private fun ShellContent(
     onOpenInvoice: (String) -> Unit,
     invoiceRepository: SqlDelightInvoiceRepository,
     ledgerRepository: LocalLedgerRepository,
+    creditNoteRepository: SqlDelightCreditNoteRepository,
+    onCreateCreditNote: (Invoice) -> Unit,
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
     clientsViewModel: ClientsViewModel,
@@ -288,11 +300,27 @@ private fun ShellContent(
 
         is Overlay.InvoiceDetail -> {
             val detailViewModel = remember(overlay.number) {
-                InvoiceDetailViewModel(overlay.number, ledgerRepository)
+                InvoiceDetailViewModel(overlay.number, ledgerRepository, creditNoteRepository)
             }
             DisposableEffect(overlay.number) { onDispose { detailViewModel.onCleared() } }
             OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_INVOICES), onBack = onBack) {
-                InvoiceDetailScreen(viewModel = detailViewModel)
+                InvoiceDetailScreen(
+                    viewModel = detailViewModel,
+                    onCreateCreditNoteClick = onCreateCreditNote,
+                )
+            }
+        }
+
+        is Overlay.CreditNote -> {
+            val creditNoteViewModel = remember(overlay.invoice.number) {
+                CreditNoteFormViewModel(
+                    sourceInvoice = overlay.invoice,
+                    creditNoteRepository = creditNoteRepository,
+                )
+            }
+            DisposableEffect(overlay.invoice.number) { onDispose { creditNoteViewModel.onCleared() } }
+            OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_INVOICES), onBack = onBack) {
+                CreditNoteFormScreen(viewModel = creditNoteViewModel)
             }
         }
 

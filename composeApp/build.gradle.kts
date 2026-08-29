@@ -133,6 +133,17 @@ sqldelight {
     databases {
         create("LedgerHubDatabase") {
             packageName.set("com.ledgerhub.db")
+
+            // ── Migrations (dette A-01, close en US-05) ────────────────────────────────────
+            // Jusqu'ici tout ajout de table ou de colonne cassait silencieusement les bases
+            // déjà installées : Schema.create ne s'exécute que sur une base neuve, et le
+            // runCatching des repositories transformait le « no such table » en repli muet.
+            //
+            // schemaOutputDirectory fige le schéma de référence (N.db) ; verifyMigrations fait
+            // échouer le build si un .sq évolue sans le .sqm correspondant. Le problème ne peut
+            // donc plus passer inaperçu — il devient une erreur de compilation.
+            schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
+            verifyMigrations.set(true)
         }
     }
 }

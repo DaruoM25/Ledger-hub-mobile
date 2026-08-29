@@ -32,21 +32,21 @@ class CreateCreditNoteUseCaseTest {
 
     @Test
     fun createCreditNote_forDraftInvoice_fails() {
-        val result = useCase(invoice(InvoiceStatus.DRAFT), number = "AV-1", issueDate = "2026-08-06", reason = "Erreur")
+        val result = useCase(invoice(InvoiceStatus.DRAFT), number = "AV-2026-0001", issueDate = "2026-08-06", reason = "Erreur")
         assertTrue(result.isFailure)
         assertFailsWith<IllegalStateException> { result.getOrThrow() }
     }
 
     @Test
     fun createCreditNote_forAlreadyCancelledInvoice_fails() {
-        val result = useCase(invoice(InvoiceStatus.CANCELLED), number = "AV-1", issueDate = "2026-08-06", reason = "Erreur")
+        val result = useCase(invoice(InvoiceStatus.CANCELLED), number = "AV-2026-0001", issueDate = "2026-08-06", reason = "Erreur")
         assertTrue(result.isFailure)
     }
 
     @Test
     fun createCreditNote_forValidatedSentOrPaidInvoice_succeeds() {
         listOf(InvoiceStatus.VALIDATED, InvoiceStatus.SENT, InvoiceStatus.PAID).forEach { status ->
-            val result = useCase(invoice(status), number = "AV-1", issueDate = "2026-08-06", reason = "Erreur")
+            val result = useCase(invoice(status), number = "AV-2026-0001", issueDate = "2026-08-06", reason = "Erreur")
             assertTrue(result.isSuccess, "Le statut $status devrait être annulable par avoir")
         }
     }
@@ -55,7 +55,7 @@ class CreateCreditNoteUseCaseTest {
 
     @Test
     fun createCreditNote_withBlankReason_fails() {
-        val result = useCase(invoice(InvoiceStatus.VALIDATED), number = "AV-1", issueDate = "2026-08-06", reason = "")
+        val result = useCase(invoice(InvoiceStatus.VALIDATED), number = "AV-2026-0001", issueDate = "2026-08-06", reason = "")
         assertTrue(result.isFailure)
         assertFailsWith<IllegalArgumentException> { result.getOrThrow() }
     }
@@ -70,12 +70,12 @@ class CreateCreditNoteUseCaseTest {
         )
         val original = invoice(InvoiceStatus.VALIDATED, lines)
 
-        val result = useCase(original, number = "AV-2026-042", issueDate = "2026-08-06", reason = "Erreur tarifaire")
+        val result = useCase(original, number = "AV-2026-0042", issueDate = "2026-08-06", reason = "Erreur tarifaire")
 
         assertTrue(result.isSuccess)
         val creditNote = result.getOrThrow()
 
-        assertEquals("AV-2026-042", creditNote.number)
+        assertEquals("AV-2026-0042", creditNote.number)
         assertEquals("2026-08-06", creditNote.issueDate)
         assertEquals(original.number, creditNote.invoiceId) // piste d'audit fiscale facture -> avoir
         assertEquals("Erreur tarifaire", creditNote.reason)

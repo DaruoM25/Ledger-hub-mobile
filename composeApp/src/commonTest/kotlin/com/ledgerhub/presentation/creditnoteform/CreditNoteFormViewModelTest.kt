@@ -70,7 +70,6 @@ class CreditNoteFormViewModelTest {
         val source = invoice()
         val viewModel = CreditNoteFormViewModel(sourceInvoice = source)
 
-        viewModel.processIntent(CreditNoteFormIntent.CreditNoteNumberChanged("AV-2026-001"))
         viewModel.processIntent(CreditNoteFormIntent.ReasonChanged("Erreur tarifaire"))
 
         val state = viewModel.uiState.value
@@ -91,7 +90,6 @@ class CreditNoteFormViewModelTest {
     @Test
     fun blankReason_producesFieldError_andBlocksSubmit() {
         val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice())
-        viewModel.processIntent(CreditNoteFormIntent.CreditNoteNumberChanged("AV-2026-001"))
         viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-06"))
 
         val state = viewModel.uiState.value
@@ -133,8 +131,10 @@ class CreditNoteFormViewModelTest {
         val source = invoice()
         val useCase = SubmitCreditNoteUseCase(MockCreditNoteRepository(simulatedDelayMillis = 1_500L))
         val viewModel = CreditNoteFormViewModel(sourceInvoice = source, submitCreditNoteUseCase = useCase, dispatcher = dispatcher)
+        // Le numéro d'avoir est attribué par la séquence dans l'init du ViewModel : on laisse
+        // cette coroutine s'exécuter avant toute saisie, sinon le formulaire reste invalide.
+        advanceUntilIdle()
 
-        viewModel.processIntent(CreditNoteFormIntent.CreditNoteNumberChanged("AV-2026-001"))
         viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-06"))
         viewModel.processIntent(CreditNoteFormIntent.ReasonChanged("Erreur tarifaire"))
         viewModel.processIntent(CreditNoteFormIntent.Submit)
@@ -165,7 +165,9 @@ class CreditNoteFormViewModelTest {
             MockCreditNoteRepository(simulatedDelayMillis = 500L, simulateFailure = true)
         )
         val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice(), submitCreditNoteUseCase = useCase, dispatcher = dispatcher)
-        viewModel.processIntent(CreditNoteFormIntent.CreditNoteNumberChanged("AV-2026-001"))
+        // Le numéro d'avoir est attribué par la séquence dans l'init du ViewModel : on laisse
+        // cette coroutine s'exécuter avant toute saisie, sinon le formulaire reste invalide.
+        advanceUntilIdle()
         viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-06"))
         viewModel.processIntent(CreditNoteFormIntent.ReasonChanged("Erreur tarifaire"))
 
@@ -187,7 +189,9 @@ class CreditNoteFormViewModelTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val useCase = SubmitCreditNoteUseCase(MockCreditNoteRepository(simulatedDelayMillis = 0L))
         val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice(), submitCreditNoteUseCase = useCase, dispatcher = dispatcher)
-        viewModel.processIntent(CreditNoteFormIntent.CreditNoteNumberChanged("AV-2026-001"))
+        // Le numéro d'avoir est attribué par la séquence dans l'init du ViewModel : on laisse
+        // cette coroutine s'exécuter avant toute saisie, sinon le formulaire reste invalide.
+        advanceUntilIdle()
         viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-06"))
         viewModel.processIntent(CreditNoteFormIntent.ReasonChanged("Erreur tarifaire"))
         viewModel.processIntent(CreditNoteFormIntent.Submit)
@@ -204,7 +208,9 @@ class CreditNoteFormViewModelTest {
     fun submit_forDraftSourceInvoice_producesError_viaCreateCreditNoteUseCase() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice(status = InvoiceStatus.DRAFT), dispatcher = dispatcher)
-        viewModel.processIntent(CreditNoteFormIntent.CreditNoteNumberChanged("AV-2026-001"))
+        // Le numéro d'avoir est attribué par la séquence dans l'init du ViewModel : on laisse
+        // cette coroutine s'exécuter avant toute saisie, sinon le formulaire reste invalide.
+        advanceUntilIdle()
         viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-06"))
         viewModel.processIntent(CreditNoteFormIntent.ReasonChanged("Erreur tarifaire"))
 
@@ -214,5 +220,75 @@ class CreditNoteFormViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.submissionStatus is SubmissionStatus.Error)
         assertNull(state.submittedCreditNote)
+    }
+
+    // ── Numérotation et refus du second avoir (US-05) ────────────────────────
+
+    @Test
+    fun init_assignsTheSequentialNumber_withoutAnyUserInput() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repository = MockCreditNoteRepository(simulatedDelayMillis = 0L)
+        val viewModel = CreditNoteFormViewModel(
+            sourceInvoice = invoice(),
+            creditNoteRepository = repository,
+            dispatcher = dispatcher,
+        )
+
+        advanceUntilIdle()
+
+        // Exercice déduit de la facture annulée (commonMain n'a pas d'horloge — voir le ViewModel).
+        assertEquals("AV-2026-0001", viewModel.uiState.value.creditNoteNumber)
+        assertNull(viewModel.uiState.value.errors[CreditNoteFormField.CREDIT_NOTE_NUMBER])
+    }
+
+    @Test
+    fun init_blocksTheForm_whenTheInvoiceAlreadyCarriesACreditNote() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repository = MockCreditNoteRepository(simulatedDelayMillis = 0L)
+        val source = invoice()
+        // Un premier avoir existe déjà pour cette facture.
+        repository.submitCreditNote(
+            com.ledgerhub.domain.creditnote.CreateCreditNoteUseCase()(
+                source, "AV-2026-0007", "2026-08-06", "Premier motif",
+            ).getOrThrow(),
+        )
+
+        val viewModel = CreditNoteFormViewModel(
+            sourceInvoice = source,
+            creditNoteRepository = repository,
+            dispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("AV-2026-0007", state.blockedByExistingCreditNote)
+        assertFalse(state.isFormEnabled, "Le formulaire est neutralisé d'emblée")
+        assertFalse(state.isSubmitEnabled)
+    }
+
+    @Test
+    fun submit_onAnAlreadyCreditedInvoice_persistsNothing() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val repository = MockCreditNoteRepository(simulatedDelayMillis = 0L)
+        val source = invoice()
+        repository.submitCreditNote(
+            com.ledgerhub.domain.creditnote.CreateCreditNoteUseCase()(
+                source, "AV-2026-0007", "2026-08-06", "Premier motif",
+            ).getOrThrow(),
+        )
+        val viewModel = CreditNoteFormViewModel(
+            sourceInvoice = source,
+            creditNoteRepository = repository,
+            dispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-07"))
+        viewModel.processIntent(CreditNoteFormIntent.ReasonChanged("Second motif"))
+        viewModel.processIntent(CreditNoteFormIntent.Submit)
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.submittedCreditNote)
+        assertEquals(1, repository.fetchCreditNotes().getOrThrow().size)
     }
 }

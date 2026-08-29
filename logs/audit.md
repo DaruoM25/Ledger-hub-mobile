@@ -617,3 +617,87 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 - **Le SIRET est verrouillé en édition** : il est la clé primaire et l'identité métier. Changer de SIRET revient à créer une autre fiche — comportement volontaire, signalé à l'utilisateur par une mention sous le champ.
 - **Les puces de taux non sélectionnées manquent de contraste** en thème sombre (gris sombre sur fond sombre). Lisible mais perfectible ; à reprendre avec le Design System.
 - **La suppression d'un client sans facture n'a pas été exercée sur émulateur** : le seul client supprimable est celui créé pendant la recette, et la vérification s'est arrêtée après la création. Couverte par `ClientsViewModelTest` et `SqlDelightClientRepositoryTest`.
+
+---
+
+## US-05 — Cycle d'annulation comptable Factur-X 2026 (Avoirs)
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-05-credit-notes` (créée depuis `main` @ `855fc02`)
+- **Statut :** ✅ Clos — 317/317 tests unitaires verts (+25), APK `BUILD SUCCESSFUL`, migration vérifiée sur base réelle, parcours d'annulation validé de bout en bout sur émulateur
+- **Objectif :** Rendre atteignable et complet le cycle d'émission d'avoirs, et fermer la dette A-01.
+
+### Constat d'audit préalable (Étape 1)
+La prémisse du prompt était exacte : `main` portait bien US-03 et US-04 (`855fc02`, poussé sur `origin`).
+
+**Une grande partie de l'US-05 existait déjà** : domaine `CreditNote` imposant les montants négatifs par `init require`, `CreateCreditNoteUseCase` refusant les factures non finalisées, table `CreditNote.sq` avec clé étrangère vers `Invoice(number)`, repository basculant la facture d'origine en `CANCELLED` **dans la même transaction** — l'inaltérabilité demandée au point 3 était donc déjà acquise. Un écran, un ViewModel et cinq suites de tests étaient en place.
+
+**Six écarts réels** ont été relevés et traités :
+1. **Parcours inatteignable** — `onCreateCreditNoteClick` avait une valeur par défaut vide et n'était câblé nulle part : le formulaire d'avoir était du code mort, exactement comme `onEditClick` signalé en US-04.
+2. **Aucun blocage de second avoir** — `selectByInvoiceNumber` existait mais n'était jamais consulté, et le repository faisait `INSERT OR REPLACE`.
+3. **`originalInvoiceDate` absent** — la référence croisée se limitait au numéro.
+4. **Lignes et assiettes non recopiées** — seuls les trois totaux l'étaient.
+5. **Numéro saisi à la main**, sans séquence ni contrôle de format.
+6. **Aucune mention « Avoir émis : … »** sur la facture parente.
+
+**Choix de modélisation** : la table `CreditNote` séparée est conservée plutôt qu'une colonne discriminante sur `Invoice`. Elle existe, porte déjà la clé étrangère, et fusionner les deux pièces imposerait de rendre nullables la moitié des colonnes d'`Invoice` et de filtrer chaque lecture existante. La spécification laissait ce choix ouvert.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Vraies migrations SQLDelight — dette A-01 close.** `schemaOutputDirectory` + `verifyMigrations` activés, schéma de référence `1.db` figé **avant** toute modification, migration `1.sqm` (v1 → v2). Le build échoue désormais si un `.sq` évolue sans son `.sqm` : le problème devient une erreur de compilation au lieu d'un repli muet à l'exécution. La migration inclut par surcroît un `CREATE TABLE IF NOT EXISTS TaxSettings` qui **rattrape les bases antérieures à l'US-04**, restées en version 1 sans cette table (incident constaté en recette US-04) — idempotent sur une base saine, donc validé tel quel par `verifyMigrations`.
+2. **Table `CreditNoteLine` dédiée.** L'avoir porte sa propre copie des lignes : un document fiscal doit rester lisible sans sa pièce parente, même principe que la copie gelée du destinataire introduite en D-03. Les prix restent positifs ; c'est le sens comptable qui inverse totaux et assiettes.
+3. **Numérotation séquentielle attribuée par la base.** `AV-AAAA-NNNN`, suffixe à largeur fixe — ce qui rend le tri lexicographique équivalent au tri numérique et permet à `selectLastNumberForPrefix` de se contenter d'un `ORDER BY number DESC LIMIT 1`. La continuité étant une obligation fiscale, elle ne pouvait pas dépendre d'une saisie.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `sqldelight/databases/1.db` | Schéma de référence figé depuis `main`. |
+| `sqldelight/…/1.sqm` | Migration v1 → v2 : `originalInvoiceDate`, `CreditNoteLine`, rattrapage `TaxSettings`. |
+| `sqldelight/…/CreditNoteLine.sq` | Lignes recopiées de la facture annulée. |
+| `domain/creditnote/CreditNoteNumbering.kt` | Format, séquence, motif `LIKE` par exercice. |
+| `commonTest/…/CreditNoteNumberingTest.kt` | 8 cas. |
+| `androidUnitTest/…/CreditNoteLifecycleRepositoryTest.kt` | 7 cas sur base réelle. |
+| `androidUnitTest/…/CreditNoteCrossReferenceUiTest.kt` | 7 cas d'interface. |
+
+### Fichiers modifiés (principaux)
+| Fichier | Nature |
+|---|---|
+| `composeApp/build.gradle.kts` | `schemaOutputDirectory` + `verifyMigrations`. |
+| `sqldelight/…/CreditNote.sq` | Colonne `originalInvoiceDate` **en dernière position** (voir RCA n°1), `insertOrReplace` étendu, `selectLastNumberForPrefix`. |
+| `sqldelight/…/Invoice.sq` | — (inchangé sur ce lot). |
+| `domain/creditnote/CreditNote.kt` | `originalInvoiceDate`, `lines`, `vatBreakdown` inversé calculé par le moteur du domaine — aucune duplication de l'arithmétique fiscale. |
+| `domain/creditnote/CreditNoteRepository.kt` | `findByInvoiceNumber`, `nextNumberForYear`, `InvoiceAlreadyCreditedException`. |
+| `domain/creditnote/CreateCreditNoteUseCase.kt` | Recopie des lignes, référence croisée, contrôle de format du numéro. |
+| `data/creditnote/SqlDelightCreditNoteRepository.kt` | Contrôle d'unicité **dans la transaction**, écriture des lignes, numérotation. |
+| `data/creditnote/MockCreditNoteRepository.kt` | Mêmes règles que l'implémentation réelle. |
+| `presentation/creditnoteform/*` | Numéro attribué et présenté en lecture seule, référence croisée complète, lignes et assiettes affichées, bannière de refus, erreurs révélées progressivement (D-02). Formatage monétaire aligné sur le `formatMoney` i18n partagé — l'écran avait jusqu'ici son propre formateur, qui ignorait la locale. |
+| `presentation/invoices/*` | `creditNoteNumber` dans l'état du détail et index `creditNotesByInvoice` dans celui de la liste ; mention « Avoir émis : … » sur les deux surfaces ; les deux ViewModels interrogent le dépôt d'avoirs. |
+| `App.kt` | `Overlay.CreditNote`, câblage de `onCreateCreditNoteClick`, dépôt d'avoirs transmis aux ViewModels liste et détail. |
+| `domain/i18n/*` | Clé `INVOICE_CREDITED_BY` (FR/EN). |
+
+### Tests
+- **Migration** : `./gradlew :composeApp:verifyCommonMainLedgerHubDatabaseMigration` → `BUILD SUCCESSFUL`.
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **317/317 verts** (292 → 317).
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+
+### Matrice RCA — incidents rencontrés
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `verifyMigrations` : « fresh database looks different from migration database » | `ALTER TABLE ADD COLUMN` place la colonne **en fin de table**, alors qu'elle était déclarée au milieu du `CREATE TABLE` : l'ordre des colonnes divergeait entre base migrée et base neuve. | `originalInvoiceDate` déplacée en dernière position du `CREATE TABLE`, avec le commentaire expliquant la contrainte. |
+| 2 | 12 suites d'avoirs en échec après le changement de contrat | Numéros à 3 chiffres devenus invalides (`AV-AAAA-NNNN`), et `CreditNoteNumberChanged` rendue sans effet par la numérotation automatique. | Numéros portés à 4 chiffres ; saisie du numéro retirée des tests ; `advanceUntilIdle()` ajouté après construction du ViewModel pour laisser la séquence s'attribuer. |
+| 3 | `typingBlankReason_displaysFieldError` en échec | Le passage à `visibleErrors` (D-02) rend neutre un champ jamais saisi ; le test n'exerçait plus son intention. | Réécrit en `clearingTheReason_displaysFieldError` : saisie puis effacement, ce que le nom annonçait. |
+| 4 | Assertions de montants en échec sur les nouveaux affichages | L'écran d'avoir utilisait un formateur local (`500.00`) ignorant la locale, là où le reste de l'app utilise `formatMoney`. | Écran aligné sur `formatMoney` ; attentes de test mises au format FR (espace insécable). |
+
+### Recette manuelle — migration sur base existante
+Point le plus important de cette recette : l'APK a été installé **par-dessus** une base US-04 en place, sans désinstallation.
+
+| Contrôle | Avant | Après |
+|---|---|---|
+| `PRAGMA user_version` | 1 | **2** |
+| Tables | 8 (sans `CreditNoteLine`) | 9, `CreditNoteLine` créée |
+| Colonne `originalInvoiceDate` | absente | présente, position 12 |
+| Factures / clients | 7 / 2 | **7 / 2 — préservés** |
+
+### Points d'attention transmis
+- **L'exercice de rattachement de l'avoir est celui de la facture annulée.** commonMain n'a pas d'horloge — le projet a écarté `kotlinx-datetime` (décision v1) et les dates transitent en chaînes ISO saisies. Le choix reste juste dans le cas courant (avoir émis dans l'année de la facture) mais devra être revu le jour où une horloge est introduite : un avoir émis en janvier 2027 sur une facture de 2026 recevrait aujourd'hui un numéro `AV-2026-…`.
+- **Les bases antérieures à l'US-04 sont rattrapées par la migration**, mais ce rattrapage est un correctif ponctuel inscrit dans `1.sqm` : il n'y aura pas d'équivalent pour un futur écart, puisque `verifyMigrations` empêche désormais qu'il s'en produise.
+- **La bannière de refus d'un second avoir est un filet de sécurité.** En pratique l'émission cascade la facture en `CANCELLED`, ce qui désactive déjà l'action côté interface ; la bannière et l'exception du dépôt couvrent les cas de course ou d'état incohérent. Les deux niveaux sont testés.
+- **Messages du domaine et du formulaire d'avoir toujours en français en dur** (motifs de validation, libellés de section). Même limitation que les écrans Clients et Paramètres, signalée en US-04.

@@ -16,10 +16,12 @@ class CreditNoteTest {
         totalVat: Money = Money(-2000),
         totalTtc: Money = Money(-12000),
     ) = CreditNote(
-        number = "AV-2026-001",
+        number = "AV-2026-0001",
         issueDate = "2026-08-06",
         invoiceId = "F-2026-001",
+        originalInvoiceDate = "2026-07-01",
         reason = reason,
+        lines = emptyList(),
         issuer = issuer,
         recipient = recipient,
         totalHt = totalHt,

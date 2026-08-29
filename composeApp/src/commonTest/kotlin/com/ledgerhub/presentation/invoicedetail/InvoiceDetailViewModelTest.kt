@@ -55,10 +55,12 @@ class InvoiceDetailViewModelTest {
         val source = invoice(InvoiceStatus.VALIDATED)
         val repository = MockCreditNoteRepository(simulatedDelayMillis = 0L)
         val existingCreditNote = CreditNote(
-            number = "AV-2026-001",
+            number = "AV-2026-0001",
             issueDate = "2026-08-01",
             invoiceId = source.number,
+            originalInvoiceDate = source.issueDate,
             reason = "Erreur tarifaire",
+            lines = emptyList(),
             issuer = issuer,
             recipient = recipient,
             totalHt = Money(-10000),

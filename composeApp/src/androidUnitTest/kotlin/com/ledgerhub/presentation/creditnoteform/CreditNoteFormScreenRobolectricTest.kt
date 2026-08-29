@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.domain.invoice.Invoice
@@ -44,10 +45,13 @@ class CreditNoteFormScreenRobolectricTest {
     }
 
     @Test
-    fun typingBlankReason_displaysFieldError() = runComposeUiTest {
+    fun clearingTheReason_displaysFieldError() = runComposeUiTest {
         setContent { CreditNoteFormScreen(viewModel = CreditNoteFormViewModel(sourceInvoice = sourceInvoice())) }
 
-        onNodeWithTag(CreditNoteFormTags.CREDIT_NOTE_NUMBER).performScrollTo().performTextInput("AV-2026-001")
+        // Le motif ne s'allume qu'une fois saisi puis vidé : un champ jamais touché reste neutre
+        // tant qu'aucune émission n'a été tentée (même règle que le formulaire de facture, D-02).
+        onNodeWithTag(CreditNoteFormTags.REASON).performScrollTo().performTextInput("Erreur")
+        onNodeWithTag(CreditNoteFormTags.REASON).performTextClearance()
 
         onNodeWithTag(CreditNoteFormTags.errorTagFor(CreditNoteFormField.REASON))
             .performScrollTo()
@@ -58,7 +62,6 @@ class CreditNoteFormScreenRobolectricTest {
     fun fillingAllFields_enablesSubmitButton() = runComposeUiTest {
         setContent { CreditNoteFormScreen(viewModel = CreditNoteFormViewModel(sourceInvoice = sourceInvoice())) }
 
-        onNodeWithTag(CreditNoteFormTags.CREDIT_NOTE_NUMBER).performScrollTo().performTextInput("AV-2026-001")
         onNodeWithTag(CreditNoteFormTags.ISSUE_DATE).performScrollTo().performTextInput("2026-08-06")
         onNodeWithTag(CreditNoteFormTags.REASON).performScrollTo().performTextInput("Erreur tarifaire")
 
