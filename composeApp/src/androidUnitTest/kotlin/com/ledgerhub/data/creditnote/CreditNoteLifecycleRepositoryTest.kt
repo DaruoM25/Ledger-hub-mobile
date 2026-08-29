@@ -45,7 +45,7 @@ class CreditNoteLifecycleRepositoryTest {
             InvoiceLine("Conseil", quantity = 2, unitPriceHt = Money(50_000), vatRate = VatRate.TAUX_NORMAL),
             InvoiceLine("Livre", quantity = 1, unitPriceHt = Money(2_000), vatRate = VatRate.TAUX_REDUIT),
         ),
-        status = InvoiceStatus.VALIDATED,
+        status = InvoiceStatus.DEPOSITED,
     )
 
     // ── Référence croisée & recopie des lignes ───────────────────────────────────────────────

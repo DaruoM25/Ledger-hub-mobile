@@ -64,7 +64,7 @@ class FacturXExportUiTest {
         lines = listOf(
             InvoiceLine("Prestation de conseil", quantity = 1, unitPriceHt = Money(220_000), vatRate = VatRate.TAUX_NORMAL),
         ),
-        status = InvoiceStatus.SENT,
+        status = InvoiceStatus.DEPOSITED,
     )
 
     // ── Présence des actions ─────────────────────────────────────────────────────────────────

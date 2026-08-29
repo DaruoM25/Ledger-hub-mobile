@@ -365,7 +365,7 @@ class InvoiceFormViewModelTest {
         viewModel.processIntent(InvoiceFormIntent.SaveDraft)
         advanceUntilIdle()
 
-        assertEquals(InvoiceStatus.VALIDATED, viewModel.uiState.value.submittedInvoice?.status)
+        assertEquals(InvoiceStatus.DEPOSITED, viewModel.uiState.value.submittedInvoice?.status)
     }
 
     // ── Statut cible par action ──────────────────────────────────────────────────────────────
@@ -398,7 +398,7 @@ class InvoiceFormViewModelTest {
         advanceUntilIdle()
 
         val invoice = assertNotNull(viewModel.uiState.value.submittedInvoice)
-        assertEquals(InvoiceStatus.VALIDATED, invoice.status)
+        assertEquals(InvoiceStatus.DEPOSITED, invoice.status)
         assertFalse(invoice.isEditable) // immutabilité fiscale
         assertTrue(invoice.isCancellableByCreditNote)
     }

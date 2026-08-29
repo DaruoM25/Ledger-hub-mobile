@@ -30,7 +30,7 @@ class InvoiceDetailViewModelTest {
     fun load_success_exposesInvoiceAndComputesVatBreakdown() = runTest {
         val invoice = testInvoice(
             "F-2026-001",
-            status = InvoiceStatus.SENT,
+            status = InvoiceStatus.DEPOSITED,
             unitPriceHtCents = 10_000,
             quantity = 2,
             vatRate = VatRate.TAUX_NORMAL,
@@ -127,7 +127,7 @@ class InvoiceDetailViewModelTest {
         advanceUntilIdle()
         assertTrue(vm.uiState.value.errorMessage != null)
 
-        repository.detailResult = Result.success(testInvoice("F-2026-001", status = InvoiceStatus.SENT))
+        repository.detailResult = Result.success(testInvoice("F-2026-001", status = InvoiceStatus.DEPOSITED))
         vm.retry()
         advanceUntilIdle()
 

@@ -43,7 +43,7 @@ class InvoiceDetailViewModelTest {
     @Test
     fun validatedInvoice_withoutExistingCreditNote_canCreateCreditNote() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val viewModel = InvoiceDetailViewModel(invoice(InvoiceStatus.VALIDATED), dispatcher = dispatcher)
+        val viewModel = InvoiceDetailViewModel(invoice(InvoiceStatus.DEPOSITED), dispatcher = dispatcher)
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.canCreateCreditNote)
@@ -52,7 +52,7 @@ class InvoiceDetailViewModelTest {
     @Test
     fun validatedInvoice_withExistingCreditNote_canNotCreateCreditNoteAgain() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val source = invoice(InvoiceStatus.VALIDATED)
+        val source = invoice(InvoiceStatus.DEPOSITED)
         val repository = MockCreditNoteRepository(simulatedDelayMillis = 0L)
         val existingCreditNote = CreditNote(
             number = "AV-2026-0001",

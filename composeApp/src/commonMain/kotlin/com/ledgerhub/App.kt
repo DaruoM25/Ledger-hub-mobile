@@ -47,6 +47,7 @@ import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.data.invoice.SqlDelightInvoiceRepository
 import com.ledgerhub.data.quote.SqlDelightQuoteRepository
 import com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository
+import com.ledgerhub.data.audit.SqlDelightAuditRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
 import com.ledgerhub.data.settings.SqlDelightTaxSettingsRepository
@@ -57,6 +58,7 @@ import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
+import com.ledgerhub.domain.invoice.ChangeInvoiceStatusUseCase
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.export.DocumentExporter
@@ -134,6 +136,12 @@ fun App(
     }
     val ledgerRepository = remember(invoiceRepository) { LocalLedgerRepository(invoiceRepository) }
     val clientRepository = remember(database) { SqlDelightClientRepository(database) }
+    val auditRepository = remember(database) { SqlDelightAuditRepository(database) }
+    // Toute transition de statut passe par ce use case : il valide contre la machine d'états
+    // avant que le dépôt n'écrive statut et trace d'audit dans une même transaction.
+    val changeInvoiceStatusUseCase = remember(invoiceRepository) {
+        ChangeInvoiceStatusUseCase(invoiceRepository)
+    }
     val taxSettingsRepository = remember(database) { SqlDelightTaxSettingsRepository(database) }
 
     // ViewModels des onglets — créés une fois, conservés entre les changements d'onglet.
@@ -238,6 +246,8 @@ fun App(
                                         invoiceRepository = invoiceRepository,
                                         ledgerRepository = ledgerRepository,
                                         creditNoteRepository = creditNoteRepository,
+                                        auditRepository = auditRepository,
+                                        changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
                                         onCreateCreditNote = onCreateCreditNote,
                                         onExportInvoiceXml = onExportInvoiceXml,
                                         onExportCreditNoteXml = onExportCreditNoteXml,
@@ -275,6 +285,8 @@ fun App(
                                     invoiceRepository = invoiceRepository,
                                     ledgerRepository = ledgerRepository,
                                     creditNoteRepository = creditNoteRepository,
+                                    auditRepository = auditRepository,
+                                    changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
                                     onCreateCreditNote = onCreateCreditNote,
                                     onExportInvoiceXml = onExportInvoiceXml,
                                     onExportCreditNoteXml = onExportCreditNoteXml,
@@ -319,6 +331,8 @@ private fun ShellContent(
     invoiceRepository: SqlDelightInvoiceRepository,
     ledgerRepository: LocalLedgerRepository,
     creditNoteRepository: SqlDelightCreditNoteRepository,
+    auditRepository: SqlDelightAuditRepository,
+    changeInvoiceStatusUseCase: ChangeInvoiceStatusUseCase,
     onCreateCreditNote: (Invoice) -> Unit,
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
@@ -345,7 +359,13 @@ private fun ShellContent(
 
         is Overlay.InvoiceDetail -> {
             val detailViewModel = remember(overlay.number) {
-                InvoiceDetailViewModel(overlay.number, ledgerRepository, creditNoteRepository)
+                InvoiceDetailViewModel(
+                    invoiceNumber = overlay.number,
+                    ledgerRepository = ledgerRepository,
+                    creditNoteRepository = creditNoteRepository,
+                    auditRepository = auditRepository,
+                    changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+                )
             }
             DisposableEffect(overlay.number) { onDispose { detailViewModel.onCleared() } }
             OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_INVOICES), onBack = onBack) {
@@ -531,7 +551,7 @@ private fun demoInvoices(): List<Invoice> {
         demo("FAC-2026-0140", InvoiceStatus.PAID, "2026-04-20", "2026-05-20", 800_000, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0139", InvoiceStatus.PAID, "2026-05-18", "2026-06-18", 192_500, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0138", InvoiceStatus.PAID, "2026-06-15", "2026-07-15", 618_800, VatRate.TAUX_NORMAL),
-        demo("FAC-2026-0137", InvoiceStatus.SENT, "2026-07-12", "2026-08-12", 220_000, VatRate.TAUX_NORMAL),
+        demo("FAC-2026-0137", InvoiceStatus.DEPOSITED, "2026-07-12", "2026-08-12", 220_000, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0136", InvoiceStatus.DRAFT, "2026-07-28", "2026-08-28", 73_400, VatRate.TAUX_NORMAL),
     )
 }

@@ -108,7 +108,7 @@ class SqlDelightInvoiceRepositoryTest {
 
         repository.submitInvoice(
             invoice(
-                status = InvoiceStatus.VALIDATED,
+                status = InvoiceStatus.DEPOSITED,
                 lines = listOf(
                     InvoiceLine("Conseil", 1, Money(10000), VatRate.TAUX_NORMAL),
                     InvoiceLine("Formation", 1, Money(5000), VatRate.TAUX_NORMAL),
@@ -118,7 +118,7 @@ class SqlDelightInvoiceRepositoryTest {
 
         val fetched = repository.fetchInvoices().getOrThrow()
         assertEquals(1, fetched.size) // même numéro -> remplacement, pas doublon
-        assertEquals(InvoiceStatus.VALIDATED, fetched.single().status)
+        assertEquals(InvoiceStatus.DEPOSITED, fetched.single().status)
         assertEquals(2, fetched.single().lines.size)
     }
 

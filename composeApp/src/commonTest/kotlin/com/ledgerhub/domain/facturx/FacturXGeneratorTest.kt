@@ -29,7 +29,7 @@ class FacturXGeneratorTest {
     private fun invoice(
         number: String = "FAC-2026-0137",
         issueDate: String = "2026-07-12",
-        status: InvoiceStatus = InvoiceStatus.VALIDATED,
+        status: InvoiceStatus = InvoiceStatus.DEPOSITED,
         lines: List<InvoiceLine> = listOf(
             InvoiceLine("Prestation de conseil", quantity = 1, unitPriceHt = Money(220_000), vatRate = VatRate.TAUX_NORMAL),
         ),

@@ -27,12 +27,12 @@ class FiscalValidationTest {
 
     @Test
     fun validateEditable_validatedInvoice_isInvalid() {
-        assertIs<ValidationResult.Invalid>(FiscalValidation.validateEditable(invoice(InvoiceStatus.VALIDATED)))
+        assertIs<ValidationResult.Invalid>(FiscalValidation.validateEditable(invoice(InvoiceStatus.DEPOSITED)))
     }
 
     @Test
     fun validateEditable_sentInvoice_isInvalid() {
-        assertIs<ValidationResult.Invalid>(FiscalValidation.validateEditable(invoice(InvoiceStatus.SENT)))
+        assertIs<ValidationResult.Invalid>(FiscalValidation.validateEditable(invoice(InvoiceStatus.DEPOSITED)))
     }
 
     @Test

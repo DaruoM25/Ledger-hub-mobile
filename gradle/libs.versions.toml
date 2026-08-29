@@ -5,6 +5,7 @@ compose-multiplatform= "1.7.3"
 ktor                 = "3.0.3"
 coroutines           = "1.9.0"
 serialization        = "1.7.3"
+datetime             = "0.6.2"
 activity-compose     = "1.9.3"
 robolectric          = "4.14.1"
 sqldelight           = "2.1.0"
@@ -28,6 +29,10 @@ ktor-client-mock               = { module = "io.ktor:ktor-client-mock",         
 kotlinx-coroutines-core        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test        = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json     = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+# ── Horloge multiplateforme — introduite en US-07 pour la Piste d'Audit Fiable ────────────────
+# La v1 s'en était passée (dates ISO saisies, pas d'horodatage). Un audit dont l'heure serait
+# fournie par l'appelant serait falsifiable : la PAF impose une source de temps réelle.
+kotlinx-datetime               = { module = "org.jetbrains.kotlinx:kotlinx-datetime",           version.ref = "datetime" }
 # ── Android uniquement ────────────────────────────────────────────────────────
 androidx-activity-compose      = { module = "androidx.activity:activity-compose",         version.ref = "activity-compose" }
 # ── Tests androidUnitTest uniquement — fournit un runtime Android simulé pour Robolectric ──

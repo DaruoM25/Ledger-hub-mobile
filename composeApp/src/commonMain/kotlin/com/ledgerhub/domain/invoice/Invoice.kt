@@ -29,16 +29,27 @@ data class Invoice(
     val totalVat: Money get() = totalVatOf(lines)
     val totalTtc: Money get() = totalTtcOf(lines)
 
-    /** Immutabilité fiscale : une facture non-brouillon ne peut plus être modifiée ni supprimée. */
-    val isEditable: Boolean get() = status == InvoiceStatus.DRAFT
+    /**
+     * Immutabilité fiscale. Modifiable au brouillon, et de nouveau après un
+     * [rejet de plateforme][InvoiceStatus.REJECTED] : la facture n'est alors jamais entrée dans
+     * le circuit légal, sa correction puis son redépôt sont la procédure attendue. Un
+     * [refus acheteur][InvoiceStatus.REFUSED], lui, porte sur une facture qui a circulé.
+     */
+    val isEditable: Boolean
+        get() = status == InvoiceStatus.DRAFT || status == InvoiceStatus.REJECTED
 
     /**
-     * Seule une facture finalisée/verrouillée (ni Brouillon, ni déjà Annulée) peut être
-     * annulée comptablement par un avoir — voir [com.ledgerhub.domain.creditnote.CreditNote].
+     * Annulation comptable par avoir — voir [com.ledgerhub.domain.creditnote.CreditNote].
+     * Dérivé de la machine d'états plutôt que réénuméré : une seule table décrit le cycle de vie,
+     * et cette propriété ne peut donc pas diverger d'elle.
      */
     val isCancellableByCreditNote: Boolean
-        get() = status == InvoiceStatus.VALIDATED || status == InvoiceStatus.SENT || status == InvoiceStatus.PAID
+        get() = InvoiceStatusTransition.isAllowed(status, InvoiceStatus.CANCELLED)
 }
 
-/** Règle métier explicite — pas de suppression hors statut Brouillon. */
+/**
+ * Suppression réservée au brouillon. Volontairement plus stricte que [Invoice.isEditable] :
+ * une facture rejetée redevient corrigeable, mais la supprimer effacerait son passage — et sa
+ * trace d'audit — du dossier.
+ */
 fun canDelete(invoice: Invoice): Boolean = invoice.status == InvoiceStatus.DRAFT

@@ -29,7 +29,7 @@ class CreditNoteFormViewModelTest {
     private val recipient = Party("Client SAS", "987654321", "98765432100045")
 
     private fun invoice(
-        status: InvoiceStatus = InvoiceStatus.VALIDATED,
+        status: InvoiceStatus = InvoiceStatus.DEPOSITED,
         lines: List<InvoiceLine> = listOf(
             InvoiceLine("Conseil", quantity = 1, unitPriceHt = Money(10000), vatRate = VatRate.TAUX_NORMAL),
             InvoiceLine("Livre", quantity = 1, unitPriceHt = Money(2000), vatRate = VatRate.TAUX_REDUIT),

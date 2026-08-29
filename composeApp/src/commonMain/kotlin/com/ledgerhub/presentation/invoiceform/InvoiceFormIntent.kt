@@ -43,7 +43,7 @@ sealed interface InvoiceFormIntent {
     data object SaveDraft : InvoiceFormIntent
 
     /**
-     * Valide et émet la facture ([InvoiceStatus.VALIDATED]) : elle devient immuable au sens fiscal
+     * Valide et émet la facture ([InvoiceStatus.DEPOSITED]) : elle devient immuable au sens fiscal
      * (plus de modification ni de suppression, annulation par avoir uniquement — voir
      * [Invoice.isEditable][com.ledgerhub.domain.invoice.Invoice.isEditable]).
      */

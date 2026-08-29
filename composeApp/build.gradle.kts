@@ -61,6 +61,7 @@ kotlin {
 
             // Persistance — SQLDelight Core (le driver SQLite concret vient d'androidMain/iosMain)
             implementation(libs.sqldelight.runtime)
+            implementation(libs.kotlinx.datetime)
         }
 
         // ── Android uniquement ─────────────────────────────────────────────

@@ -1,0 +1,41 @@
+-- Migration 2 → 3 — US-07, cycle de vie DGFIP 2026 et Piste d'Audit Fiable.
+--
+-- Deux gestes distincts, dont le second est le plus délicat du lot : le référentiel de statuts
+-- change de valeurs. Sans remappage, `InvoiceStatus.valueOf()` lèverait à la **lecture** de toute
+-- facture existante — pas à l'écriture — et chaque écran deviendrait inutilisable.
+
+-- 1. Piste d'Audit Fiable.
+CREATE TABLE IF NOT EXISTS AuditLog (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceNumber TEXT NOT NULL,
+    fromStatus TEXT,
+    toStatus TEXT NOT NULL,
+    reason TEXT,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS AuditLog_invoice_created ON AuditLog(invoiceNumber, createdAt);
+
+-- 2. Trace du remappage — écrite AVANT la mise à jour, tant que l'ancien statut est encore
+-- lisible en base. Une piste d'audit qui débuterait par un changement de statut invisible serait
+-- incohérente dès sa première ligne.
+--
+-- `hex(randomblob(16))` : identifiant unique sans dépendance, SQLite ne sachant pas générer d'UUID.
+-- `datetime('now')` : horodatage du moment de la migration, seule heure disponible ici — le
+-- suffixe 'Z' est ajouté pour rester au format ISO 8601 UTC comme le reste des entrées.
+INSERT INTO AuditLog(id, invoiceNumber, fromStatus, toStatus, reason, createdAt)
+SELECT
+    lower(hex(randomblob(16))),
+    number,
+    status,
+    'DEPOSITED',
+    'Migration référentiel DGFIP 2026 : VALIDATED et SENT regroupés sous DEPOSITED',
+    strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+FROM Invoice
+WHERE status IN ('VALIDATED', 'SENT');
+
+-- 3. Remappage. VALIDATED et SENT désignaient tous deux une facture émise et en circulation :
+-- DEPOSITED est leur équivalent unique dans le référentiel cible. Aucune donnée fiscale n'est
+-- perdue — la nuance « validée mais pas encore transmise » n'existe plus au référentiel.
+UPDATE Invoice SET status = 'DEPOSITED' WHERE status IN ('VALIDATED', 'SENT');

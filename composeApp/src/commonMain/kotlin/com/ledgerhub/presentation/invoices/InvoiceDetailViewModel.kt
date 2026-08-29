@@ -1,7 +1,10 @@
 package com.ledgerhub.presentation.invoices
 
 import com.ledgerhub.data.repository.MockLedgerRepository
+import com.ledgerhub.domain.audit.AuditRepository
 import com.ledgerhub.domain.creditnote.CreditNoteRepository
+import com.ledgerhub.domain.invoice.ChangeInvoiceStatusUseCase
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.repository.LedgerRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +29,10 @@ class InvoiceDetailViewModel(
     private val ledgerRepository: LedgerRepository = MockLedgerRepository(),
     /** Facultatif : sans lui, la mention croisée vers l'avoir n'est simplement pas affichée. */
     private val creditNoteRepository: CreditNoteRepository? = null,
+    /** Facultatif : sans lui, la Piste d'Audit Fiable n'est simplement pas affichée. */
+    private val auditRepository: AuditRepository? = null,
+    /** Facultatif : sans lui, aucune action de transition n'est proposée. */
+    private val changeInvoiceStatusUseCase: ChangeInvoiceStatusUseCase? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -47,6 +54,7 @@ class InvoiceDetailViewModel(
             // Mention croisée US-05 : l'avoir qui annule cette facture, s'il existe.
             val creditNoteNumber = creditNoteRepository
                 ?.findByInvoiceNumber(invoiceNumber)?.getOrNull()?.number
+            val auditTrail = auditRepository?.entriesFor(invoiceNumber)?.getOrNull().orEmpty()
             _uiState.update { current ->
                 result.fold(
                     onSuccess = { invoice ->
@@ -55,6 +63,7 @@ class InvoiceDetailViewModel(
                             invoice = invoice,
                             notFound = invoice == null,
                             creditNoteNumber = creditNoteNumber,
+                            auditTrail = auditTrail,
                         )
                     },
                     onFailure = {
@@ -66,6 +75,54 @@ class InvoiceDetailViewModel(
                     },
                 )
             }
+        }
+    }
+
+    // ── Cycle de vie réglementaire (US-07) ───────────────────────────────────────────────────
+
+    /** Ouvre la saisie du motif pour la transition [target]. Aucune écriture à ce stade. */
+    fun startTransition(target: InvoiceStatus) {
+        _uiState.update { it.copy(pendingTransition = target, transitionReason = "", transitionError = null) }
+    }
+
+    fun updateTransitionReason(reason: String) {
+        _uiState.update { it.copy(transitionReason = reason) }
+    }
+
+    fun cancelTransition() {
+        _uiState.update { it.copy(pendingTransition = null, transitionReason = "", transitionError = null) }
+    }
+
+    /**
+     * Confirme la transition en cours. La validation appartient au use case : ce ViewModel ne
+     * réimplémente pas la machine d'états, il en consomme le verdict.
+     */
+    fun confirmTransition() {
+        val state = _uiState.value
+        val invoice = state.invoice ?: return
+        val target = state.pendingTransition ?: return
+        val useCase = changeInvoiceStatusUseCase ?: return
+        if (state.isTransitioning) return
+
+        _uiState.update { it.copy(isTransitioning = true, transitionError = null) }
+        scope.launch {
+            useCase(invoice, target, state.transitionReason.takeIf { it.isNotBlank() }).fold(
+                onSuccess = {
+                    _uiState.update {
+                        it.copy(isTransitioning = false, pendingTransition = null, transitionReason = "")
+                    }
+                    // Rechargement : le statut ET la piste d'audit ont changé en base.
+                    load()
+                },
+                onFailure = { throwable ->
+                    _uiState.update {
+                        it.copy(
+                            isTransitioning = false,
+                            transitionError = throwable.message ?: "Transition impossible",
+                        )
+                    }
+                },
+            )
         }
     }
 

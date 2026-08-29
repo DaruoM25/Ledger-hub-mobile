@@ -25,8 +25,8 @@ class MockLedgerRepository(
     private val invoices: List<Invoice> = listOf(
         sampleInvoice("F-2026-001", InvoiceStatus.PAID, "2026-02-14", 120_000, VatRate.TAUX_NORMAL),
         sampleInvoice("F-2026-002", InvoiceStatus.PAID, "2026-03-03", 84_000, VatRate.TAUX_INTERMEDIAIRE),
-        sampleInvoice("F-2026-003", InvoiceStatus.SENT, "2026-05-21", 45_000, VatRate.TAUX_NORMAL),
-        sampleInvoice("F-2026-004", InvoiceStatus.VALIDATED, "2026-06-30", 210_000, VatRate.TAUX_NORMAL),
+        sampleInvoice("F-2026-003", InvoiceStatus.DEPOSITED, "2026-05-21", 45_000, VatRate.TAUX_NORMAL),
+        sampleInvoice("F-2026-004", InvoiceStatus.DEPOSITED, "2026-06-30", 210_000, VatRate.TAUX_NORMAL),
         sampleInvoice("F-2026-005", InvoiceStatus.DRAFT, "2026-07-11", 30_000, VatRate.TAUX_REDUIT),
         sampleInvoice("F-2026-006", InvoiceStatus.CANCELLED, "2026-07-25", 67_000, VatRate.TAUX_NORMAL),
     )

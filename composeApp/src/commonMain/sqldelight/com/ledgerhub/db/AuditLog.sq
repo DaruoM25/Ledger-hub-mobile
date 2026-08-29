@@ -1,0 +1,41 @@
+-- Piste d'Audit Fiable (PAF) — historique des transitions de statut d'une facture.
+--
+-- Table en écriture seule : aucun UPDATE, aucun DELETE par ligne. C'est la définition même d'une
+-- piste d'audit — une correction s'exprime par une nouvelle transition, jamais par la réécriture
+-- de l'historique. Seul un DELETE en cascade sur la facture est prévu, pour ne pas laisser
+-- d'orphelins si une facture brouillon est supprimée.
+--
+-- fromStatus est NULL pour la première entrée d'une facture : il n'y a pas d'état antérieur.
+-- createdAt est un horodatage ISO 8601 UTC produit par une horloge réelle (voir domain.time.Clock).
+CREATE TABLE AuditLog (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceNumber TEXT NOT NULL,
+    fromStatus TEXT,
+    toStatus TEXT NOT NULL,
+    reason TEXT,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+-- Index de lecture : l'historique est toujours consulté facture par facture, dans l'ordre.
+CREATE INDEX AuditLog_invoice_created ON AuditLog(invoiceNumber, createdAt);
+
+insert:
+INSERT INTO AuditLog(id, invoiceNumber, fromStatus, toStatus, reason, createdAt)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- Tri secondaire sur l'id : deux transitions horodatées à la même milliseconde doivent malgré
+-- tout ressortir dans un ordre stable, sans quoi l'historique affiché varierait d'une lecture
+-- à l'autre.
+selectByInvoiceNumber:
+SELECT * FROM AuditLog
+WHERE invoiceNumber = ?
+ORDER BY createdAt ASC, id ASC;
+
+selectAll:
+SELECT * FROM AuditLog
+ORDER BY createdAt ASC, id ASC;
+
+deleteByInvoiceNumber:
+DELETE FROM AuditLog
+WHERE invoiceNumber = ?;
