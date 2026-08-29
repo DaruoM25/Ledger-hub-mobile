@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -22,7 +23,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -46,6 +46,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.components.filterAmount
+import com.ledgerhub.presentation.components.filterQuantity
+import com.ledgerhub.presentation.components.filterSiret
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.format
@@ -477,38 +480,6 @@ private fun SectionCard(
         }
     }
 }
-
-// ── Filtres de saisie ────────────────────────────────────────────────────────────
-// Ils normalisent la frappe pour éviter les saisies structurellement impossibles ; la validation
-// métier (FiscalValidation, parseAmountToCents) reste seule juge de la conformité.
-
-/** SIRET : 14 chiffres exactement — on ne laisse entrer que des chiffres, et pas un de plus. */
-private fun filterSiret(input: String): String = input.filter { it.isDigit() }.take(SIRET_LENGTH)
-
-/** Quantité : entier positif, borné pour éviter les saisies aberrantes. */
-private fun filterQuantity(input: String): String = input.filter { it.isDigit() }.take(QUANTITY_MAX_DIGITS)
-
-/**
- * Montant : chiffres et un séparateur décimal unique. La virgule et le point sont acceptés
- * (claviers FR et EN), [parseAmountToCents] normalise ensuite.
- */
-private fun filterAmount(input: String): String {
-    val builder = StringBuilder()
-    var separatorSeen = false
-    for (char in input) {
-        when {
-            char.isDigit() -> builder.append(char)
-            (char == ',' || char == '.') && !separatorSeen && builder.isNotEmpty() -> {
-                separatorSeen = true
-                builder.append(char)
-            }
-        }
-    }
-    return builder.toString()
-}
-
-private const val SIRET_LENGTH = 14
-private const val QUANTITY_MAX_DIGITS = 6
 
 /**
  * Champ de saisie du formulaire.

@@ -107,6 +107,40 @@ enum class StringKey {
     // ── Écrans "à venir" ────────────────────────────────────────────────────
     PLACEHOLDER_COMING_SOON,
 
+    // ── Écran Clients ───────────────────────────────────────────────────────
+    CLIENTS_TITLE,
+    CLIENTS_SUBTITLE,
+    CLIENTS_ADD,
+    CLIENTS_EMPTY,
+    CLIENTS_LOADING,
+    CLIENT_FORM_NEW_TITLE,
+    CLIENT_FORM_EDIT_TITLE,
+    CLIENT_FIELD_NAME,
+    CLIENT_FIELD_SIRET,
+    CLIENT_FIELD_EMAIL,
+    CLIENT_SIRET_LOCKED_HINT,
+    CLIENT_ACTION_EDIT,
+    CLIENT_ACTION_DELETE,
+    CLIENT_DELETE_TITLE,
+    CLIENT_DELETE_CONFIRM,
+    ACTION_SAVE,
+    ACTION_CANCEL,
+
+    // ── Écran Paramètres fiscaux ────────────────────────────────────────────
+    SETTINGS_TITLE,
+    SETTINGS_SUBTITLE,
+    SETTINGS_SECTION_ISSUER,
+    SETTINGS_SECTION_VAT,
+    SETTINGS_SECTION_COMPLIANCE,
+    SETTINGS_FIELD_ISSUER_NAME,
+    SETTINGS_FIELD_ISSUER_SIRET,
+    SETTINGS_FIELD_SIREN_DERIVED,
+    SETTINGS_FIELD_VAT_NUMBER,
+    SETTINGS_VAT_RATES_REFERENCE,
+    SETTINGS_DEFAULT_VAT_RATE,
+    SETTINGS_FACTURX_SWITCH,
+    SETTINGS_SAVE,
+
     // ── Erreurs de validation (résolues depuis ValidationErrorKey) ──────────
     VALIDATION_INVOICE_NUMBER_REQUIRED,
     VALIDATION_DATE_FORMAT_INVALID,

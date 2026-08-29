@@ -125,12 +125,12 @@ private fun PaperHeader(
                 Text("🏢")
             }
             Text(
-                text = CabinetIdentity.party.name,
+                text = uiState.issuer.name,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.CABINET_NAME },
             )
             Text(
-                text = CabinetIdentity.party.siret,
+                text = uiState.issuer.siret,
                 style = MaterialTheme.typography.bodySmall.copy(color = PaperMutedText),
                 modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.CABINET_SIRET },
             )

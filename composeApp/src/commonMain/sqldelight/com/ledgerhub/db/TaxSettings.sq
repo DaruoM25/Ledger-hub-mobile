@@ -1,0 +1,24 @@
+-- Paramètres fiscaux du cabinet — table mono-ligne. Le CHECK sur la clé primaire interdit
+-- structurellement une seconde ligne : il ne peut exister qu'un seul jeu de paramètres.
+-- Les taux de TVA ne figurent PAS ici : ils sont fixés par la loi et portés par l'enum de
+-- domaine VatRate. Seul le taux pré-sélectionné au formulaire est configurable.
+CREATE TABLE TaxSettings (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    issuerName TEXT NOT NULL,
+    issuerSiren TEXT NOT NULL,
+    issuerSiret TEXT NOT NULL,
+    issuerEmail TEXT NOT NULL DEFAULT '',
+    -- Numéro de TVA intracommunautaire (FR + clé à 2 caractères + SIREN).
+    vatNumber TEXT NOT NULL DEFAULT '',
+    -- Taux pré-sélectionné dans le formulaire de facture — nom de la constante VatRate.
+    defaultVatRate TEXT NOT NULL DEFAULT 'TAUX_NORMAL',
+    -- Génération Factur-X et dématérialisation actives (1 = oui). Conformité 2026 par défaut.
+    facturXEnabled INTEGER NOT NULL DEFAULT 1
+);
+
+select:
+SELECT * FROM TaxSettings WHERE id = 1;
+
+upsert:
+INSERT OR REPLACE INTO TaxSettings(id, issuerName, issuerSiren, issuerSiret, issuerEmail, vatNumber, defaultVatRate, facturXEnabled)
+VALUES (1, ?, ?, ?, ?, ?, ?, ?);

@@ -3,6 +3,7 @@ package com.ledgerhub.presentation.invoiceform
 import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.Money
+import com.ledgerhub.domain.invoice.Party
 
 /**
  * État immuable du formulaire — pattern UDF. Les champs sont stockés en texte brut (saisie
@@ -16,6 +17,12 @@ data class InvoiceFormUiState(
     val clientName: String = "",
     val clientSiret: String = "",
     val clientEmail: String = "",
+    /**
+     * Émetteur porté par la facture. Alimenté par les paramètres fiscaux enregistrés
+     * ([com.ledgerhub.domain.settings.TaxSettings]) ; [CabinetIdentity] n'en est plus que le repli
+     * tant que rien n'a été enregistré.
+     */
+    val issuer: Party = CabinetIdentity.party,
     val lines: List<InvoiceLineFormState> = listOf(InvoiceLineFormState()),
     val errors: Map<InvoiceFormField, ValidationErrorKey> = emptyMap(),
     /** Champs déjà saisis par l'utilisateur — conditionne l'affichage des erreurs, pas leur calcul. */

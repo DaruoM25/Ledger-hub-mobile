@@ -549,3 +549,71 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 **Réserve — l'immutabilité est aujourd'hui une affordance, pas une barrière.** Elle tient parce qu'aucun parcours d'édition n'existe (C-03). Le jour où `onEditClick` sera câblé, un bouton désactivé ne protégera que du clic : il faudra **un refus en amont, côté ViewModel ou use case**, pour couvrir tout chemin de navigation alternatif (deep link, restauration d'état, écran Clients). À traiter comme prérequis de l'US d'édition, et non comme une amélioration ultérieure.
 
 **Réserve secondaire — le statut `VALIDATED` n'a pas été exercé sur device** (NC-01), faute de facture Validée en base : la couverture repose sur l'automatisé. À reprendre dès qu'une émission « Valider et émettre » aura abouti bout-en-bout sur l'émulateur.
+
+---
+
+## US-04 (Partie 2) — CRUD Clients & Paramètres fiscaux
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-04-clients-actions-settings`
+- **Statut :** ✅ Clos — 292/292 tests unitaires verts (+55), APK `BUILD SUCCESSFUL`, parcours CRUD et Snackbar vérifiés sur émulateur
+- **Objectif :** Remplacer les placeholders Clients et Paramètres par des écrans réels connectés à SQLDelight.
+
+### Constat d'audit préalable (Étape 1)
+1. **La table `Customer` existait déjà** avec `insertIfAbsent`, `updateIdentity`, `selectAll`, `selectBySiret`, `deleteBySiret`. La requête `updateIdentity`, ajoutée avec D-03 et restée inutilisée faute d'écran, trouve enfin son point d'entrée : cette US ferme la boucle signalée à l'audit D-03.
+2. **`Party` modélise déjà exactement la fiche client** (nom, SIREN, SIRET, email) — même forme que la table. Réutilisé plutôt que d'introduire un type `Client` en doublon.
+3. **Aucune table de paramètres n'existait** — `TaxSettings` créée, mono-ligne (`CHECK (id = 1)`).
+4. **Les taux de TVA sont figés dans l'enum de domaine `VatRate`**, en points de base, et alimentent `computeVatBreakdown`. Deux écarts avec la spécification : le code porte **cinq** taux (20 %, 10 %, 5,5 %, **2,1 %**, Exonéré) là où le prompt en cite quatre et nomme « 0 % » ce que le domaine appelle « Exonéré ».
+5. **La suppression d'un client touchait l'intégrité fiscale** : `Invoice.recipientSiret` porte une clé étrangère vers `Customer(siret)` et l'application n'active pas `PRAGMA foreign_keys` — une suppression serait passée sans erreur, en laissant des références orphelines.
+6. **`CabinetIdentity` était codé en dur** et servait d'émetteur à toute facture : sans branchement, l'écran Paramètres serait resté décoratif.
+
+### Décisions d'architecture (validées par le PO en Étape 1)
+1. **Taux de référence + taux par défaut.** Les cinq taux légaux sont présentés en lecture seule ; seul le taux pré-sélectionné à la saisie d'une ligne se configure. Rendre les valeurs éditables aurait permis d'émettre des factures à taux non conforme et imposé de transformer `VatRate` en donnée persistée — refonte de `computeVatBreakdown` et de ses tests. Le taux particulier à 2,1 % est conservé : c'est un taux français réel.
+2. **Suppression bloquée si des factures référencent la fiche.** Message nommant le nombre de factures concernées ; requête `Invoice.countByRecipientSiret` ajoutée. Les clients sans facture restent supprimables. Cohérent avec l'immutabilité déjà en place : on ne retire pas une pièce du dossier fiscal.
+3. **Les paramètres alimentent réellement les factures.** `InvoiceFormViewModel` reçoit l'émetteur et le taux par défaut ; `CabinetIdentity` n'est plus qu'un repli tant que rien n'est enregistré. L'aperçu WYSIWYG lit le même émetteur, désormais porté par `InvoiceFormUiState.issuer`.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `sqldelight/…/TaxSettings.sq` | Table mono-ligne + `select` / `upsert`. |
+| `domain/client/ClientRepository.kt` | Contrat CRUD sur `Party`, plus `ClientInUseException` et `DuplicateClientException`. |
+| `domain/settings/TaxSettings.kt` | Modèle, valeurs par défaut, `issuerParty`, contrat `TaxSettingsRepository`. |
+| `data/client/SqlDelightClientRepository.kt` | CRUD SQLDelight, refus de doublon et garde-fou de suppression, tous deux en transaction. |
+| `data/settings/SqlDelightTaxSettingsRepository.kt` | Chargement avec repli sur les valeurs par défaut, `upsert`. |
+| `presentation/components/InputFilters.kt` | Filtres de saisie partagés — extraits du formulaire de facture où ils étaient privés. |
+| `presentation/clients/ClientsUiState.kt` · `ClientsViewModel.kt` · `ClientsScreen.kt` | Écran Clients complet (liste, dialogue d'ajout/édition, confirmation de suppression). |
+| `presentation/settings/TaxSettingsViewModel.kt` · `TaxSettingsScreen.kt` | Écran Paramètres fiscaux avec Snackbar. |
+
+### Fichiers modifiés
+| Fichier | Nature |
+|---|---|
+| `sqldelight/…/Invoice.sq` | Ajout `countByRecipientSiret` — garde-fou de suppression. |
+| `domain/invoice/FiscalValidation.kt` | Ajout `validateEmail`, `validateCompanyName`, `validateVatNumber` : les deux nouveaux écrans réutilisent les règles du formulaire de facture, jamais une seconde implémentation. |
+| `presentation/invoiceform/InvoiceFormViewModel.kt` | Nouveaux paramètres `issuer` et `defaultVatRate` ; `buildInvoice` lit `state.issuer` ; toute nouvelle ligne naît au taux configuré. |
+| `presentation/invoiceform/InvoiceFormUiState.kt` | Ajout `issuer`. |
+| `presentation/invoiceform/InvoiceFormScreen.kt` | Filtres de saisie déplacés vers `InputFilters.kt`. |
+| `presentation/invoiceform/InvoicePaperCanvas.kt` | L'aperçu lit `uiState.issuer` au lieu de `CabinetIdentity`. |
+| `App.kt` | Câblage des deux dépôts et ViewModels ; les paramètres sont relus à chaque changement d'onglet, ce qui propage une modification sans coupler les ViewModels entre eux. |
+| `domain/i18n/StringKey.kt` · `AppTranslations.kt` | 32 clés nouvelles, FR et EN. |
+
+### Tests
+- **Unitaires** : `./gradlew :composeApp:testDebugUnitTest --console=plain` → **292/292 verts**, 0 échec / 0 erreur (237 → 292).
+  - `ClientsViewModelTest` — 15 cas (dépôt en mémoire aux mêmes règles que SQLDelight)
+  - `ClientsScreenRobolectricTest` — 9 cas
+  - `TaxSettingsViewModelTest` — 11 cas
+  - `TaxSettingsScreenRobolectricTest` — 10 cas
+  - `SqlDelightClientRepositoryTest` — 7 cas
+  - `SqlDelightTaxSettingsRepositoryTest` — 3 cas
+- **Build** : `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL`.
+
+### Matrice RCA — incidents rencontrés
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `no such table: TaxSettings` sur l'installation existante | **La dette de migration signalée à l'audit D-03 se matérialise** : `Schema.create` ne s'exécute que sur une base neuve, et le projet n'a aucun `.sqm`. Le `runCatching` du dépôt masquait l'erreur, l'écran affichait les valeurs par défaut et l'enregistrement échouait silencieusement. | Réinstallation à froid pour la recette, conformément à la procédure retenue en D-03. **La dette reste ouverte** — voir points d'attention. |
+| 2 | `successMessage_isPresentedInASnackbar_thenConsumed` en échec | La consommation du message intervient **après** la fermeture du Snackbar (`showSnackbar` suspend le temps de l'affichage) : l'assertion d'immédiateté était fausse, pas le code. | Test scindé — l'affichage est vérifié à l'écran, la consommation au niveau du ViewModel. |
+
+### Points d'attention transmis
+- **La dette de migration SQLDelight est désormais avérée, plus seulement théorique.** Tout ajout de table ou de colonne casse silencieusement les installations existantes : le `runCatching` des dépôts transforme l'erreur SQL en repli sur les valeurs par défaut, sans rien signaler. Avant toute distribution — et idéalement avant le prochain changement de schéma — il faut introduire `.sqm` + `verifyMigrations`, ou faire échouer bruyamment un schéma incompatible.
+- **Messages utilisateur des deux nouveaux écrans en français en dur.** « Client ajouté », « Suppression impossible : … », et les motifs rendus par `FiscalValidation`, ne passent pas par `tr()`. Le formulaire de facture, lui, utilise `ValidationErrorKey`. Incohérence assumée pour ce lot : la généraliser demande d'introduire des clés pour tous les motifs du domaine.
+- **Le SIRET est verrouillé en édition** : il est la clé primaire et l'identité métier. Changer de SIRET revient à créer une autre fiche — comportement volontaire, signalé à l'utilisateur par une mention sous le champ.
+- **Les puces de taux non sélectionnées manquent de contraste** en thème sombre (gris sombre sur fond sombre). Lisible mais perfectible ; à reprendre avec le Design System.
+- **La suppression d'un client sans facture n'a pas été exercée sur émulateur** : le seul client supprimable est celui créé pendant la recette, et la vérification s'est arrêtée après la création. Couverte par `ClientsViewModelTest` et `SqlDelightClientRepositoryTest`.

@@ -9,6 +9,7 @@ import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
+import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.domain.invoice.parseAmountToCents
 import com.ledgerhub.domain.invoice.totalHtOf
@@ -40,12 +41,23 @@ private val EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
 class InvoiceFormViewModel(
     private val submitInvoiceUseCase: SubmitInvoiceUseCase = SubmitInvoiceUseCase(MockInvoiceRepository()),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Émetteur issu des paramètres fiscaux enregistrés ; [CabinetIdentity] sert de repli. */
+    issuer: Party = CabinetIdentity.party,
+    /** Taux pré-sélectionné sur toute nouvelle ligne — configurable aux paramètres fiscaux. */
+    private val defaultVatRate: VatRate = VatRate.TAUX_NORMAL,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     // L'état initial reflète aussi les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
-    private val _uiState = MutableStateFlow(revalidate(InvoiceFormUiState()))
+    private val _uiState = MutableStateFlow(
+        revalidate(
+            InvoiceFormUiState(
+                issuer = issuer,
+                lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
+            ),
+        ),
+    )
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
 
     fun processIntent(intent: InvoiceFormIntent) {
@@ -78,7 +90,7 @@ class InvoiceFormViewModel(
             is InvoiceFormIntent.ToggleFacturX -> current.copy(generateFacturX = intent.enabled)
 
             InvoiceFormIntent.AddLine ->
-                current.copy(lines = current.lines + InvoiceLineFormState())
+                current.copy(lines = current.lines + InvoiceLineFormState(vatRate = defaultVatRate))
 
             is InvoiceFormIntent.RemoveLine ->
                 if (current.canRemoveLines && intent.index in current.lines.indices) {
@@ -191,7 +203,7 @@ class InvoiceFormViewModel(
         number = state.invoiceNumber,
         issueDate = state.issueDate,
         status = status,
-        issuer = CabinetIdentity.party,
+        issuer = state.issuer,
         recipient = Party(
             name = state.clientName,
             // Le SIREN est les 9 premiers chiffres du SIRET (règle INSEE) — déjà validé à 14 chiffres.

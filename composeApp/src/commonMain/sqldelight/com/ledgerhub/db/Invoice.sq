@@ -40,6 +40,12 @@ selectByNumber:
 SELECT * FROM Invoice
 WHERE number = ?;
 
+-- Garde-fou de suppression d'une fiche client : on ne retire pas de l'historique un
+-- destinataire qui figure sur des factures déjà émises (voir ClientRepository.deleteClient).
+countByRecipientSiret:
+SELECT COUNT(*) FROM Invoice
+WHERE recipientSiret = ?;
+
 updateStatus:
 UPDATE Invoice
 SET status = ?
