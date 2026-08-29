@@ -63,7 +63,7 @@ class InvoiceFormViewModel(
     fun processIntent(intent: InvoiceFormIntent) {
         when (intent) {
             InvoiceFormIntent.SaveDraft -> submit(InvoiceStatus.DRAFT)
-            InvoiceFormIntent.ValidateAndIssue -> submit(InvoiceStatus.VALIDATED)
+            InvoiceFormIntent.ValidateAndIssue -> submit(InvoiceStatus.DEPOSITED)
             else -> _uiState.update { current -> revalidate(applyChange(current, intent)) }
         }
     }
@@ -225,7 +225,7 @@ class InvoiceFormViewModel(
 
     /**
      * Chemin d'écriture commun aux deux actions. [targetStatus] est la seule différence :
-     * [InvoiceStatus.DRAFT] pour un enregistrement, [InvoiceStatus.VALIDATED] pour une émission.
+     * [InvoiceStatus.DRAFT] pour un enregistrement, [InvoiceStatus.DEPOSITED] pour une émission.
      *
      * Une écriture déjà en cours est ignorée : le garde-fou complète la désactivation des boutons
      * côté écran et couvre le double appui rapide.

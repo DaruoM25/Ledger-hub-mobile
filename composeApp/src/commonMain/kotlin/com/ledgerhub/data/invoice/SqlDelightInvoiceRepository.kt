@@ -7,6 +7,11 @@ import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.InvoiceRepository
 import com.ledgerhub.domain.invoice.InvoiceStatus
+import com.ledgerhub.domain.invoice.InvoiceStatusRepository
+import com.ledgerhub.domain.time.Clock
+import com.ledgerhub.domain.time.SystemClock
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.VatRate
@@ -23,7 +28,44 @@ import com.ledgerhub.domain.invoice.VatRate
 class SqlDelightInvoiceRepository(
     private val database: LedgerHubDatabase,
     private val userEmail: String,
-) : InvoiceRepository {
+    /** Horodatage des traces d'audit — injecté pour rester déterministe en test. */
+    private val clock: Clock = SystemClock,
+) : InvoiceRepository, InvoiceStatusRepository {
+
+    /**
+     * Change le statut **et** écrit la trace d'audit, dans une seule transaction.
+     *
+     * L'atomicité est la raison d'être de cette méthode : un statut modifié sans trace rendrait
+     * la piste d'audit mensongère, une trace sans changement la rendrait fausse. La validation de
+     * la transition, elle, appartient à
+     * [ChangeInvoiceStatusUseCase][com.ledgerhub.domain.invoice.ChangeInvoiceStatusUseCase] —
+     * elle a lieu avant d'arriver ici.
+     */
+    override suspend fun changeStatus(
+        invoiceNumber: String,
+        from: InvoiceStatus,
+        to: InvoiceStatus,
+        reason: String?,
+    ): Result<Unit> = runCatching {
+        database.transaction {
+            database.invoiceQueries.updateStatus(to.name, invoiceNumber)
+            database.auditLogQueries.insert(
+                id = newAuditId(invoiceNumber, to),
+                invoiceNumber = invoiceNumber,
+                fromStatus = from.name,
+                toStatus = to.name,
+                reason = reason,
+                createdAt = clock.nowIso(),
+            )
+        }
+    }
+
+    /**
+     * Identifiant d'entrée d'audit. `Uuid.random()` est multiplateforme depuis Kotlin 2.0 :
+     * ni dépendance ni `expect`/`actual` pour un besoin aussi élémentaire.
+     */
+    @OptIn(ExperimentalUuidApi::class)
+    private fun newAuditId(invoiceNumber: String, to: InvoiceStatus): String = Uuid.random().toString()
 
     override suspend fun submitInvoice(invoice: Invoice): Result<Unit> = runCatching {
         database.transaction {
@@ -67,8 +109,31 @@ class SqlDelightInvoiceRepository(
         }
     }
 
+    /**
+     * Nombre de factures du compte. Ne construit **aucun** objet de domaine, donc ne peut pas
+     * échouer sur une ligne indésérialisable — c'est précisément ce qui rend ce comptage sûr
+     * pour décider s'il faut semer les données de démonstration (voir `seedDemoDataIfEmpty`).
+     */
+    suspend fun countInvoices(): Result<Long> = runCatching {
+        database.invoiceQueries.countByUserEmail(userEmail).executeAsOne()
+    }
+
+    /**
+     * Une ligne indésérialisable est **écartée**, pas propagée : auparavant, une seule facture
+     * corrompue faisait échouer la lecture entière et vidait l'écran de toutes les autres.
+     * Perdre une ligne à l'affichage est regrettable ; perdre les cent autres est inacceptable.
+     *
+     * L'anomalie est signalée sur la sortie standard — le projet n'a pas de journalisation
+     * partagée, et `println` est la seule sortie disponible en commonMain. À remplacer par un
+     * vrai logger le jour où il en existe un.
+     */
     override suspend fun fetchInvoices(): Result<List<Invoice>> = runCatching {
-        database.invoiceQueries.selectByUserEmail(userEmail).executeAsList().map { it.toDomain() }
+        database.invoiceQueries.selectByUserEmail(userEmail).executeAsList().mapNotNull { row ->
+            runCatching { row.toDomain() }.getOrElse { throwable ->
+                println("[LedgerHub] Facture ${row.number} ignorée — enregistrement illisible : ${throwable.message}")
+                null
+            }
+        }
     }
 
     private fun InvoiceRow.toDomain(): Invoice {

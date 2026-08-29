@@ -18,7 +18,7 @@ class InvoiceListViewModelTest {
     private val sampleInvoices = listOf(
         testInvoice("F-2026-001", InvoiceStatus.PAID, issueDate = "2026-02-01"),
         testInvoice("F-2026-002", InvoiceStatus.PAID, issueDate = "2026-05-15"),
-        testInvoice("F-2026-003", InvoiceStatus.SENT, issueDate = "2026-03-10"),
+        testInvoice("F-2026-003", InvoiceStatus.DEPOSITED, issueDate = "2026-03-10"),
         testInvoice("F-2026-004", InvoiceStatus.DRAFT, issueDate = "2026-07-20"),
     )
 
@@ -107,7 +107,7 @@ class InvoiceListViewModelTest {
         val counts = viewModel.uiState.value.counts
         assertEquals(4, counts[InvoiceStatusFilter.TOUTES])
         assertEquals(2, counts[InvoiceStatusFilter.PAID])
-        assertEquals(1, counts[InvoiceStatusFilter.SENT])
+        assertEquals(1, counts[InvoiceStatusFilter.DEPOSITED])
         assertEquals(1, counts[InvoiceStatusFilter.DRAFT])
         assertEquals(0, counts[InvoiceStatusFilter.CANCELLED])
     }

@@ -392,8 +392,9 @@ private fun OutlinedSurfaceCard(modifier: Modifier = Modifier, content: @Composa
 
 private fun InvoiceStatus.tone(): InvoiceStatusTone = when (this) {
     InvoiceStatus.PAID -> InvoiceStatusTone.PAID
-    InvoiceStatus.SENT, InvoiceStatus.VALIDATED -> InvoiceStatusTone.PENDING
-    InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED -> InvoiceStatusTone.DRAFT
+    InvoiceStatus.DEPOSITED -> InvoiceStatusTone.PENDING
+    InvoiceStatus.DRAFT, InvoiceStatus.REJECTED, InvoiceStatus.REFUSED, InvoiceStatus.CANCELLED ->
+        InvoiceStatusTone.DRAFT
 }
 
 private fun QuoteStatus.tone(): InvoiceStatusTone = when (this) {
@@ -404,9 +405,10 @@ private fun QuoteStatus.tone(): InvoiceStatusTone = when (this) {
 
 private fun InvoiceStatus.statusKey(): StringKey = when (this) {
     InvoiceStatus.DRAFT -> StringKey.STATUS_DRAFT
-    InvoiceStatus.VALIDATED -> StringKey.STATUS_VALIDATED
-    InvoiceStatus.SENT -> StringKey.STATUS_SENT
+    InvoiceStatus.DEPOSITED -> StringKey.STATUS_DEPOSITED
     InvoiceStatus.PAID -> StringKey.STATUS_PAID
+    InvoiceStatus.REJECTED -> StringKey.STATUS_REJECTED
+    InvoiceStatus.REFUSED -> StringKey.STATUS_REFUSED
     InvoiceStatus.CANCELLED -> StringKey.STATUS_CANCELLED
 }
 

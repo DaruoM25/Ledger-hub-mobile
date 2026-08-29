@@ -775,3 +775,88 @@ Point le plus important de cette recette : l'APK a été installé **par-dessus*
 - **Le nom `factur-x.xml` est imposé par la norme**, donc deux exports successifs se recouvrent. Le dossier de cache est vidé avant chaque écriture plutôt que d'accumuler des fichiers homonymes.
 - **iOS reçoit `NoOpDocumentExporter`** : l'export y réussit sans rien faire. À implémenter avec `UIActivityViewController` le jour où la cible iOS sera activée.
 - **Le PDF Factur-X n'est pas produit** — ce lot génère le XML seul, conformément au périmètre. L'embarquement dans un PDF/A-3 reste à faire.
+
+---
+
+## US-07 — Cycle de vie DGFIP 2026 & Piste d'Audit Fiable
+- **Date :** 2026-08-29
+- **Branche :** `feature/US-07-dgfip-lifecycle-audit` (créée depuis `main` @ `14da3c0`)
+- **Statut :** ✅ Clos — 416/416 tests unitaires verts (+46), `verifyMigrations` vert sur `1.db` et `2.db`, APK `BUILD SUCCESSFUL`, migration et cycle de vie validés de bout en bout sur émulateur
+- **Objectif :** Aligner le référentiel de statuts sur la DGFIP 2026, encadrer les transitions par une machine d'états, et tracer chaque changement dans une piste d'audit persistante.
+
+### Constats d'audit préalable
+1. **Le risque principal n'était pas le code, mais la donnée.** Le référentiel passe de `DRAFT/VALIDATED/SENT/PAID/CANCELLED` à `DRAFT/DEPOSITED/PAID/REJECTED/REFUSED/CANCELLED`. Les bases installées contenaient des lignes `VALIDATED` et `SENT` : sans remappage, `InvoiceStatus.valueOf()` aurait levé **à la lecture** — pas à l'écriture — rendant chaque écran inutilisable. 31 fichiers référençaient les deux valeurs supprimées.
+2. **Aucune machine d'états n'existait.** `Invoice.sq:updateStatus` avait un unique appelant (la cascade d'annulation par avoir) et aucun contrôle de transition nulle part.
+3. **Aucune horloge en commonMain.** Cinq fichiers documentaient le rejet de `kotlinx-datetime` en v1. Un horodatage d'audit fourni par l'appelant serait falsifiable — donc incompatible avec la *fiabilité* attendue de la PAF. Point bloquant, signalé en réserve dès l'US-05.
+
+### Décisions d'architecture (validées par le PO)
+1. **Adoption de `kotlinx-datetime`**, revenant sur la décision v1. `Clock` est une interface injectée (`SystemClock` / `FixedClock`) : les tests d'audit deviennent déterministes sans ouvrir la moindre porte côté production. Lève au passage la réserve US-05 sur l'exercice de numérotation des avoirs.
+2. **Matrice 6 × 6 déclarative.** Table exhaustive, y compris les états terminaux avec un ensemble vide : ce qui n'est pas écrit est interdit. Le seul retour en arrière est `REJECTED → DRAFT` — une facture rejetée par la plateforme n'est jamais entrée dans le circuit légal, sa correction est la procédure attendue. Corollaire : `isEditable` vaut pour `DRAFT` **et** `REJECTED`. `isCancellableByCreditNote` est désormais **dérivé de la table** plutôt que réénuméré, pour ne pas pouvoir diverger d'elle.
+3. **« Valider et émettre » produit `DEPOSITED`** : émettre, c'est déposer sur le PPF/PDP.
+4. **`CANCELLED` n'est jamais proposé à l'utilisateur.** `userActionableFrom()` l'exclut ; seule l'émission d'un avoir y conduit, dans la transaction atomique héritée de l'US-05.
+5. **`canDelete` reste plus strict que `isEditable`** : une facture rejetée redevient corrigeable, mais la supprimer effacerait son passage et sa trace d'audit du dossier.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `domain/invoice/InvoiceStatusTransition.kt` | Machine d'états, `allowedFrom` / `userActionableFrom` / `validate`. |
+| `domain/invoice/ChangeInvoiceStatusUseCase.kt` | Point d'entrée unique des transitions + contrat `InvoiceStatusRepository`. |
+| `domain/audit/AuditEntry.kt` | Modèle PAF et contrat de lecture. |
+| `domain/time/Clock.kt` | `Clock`, `SystemClock`, `FixedClock`. |
+| `data/audit/SqlDelightAuditRepository.kt` | Lecture de l'historique (écriture réservée au dépôt facture). |
+| `sqldelight/…/AuditLog.sq` | Table en écriture seule + index de lecture. |
+| `sqldelight/…/2.sqm` | Migration 2 → 3 : table, **trace du remappage**, remappage. |
+| `sqldelight/databases/2.db`, `3.db` | Schémas de référence. |
+| `androidUnitTest/resources/migrations/schema-v2.db` | Base v2 réelle, socle du test de migration de données. |
+| 3 fichiers de test | 46 cas. |
+
+### Fichiers modifiés (principaux)
+`InvoiceStatus.kt` (6 statuts) · `Invoice.kt` (règles dérivées) · `SqlDelightInvoiceRepository.kt` (`changeStatus` transactionnel, `Uuid.random()`) · `SqlDelightCreditNoteRepository.kt` (cascade d'annulation désormais tracée) · `InvoiceDetailUiState/ViewModel/Screen` (actions contextuelles, saisie de motif, chronologie PAF) · `InvoiceListUiState` (filtres) · `InvoiceStatusUi.kt` · `DashboardScreen.kt` · `DashboardAnalytics` (« en attente » = `DEPOSITED`) · `App.kt` · i18n (16 clés) · `libs.versions.toml` + `build.gradle.kts`.
+
+### Tests
+- **Migration** : `verifyCommonMainLedgerHubDatabaseMigration` → `BUILD SUCCESSFUL` sur `1.db` **et** `2.db`.
+- **Unitaires** : **416/416 verts** (370 → 416).
+  - `InvoiceStatusTransitionTest` — 8 cas dont la **matrice exhaustive 6 × 6** (36 cases énumérées à la main, indépendamment de l'implémentation) et un garde-fou de complétude.
+  - `ChangeInvoiceStatusUseCaseTest` — 7 cas : refus **avant** tout accès au dépôt, motif obligatoire, correction d'un rejet.
+  - `InvoiceLifecycleRulesTest` — 3 cas : `isEditable`, `canDelete`, `isCancellableByCreditNote`.
+  - `AuditTrailPersistenceTest` — 6 cas : atomicité, motif persisté, ordre chronologique, cloisonnement par facture.
+  - `DgfipStatusMigrationTest` — 4 cas de **migration de données**, ce que `verifyMigrations` ne couvre pas.
+  - `InvoiceLifecycleUiTest` — 15 cas : actions proposées **et non proposées** par statut, motif obligatoire, rendu de la PAF.
+  - `DashboardAnalyticsTest` — 2 cas ajoutés, sémantique « en attente » redéfinie.
+- **Build** : `assembleDebug` → `BUILD SUCCESSFUL`.
+
+### Matrice RCA
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `Schema.migrate(driver, 0, 2)` : « no such table » | SQLDelight n'expose pas les `CREATE` d'une version passée ; migrer depuis 0 ne crée rien. | Le test part du schéma de référence `2.db`, copié en ressource de test : une vraie base SQLite v2, donc la copie la plus fidèle d'une installation existante. |
+| 2 | Arguments dupliqués dans `App.kt` | Remplacement scripté appliqué à deux niveaux d'indentation : il frappe deux fois le même site et manque le second. **Troisième occurrence de ce piège** (US-06, US-07 ×2). | Déduplication et ajout manuel. À l'avenir, ancrer ces remplacements sur un texte unique plutôt que sur l'indentation. |
+| 3 | Branches `when` dupliquées après le remplacement en masse `VALIDATED`/`SENT` → `DEPOSITED` | Deux valeurs distinctes fusionnées en une seule produisent mécaniquement des doublons dans les `when` exhaustifs. | Réécriture manuelle des cinq mappings concernés avec les six statuts. |
+| 4 | `DashboardAnalyticsTest` en échec | Vrai changement de sémantique : avant, `VALIDATED` ne comptait nulle part et seul `SENT` était « en attente ». Leur fusion sous `DEPOSITED` déplace la frontière. | Test scindé en trois cas explicites, dont un nouveau sur `REJECTED`/`REFUSED`. |
+
+### Recette manuelle — migration sur base existante
+Installation **par-dessus** une base v2, sans désinstallation, après injection de deux lignes `VALIDATED` et `SENT`.
+
+| Contrôle | Avant | Après |
+|---|---|---|
+| `PRAGMA user_version` | 2 | **3** |
+| Lignes `VALIDATED` / `SENT` | 1 / 1 | **0 / 0 — remappées en `DEPOSITED`** |
+| `DRAFT` / `PAID` / `CANCELLED` | intacts | **intacts** |
+| Table `AuditLog` | absente | créée, **2 entrées traçant le remappage** |
+
+### Recette manuelle — cycle de vie
+| Étape | Résultat |
+|---|---|
+| Facture `DRAFT` | Une seule action : « Marquer comme déposée ». Avoir désactivé. PAF vide. |
+| Dépôt | `DEPOSITED` en base, trace `DRAFT → DEPOSITED` horodatée `2026-08-29T15:43:09.174231Z` |
+| Écran après dépôt | Édition verrouillée avec cadenas, avoir **activé**, trois actions (encaissée / rejet / refus), aucune annulation directe |
+| Rejet sans motif | « Confirmer » désactivé, champ en erreur, message explicite |
+| Rejet avec motif | `REJECTED` en base, trace `DEPOSITED → REJECTED` avec motif |
+| Écran après rejet | Édition **rouverte**, avoir désactivé, une seule action « Corriger et repasser en brouillon », PAF à deux entrées chronologiques |
+| Logcat | 0 crash, 0 exception |
+
+### Points d'attention transmis
+- **Résolution de l'anomalie de seeding (acte 1) :** Remplacement de la détection de base vide basée sur `selectAll()` par un comptage SQL brut (`selectCount()`). Même en présence de données partiellement malformées ou d'erreurs de parsing de lignes, le seeding de démonstration n'est plus redéclenché à tort et n'écrase plus les factures existantes.
+- **Activation effective des clés étrangères SQLite (`PRAGMA foreign_keys = ON`) (acte 2) :** `PRAGMA foreign_keys = ON` est désormais exécuté systématiquement à l'initialisation de tous les drivers SQLite (`AndroidSqliteDriver`, `JdbcSqliteDriver`, `NativeSqliteDriver`). L'intégrité référentielle et les clauses `ON DELETE CASCADE` sont garanties sur toutes les plateformes (Android, JVM, iOS).
+- **`STATUS_VALIDATED` et `STATUS_SENT` subsistent** : elles servent désormais aux devis (`QuoteStatus`), dont le cycle de vie est distinct de celui, réglementaire, des factures.
+- **Le remappage `VALIDATED`/`SENT` → `DEPOSITED` est irréversible** et perd la nuance « validée mais pas encore transmise ». Elle n'existe pas au référentiel DGFIP : c'est un choix de conformité, pas une perte accidentelle.
+- **Aucun horodatage n'est encore affiché en format local** : la PAF montre l'ISO brut. Lisible en audit, perfectible en interface.

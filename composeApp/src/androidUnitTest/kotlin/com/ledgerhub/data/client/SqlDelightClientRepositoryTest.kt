@@ -115,7 +115,7 @@ class SqlDelightClientRepositoryTest {
                 issuer = Party("Cabinet LedgerHub", "820329331", "82032933100027"),
                 recipient = client(),
                 lines = listOf(InvoiceLine("Conseil", 1, Money(100_000), VatRate.TAUX_NORMAL)),
-                status = InvoiceStatus.VALIDATED,
+                status = InvoiceStatus.DEPOSITED,
             ),
         ).getOrThrow()
 

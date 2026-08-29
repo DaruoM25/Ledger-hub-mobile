@@ -61,6 +61,7 @@ kotlin {
 
             // Persistance — SQLDelight Core (le driver SQLite concret vient d'androidMain/iosMain)
             implementation(libs.sqldelight.runtime)
+            implementation(libs.kotlinx.datetime)
         }
 
         // ── Android uniquement ─────────────────────────────────────────────
@@ -200,5 +201,14 @@ tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach
         excludeTestsMatching("com.ledgerhub.presentation.invoiceform.InvoiceFormScreenTest")
         excludeTestsMatching("com.ledgerhub.presentation.quoteform.QuoteFormScreenTest")
         excludeTestsMatching("com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreenTest")
+    }
+}
+
+tasks.configureEach {
+    doFirst {
+        val sqliteTmp = rootDir.resolve("build/tmp/sqlite").apply { mkdirs() }
+        val sqlitePath = sqliteTmp.absolutePath.replace('\\', '/')
+        System.setProperty("org.sqlite.tmpdir", sqlitePath)
+        System.setProperty("java.io.tmpdir", sqlitePath)
     }
 }

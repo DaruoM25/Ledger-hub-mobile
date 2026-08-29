@@ -71,9 +71,9 @@ class InvoiceImmutabilityUiTest {
 
     @Test
     fun persistedValidatedInvoice_exposesIsEditableFalse() = runTest {
-        val reloaded = persistAndReload(InvoiceStatus.VALIDATED)
+        val reloaded = persistAndReload(InvoiceStatus.DEPOSITED)
 
-        assertEquals(InvoiceStatus.VALIDATED, reloaded.status)
+        assertEquals(InvoiceStatus.DEPOSITED, reloaded.status)
         assertFalse(reloaded.isEditable)
         assertFalse(canDelete(reloaded))
         // Seule voie de sortie légale : l'avoir.
@@ -101,7 +101,7 @@ class InvoiceImmutabilityUiTest {
 
     @Test
     fun detailScreen_ofAValidatedInvoice_offersNoUsableEditAction() = runTest {
-        val reloaded = persistAndReload(InvoiceStatus.VALIDATED)
+        val reloaded = persistAndReload(InvoiceStatus.DEPOSITED)
 
         var editRequested = false
 
@@ -159,7 +159,7 @@ class InvoiceImmutabilityUiTest {
 
     @Test
     fun listCard_marksALockedInvoiceWithAPadlock_andLeavesDraftsUnmarked() = runTest {
-        val validated = persistAndReload(InvoiceStatus.VALIDATED)
+        val validated = persistAndReload(InvoiceStatus.DEPOSITED)
         val draft = persistAndReload(InvoiceStatus.DRAFT)
 
         runComposeUiTest {

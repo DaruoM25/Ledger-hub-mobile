@@ -36,7 +36,7 @@ class MockInvoiceRepository(
         sampleInvoice("F-2026-104", InvoiceStatus.PAID, "2026-06-02", unitPriceHtCents = 150000),
         sampleInvoice("F-2026-105", InvoiceStatus.PAID, "2026-07-18", unitPriceHtCents = 60000),
         sampleInvoice("F-2026-106", InvoiceStatus.PAID, "2026-08-01", unitPriceHtCents = 70000),
-        sampleInvoice("F-2026-107", InvoiceStatus.SENT, "2026-08-10", unitPriceHtCents = 45000),
+        sampleInvoice("F-2026-107", InvoiceStatus.DEPOSITED, "2026-08-10", unitPriceHtCents = 45000),
         sampleInvoice("F-2026-108", InvoiceStatus.DRAFT, "2026-08-15", unitPriceHtCents = 20000),
     )
 

@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,8 +31,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.audit.AuditEntry
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.VatBreakdown
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
@@ -56,6 +61,16 @@ object InvoiceDetailScreenTags {
     const val CREDIT_NOTE_MENTION = "invoices_detail_credit_note_mention"
     const val EXPORT_INVOICE_XML_BUTTON = "invoices_detail_export_invoice_xml"
     const val EXPORT_CREDIT_NOTE_XML_BUTTON = "invoices_detail_export_credit_note_xml"
+    const val LIFECYCLE_SECTION = "invoices_detail_lifecycle"
+    const val AUDIT_TRAIL = "invoices_detail_audit_trail"
+    const val AUDIT_TRAIL_EMPTY = "invoices_detail_audit_trail_empty"
+    const val TRANSITION_DIALOG = "invoices_detail_transition_dialog"
+    const val TRANSITION_REASON = "invoices_detail_transition_reason"
+    const val TRANSITION_CONFIRM = "invoices_detail_transition_confirm"
+    const val TRANSITION_ERROR = "invoices_detail_transition_error"
+
+    fun transitionButton(target: InvoiceStatus) = "invoices_detail_transition_" + target.name
+    fun auditEntry(id: String) = "invoices_detail_audit_entry_" + id
     const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
     const val LOCKED_BANNER = "invoices_detail_locked_banner"
     fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
@@ -78,6 +93,10 @@ fun InvoiceDetailScreen(
         onCreateCreditNoteClick = onCreateCreditNoteClick,
         onExportInvoiceXml = onExportInvoiceXml,
         onExportCreditNoteXml = onExportCreditNoteXml,
+        onStartTransition = viewModel::startTransition,
+        onTransitionReasonChanged = viewModel::updateTransitionReason,
+        onConfirmTransition = viewModel::confirmTransition,
+        onCancelTransition = viewModel::cancelTransition,
     )
 }
 
@@ -89,6 +108,10 @@ internal fun InvoiceDetailView(
     onCreateCreditNoteClick: (Invoice) -> Unit = {},
     onExportInvoiceXml: (Invoice) -> Unit = {},
     onExportCreditNoteXml: (String) -> Unit = {},
+    onStartTransition: (InvoiceStatus) -> Unit = {},
+    onTransitionReasonChanged: (String) -> Unit = {},
+    onConfirmTransition: () -> Unit = {},
+    onCancelTransition: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -110,8 +133,19 @@ internal fun InvoiceDetailView(
                 onCreateCreditNoteClick = onCreateCreditNoteClick,
                 onExportInvoiceXml = onExportInvoiceXml,
                 onExportCreditNoteXml = onExportCreditNoteXml,
+                onStartTransition = onStartTransition,
             )
         }
+    }
+
+    uiState.pendingTransition?.let { target ->
+        TransitionReasonDialog(
+            uiState = uiState,
+            target = target,
+            onReasonChanged = onTransitionReasonChanged,
+            onConfirm = onConfirmTransition,
+            onDismiss = onCancelTransition,
+        )
     }
 }
 
@@ -123,6 +157,7 @@ private fun InvoiceBody(
     onCreateCreditNoteClick: (Invoice) -> Unit,
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
+    onStartTransition: (InvoiceStatus) -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -253,6 +288,162 @@ private fun InvoiceBody(
             Text("⬇  ${tr(StringKey.ACTION_EXPORT_CREDIT_NOTE_XML)} $creditNoteNumber")
         }
     }
+
+    LifecycleSection(uiState = uiState, onStartTransition = onStartTransition)
+    AuditTrailSection(entries = uiState.auditTrail)
+}
+
+/**
+ * Actions de cycle de vie DGFIP. Les boutons sont **derives de la machine d'etats** : rien n'est
+ * code en dur ici, et une transition retiree du referentiel disparait d'elle-meme de l'ecran.
+ */
+@Composable
+private fun LifecycleSection(
+    uiState: InvoiceDetailUiState,
+    onStartTransition: (InvoiceStatus) -> Unit,
+) {
+    val transitions = uiState.availableTransitions
+    if (transitions.isEmpty()) return
+
+    HorizontalDivider()
+    Text(
+        tr(StringKey.LIFECYCLE_TITLE),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.LIFECYCLE_SECTION },
+    )
+    transitions.forEach { target ->
+        Button(
+            onClick = { onStartTransition(target) },
+            enabled = !uiState.isTransitioning,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { testTag = InvoiceDetailScreenTags.transitionButton(target) },
+        ) {
+            Text(tr(target.actionKey()))
+        }
+    }
+    uiState.transitionError?.let { message ->
+        Text(
+            message,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.semantics {
+                testTag = InvoiceDetailScreenTags.TRANSITION_ERROR
+                contentDescription = message
+            },
+        )
+    }
+}
+
+/** Libelle de l'action menant a ce statut : c'est le geste qui est nomme, pas l'etat d'arrivee. */
+private fun InvoiceStatus.actionKey(): StringKey = when (this) {
+    InvoiceStatus.DEPOSITED -> StringKey.ACTION_MARK_DEPOSITED
+    InvoiceStatus.PAID -> StringKey.ACTION_MARK_PAID
+    InvoiceStatus.REJECTED -> StringKey.ACTION_MARK_REJECTED
+    InvoiceStatus.REFUSED -> StringKey.ACTION_MARK_REFUSED
+    InvoiceStatus.DRAFT -> StringKey.ACTION_REOPEN_DRAFT
+    // CANCELLED n'est jamais propose a l'utilisateur (voir userActionableFrom).
+    InvoiceStatus.CANCELLED -> StringKey.STATUS_CANCELLED
+}
+
+/** Chronologie de la Piste d'Audit Fiable, de la plus ancienne transition a la plus recente. */
+@Composable
+private fun AuditTrailSection(entries: List<AuditEntry>) {
+    HorizontalDivider()
+    Text(
+        tr(StringKey.AUDIT_TRAIL_TITLE),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    if (entries.isEmpty()) {
+        Text(
+            tr(StringKey.AUDIT_TRAIL_EMPTY),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.AUDIT_TRAIL_EMPTY },
+        )
+        return
+    }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.AUDIT_TRAIL },
+    ) {
+        entries.forEach { entry ->
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.auditEntry(entry.id) },
+            ) {
+                val from = entry.fromStatus?.displayLabel() ?: "—"
+                Text(
+                    from + "  →  " + entry.toStatus.displayLabel(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    entry.createdAt,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                entry.reason?.let { reason ->
+                    Text(
+                        reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Saisie du motif. Obligatoire sur les transitions negatives, libre ailleurs. */
+@Composable
+private fun TransitionReasonDialog(
+    uiState: InvoiceDetailUiState,
+    target: InvoiceStatus,
+    onReasonChanged: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.TRANSITION_DIALOG },
+        title = { Text(tr(target.actionKey())) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = uiState.transitionReason,
+                    onValueChange = onReasonChanged,
+                    label = { Text(tr(StringKey.AUDIT_REASON_LABEL)) },
+                    singleLine = true,
+                    isError = uiState.pendingTransitionRequiresReason && uiState.transitionReason.isBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { testTag = InvoiceDetailScreenTags.TRANSITION_REASON },
+                )
+                if (uiState.pendingTransitionRequiresReason && uiState.transitionReason.isBlank()) {
+                    Text(
+                        tr(StringKey.AUDIT_REASON_REQUIRED),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = uiState.canConfirmTransition,
+                modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.TRANSITION_CONFIRM },
+            ) {
+                Text(tr(StringKey.AUDIT_CONFIRM))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(tr(StringKey.ACTION_CANCEL)) }
+        },
+    )
 }
 
 /** Atténuation appliquée à une action neutralisée par l'immutabilité fiscale. */

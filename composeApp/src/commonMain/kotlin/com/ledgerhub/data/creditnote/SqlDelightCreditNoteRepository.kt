@@ -9,6 +9,10 @@ import com.ledgerhub.domain.creditnote.CreditNoteRepository
 import com.ledgerhub.domain.creditnote.InvoiceAlreadyCreditedException
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.InvoiceStatus
+import com.ledgerhub.domain.time.Clock
+import com.ledgerhub.domain.time.SystemClock
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.VatRate
@@ -23,9 +27,12 @@ import com.ledgerhub.domain.invoice.VatRate
  *
  * @param userEmail compte propriétaire des avoirs lus/écrits — scoping multi-utilisateurs.
  */
+@OptIn(ExperimentalUuidApi::class)
 class SqlDelightCreditNoteRepository(
     private val database: LedgerHubDatabase,
     private val userEmail: String,
+    /** Horodatage de la trace d'audit d'annulation — injecté pour rester déterministe en test. */
+    private val clock: Clock = SystemClock,
 ) : CreditNoteRepository {
 
     override suspend fun submitCreditNote(creditNote: CreditNote): Result<Unit> = runCatching {
@@ -71,7 +78,19 @@ class SqlDelightCreditNoteRepository(
                     vatRate = line.vatRate.name,
                 )
             }
+            // L'annulation est une transition comme une autre : elle doit laisser une trace,
+            // dans la même transaction que l'avoir lui-même (PAF, US-07).
+            val previousStatus = database.invoiceQueries
+                .selectByNumber(creditNote.invoiceId).executeAsOneOrNull()?.status
             database.invoiceQueries.updateStatus(InvoiceStatus.CANCELLED.name, creditNote.invoiceId)
+            database.auditLogQueries.insert(
+                id = Uuid.random().toString(),
+                invoiceNumber = creditNote.invoiceId,
+                fromStatus = previousStatus,
+                toStatus = InvoiceStatus.CANCELLED.name,
+                reason = "Annulée par l'avoir ${creditNote.number} — ${creditNote.reason}",
+                createdAt = clock.nowIso(),
+            )
         }
     }
 

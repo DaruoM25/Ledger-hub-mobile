@@ -89,6 +89,19 @@ enum class StringKey {
     DETAIL_CANCELLED_READ_ONLY,
     INVOICE_LOCKED_HINT,
     INVOICE_CREDITED_BY,
+
+    // ── Cycle de vie DGFIP & Piste d'Audit Fiable (US-07) ───────────────────
+    ACTION_MARK_DEPOSITED,
+    ACTION_MARK_PAID,
+    ACTION_MARK_REJECTED,
+    ACTION_MARK_REFUSED,
+    ACTION_REOPEN_DRAFT,
+    AUDIT_TRAIL_TITLE,
+    AUDIT_TRAIL_EMPTY,
+    AUDIT_REASON_LABEL,
+    AUDIT_REASON_REQUIRED,
+    AUDIT_CONFIRM,
+    LIFECYCLE_TITLE,
     ACTION_EXPORT_INVOICE_XML,
     ACTION_EXPORT_CREDIT_NOTE_XML,
     EXPORT_SUCCESS,
@@ -97,15 +110,21 @@ enum class StringKey {
     FACTURX_BADGE,
     FILTER_ALL,
     FILTER_DRAFT,
-    FILTER_VALIDATED,
-    FILTER_SENT,
+    FILTER_DEPOSITED,
+    FILTER_REJECTED,
+    FILTER_REFUSED,
     FILTER_PAID,
     FILTER_CANCELLED,
 
     // ── Statuts de facture ──────────────────────────────────────────────────
     STATUS_DRAFT,
+    // STATUS_VALIDATED / STATUS_SENT restent utilisés par les devis (QuoteStatus), dont le
+    // cycle de vie est distinct de celui, réglementaire, des factures.
     STATUS_VALIDATED,
     STATUS_SENT,
+    STATUS_DEPOSITED,
+    STATUS_REJECTED,
+    STATUS_REFUSED,
     STATUS_PAID,
     STATUS_CANCELLED,
 

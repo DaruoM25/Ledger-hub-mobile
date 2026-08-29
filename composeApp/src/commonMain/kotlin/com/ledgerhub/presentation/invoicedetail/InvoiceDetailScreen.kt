@@ -35,17 +35,19 @@ object InvoiceDetailTags {
 
 internal fun InvoiceStatus.label(): String = when (this) {
     InvoiceStatus.DRAFT -> "Brouillon"
-    InvoiceStatus.VALIDATED -> "Validée"
-    InvoiceStatus.SENT -> "Envoyée"
-    InvoiceStatus.PAID -> "Payée"
+    InvoiceStatus.DEPOSITED -> "Déposée"
+    InvoiceStatus.PAID -> "Encaissée"
+    InvoiceStatus.REJECTED -> "Rejetée"
+    InvoiceStatus.REFUSED -> "Refusée"
     InvoiceStatus.CANCELLED -> "Annulée"
 }
 
 internal fun InvoiceStatus.badgeColor(): Color = when (this) {
     InvoiceStatus.DRAFT -> Color(0xFF9E9E9E)
-    InvoiceStatus.VALIDATED -> Color(0xFF2196F3)
-    InvoiceStatus.SENT -> Color(0xFF3F51B5)
+    InvoiceStatus.DEPOSITED -> Color(0xFF3F51B5)
     InvoiceStatus.PAID -> Color(0xFF4CAF50)
+    InvoiceStatus.REJECTED -> Color(0xFFEF6C00)
+    InvoiceStatus.REFUSED -> Color(0xFFD84315)
     InvoiceStatus.CANCELLED -> Color(0xFFF44336)
 }
 

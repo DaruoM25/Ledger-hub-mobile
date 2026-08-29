@@ -36,7 +36,7 @@ class SqlDelightCreditNoteRepositoryTest {
     private val issuer = Party("Vendeur SARL", "123456789", "12345678900012")
     private val recipient = Party("Client SAS", "987654321", "98765432100045")
 
-    private fun invoice(status: InvoiceStatus = InvoiceStatus.VALIDATED) = Invoice(
+    private fun invoice(status: InvoiceStatus = InvoiceStatus.DEPOSITED) = Invoice(
         number = "F-2026-042",
         issueDate = "2026-08-01",
         issuer = issuer,
@@ -77,7 +77,7 @@ class SqlDelightCreditNoteRepositoryTest {
         val database = newDatabase()
         val invoiceRepository = SqlDelightInvoiceRepository(database, userEmail = "qa@ledgerhub.app")
         val creditNoteRepository = SqlDelightCreditNoteRepository(database, userEmail = "qa@ledgerhub.app")
-        val sourceInvoice = invoice(status = InvoiceStatus.SENT)
+        val sourceInvoice = invoice(status = InvoiceStatus.DEPOSITED)
         invoiceRepository.submitInvoice(sourceInvoice)
 
         val creditNote = CreateCreditNoteUseCase()(sourceInvoice, "AV-2026-0001", "2026-08-06", "Erreur tarifaire").getOrThrow()

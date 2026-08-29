@@ -61,7 +61,7 @@ class InvoiceCancellationFlowRobolectricTest {
         issuer = Party("Vendeur SARL", "123456789", "12345678900012"),
         recipient = Party("Client SAS", "987654321", "98765432100045"),
         lines = listOf(InvoiceLine("Conseil", quantity = 2, unitPriceHt = Money(5000), vatRate = VatRate.TAUX_NORMAL)),
-        status = InvoiceStatus.VALIDATED,
+        status = InvoiceStatus.DEPOSITED,
     )
 
     @Test

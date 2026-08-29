@@ -52,7 +52,7 @@ class DashboardAnalyticsTest {
     fun issuedCount_countsEveryInvoice_regardlessOfStatus() {
         val invoices = listOf(
             invoice("F-100", InvoiceStatus.DRAFT),
-            invoice("F-101", InvoiceStatus.SENT),
+            invoice("F-101", InvoiceStatus.DEPOSITED),
             invoice("F-102", InvoiceStatus.PAID),
             invoice("F-103", InvoiceStatus.CANCELLED),
         )
@@ -73,7 +73,7 @@ class DashboardAnalyticsTest {
 
     @Test
     fun sentInvoice_contributesToPendingRevenue_notCollected() {
-        val sent = invoice("F-002", InvoiceStatus.SENT, unitPriceHtCents = 5000) // 50.00 HT * 20% = 60.00 TTC
+        val sent = invoice("F-002", InvoiceStatus.DEPOSITED, unitPriceHtCents = 5000) // 50.00 HT * 20% = 60.00 TTC
 
         val analytics = computeDashboardAnalytics(invoices = listOf(sent), creditNotes = emptyList())
 
@@ -82,14 +82,39 @@ class DashboardAnalyticsTest {
     }
 
     @Test
-    fun draftAndValidatedInvoices_contributeToNeitherCollectedNorPending() {
+    fun aDraftContributesToNeitherCollectedNorPending() {
+        // Un brouillon n'est pas une créance : il n'a pas quitté le cabinet.
         val draft = invoice("F-003", InvoiceStatus.DRAFT)
-        val validated = invoice("F-004", InvoiceStatus.VALIDATED)
 
-        val analytics = computeDashboardAnalytics(invoices = listOf(draft, validated), creditNotes = emptyList())
+        val analytics = computeDashboardAnalytics(invoices = listOf(draft), creditNotes = emptyList())
 
         assertEquals(Money.ZERO, analytics.collectedRevenue)
         assertEquals(Money.ZERO, analytics.pendingRevenue)
+    }
+
+    @Test
+    fun aDepositedInvoiceIsPending_notCollected() {
+        // Référentiel DGFIP (US-07) : une facture déposée est une créance en attente
+        // d'encaissement. Avant l'US-07, VALIDATED ne comptait nulle part et seul SENT était
+        // en attente — la fusion des deux sous DEPOSITED déplace cette frontière.
+        val deposited = invoice("F-004", InvoiceStatus.DEPOSITED)
+
+        val analytics = computeDashboardAnalytics(invoices = listOf(deposited), creditNotes = emptyList())
+
+        assertEquals(Money.ZERO, analytics.collectedRevenue)
+        assertEquals(deposited.totalTtc, analytics.pendingRevenue)
+    }
+
+    @Test
+    fun rejectedAndRefusedInvoices_areNotPending() {
+        // Une facture rejetée ou refusée n'est plus une créance recouvrable en l'état.
+        val rejected = invoice("F-008", InvoiceStatus.REJECTED)
+        val refused = invoice("F-009", InvoiceStatus.REFUSED)
+
+        val analytics = computeDashboardAnalytics(invoices = listOf(rejected, refused), creditNotes = emptyList())
+
+        assertEquals(Money.ZERO, analytics.pendingRevenue)
+        assertEquals(Money.ZERO, analytics.collectedRevenue)
     }
 
     @Test
@@ -184,7 +209,7 @@ class DashboardAnalyticsTest {
     @Test
     fun overdueRevenue_isAlwaysZero_noDueDateInDomainYet() {
         val paid = invoice("F-020", InvoiceStatus.PAID)
-        val sent = invoice("F-021", InvoiceStatus.SENT)
+        val sent = invoice("F-021", InvoiceStatus.DEPOSITED)
 
         val analytics = computeDashboardAnalytics(invoices = listOf(paid, sent), creditNotes = emptyList())
 
@@ -205,7 +230,7 @@ class DashboardAnalyticsTest {
         val invoices = listOf(
             invoice("F-030", InvoiceStatus.DRAFT, issueDate = "2026-08-01"),
             invoice("F-031", InvoiceStatus.PAID, issueDate = "2026-08-08"),
-            invoice("F-032", InvoiceStatus.SENT, issueDate = "2026-08-03"),
+            invoice("F-032", InvoiceStatus.DEPOSITED, issueDate = "2026-08-03"),
         )
 
         val analytics = computeDashboardAnalytics(invoices = invoices, creditNotes = emptyList(), quotes = listOf(quote))

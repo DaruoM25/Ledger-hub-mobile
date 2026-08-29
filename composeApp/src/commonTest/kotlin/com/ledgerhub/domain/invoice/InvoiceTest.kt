@@ -39,7 +39,7 @@ class InvoiceTest {
 
     @Test
     fun validatedInvoice_isNotEditable_andCannotBeDeleted() {
-        val validated = invoice(InvoiceStatus.VALIDATED)
+        val validated = invoice(InvoiceStatus.DEPOSITED)
         assertFalse(validated.isEditable)
         assertFalse(canDelete(validated))
     }

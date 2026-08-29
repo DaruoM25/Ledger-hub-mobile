@@ -9,17 +9,19 @@ import com.ledgerhub.domain.invoice.InvoiceStatus
 enum class InvoiceStatusFilter(val label: String) {
     TOUTES("Toutes"),
     DRAFT("Brouillons"),
-    VALIDATED("Validées"),
-    SENT("Envoyées"),
-    PAID("Payées"),
+    DEPOSITED("Déposées"),
+    PAID("Encaissées"),
+    REJECTED("Rejetées"),
+    REFUSED("Refusées"),
     CANCELLED("Annulées");
 
     fun matches(status: InvoiceStatus): Boolean = when (this) {
         TOUTES -> true
         DRAFT -> status == InvoiceStatus.DRAFT
-        VALIDATED -> status == InvoiceStatus.VALIDATED
-        SENT -> status == InvoiceStatus.SENT
+        DEPOSITED -> status == InvoiceStatus.DEPOSITED
         PAID -> status == InvoiceStatus.PAID
+        REJECTED -> status == InvoiceStatus.REJECTED
+        REFUSED -> status == InvoiceStatus.REFUSED
         CANCELLED -> status == InvoiceStatus.CANCELLED
     }
 }

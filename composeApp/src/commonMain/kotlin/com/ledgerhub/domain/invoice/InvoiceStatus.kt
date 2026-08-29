@@ -1,10 +1,37 @@
 package com.ledgerhub.domain.invoice
 
-/** Cycle de vie d'une facture. Seul [DRAFT] autorise modification/suppression. */
+/**
+ * Cycle de vie réglementaire d'une facture — référentiel DGFIP 2026.
+ *
+ * Remplace le cycle v1 (`VALIDATED` / `SENT`), dont les deux valeurs désignaient une facture
+ * émise et en circulation : elles sont regroupées sous [DEPOSITED] par la migration `2.sqm`.
+ *
+ * Les transitions autorisées ne sont pas portées ici mais par [InvoiceStatusTransition] : un
+ * statut décrit un état, pas les chemins qui y mènent.
+ */
 enum class InvoiceStatus {
+    /** Brouillon — seul état modifiable et supprimable. */
     DRAFT,
-    VALIDATED,
-    SENT,
+
+    /** Déposée sur le portail public de facturation ou une plateforme agréée. */
+    DEPOSITED,
+
+    /** Encaissée. */
     PAID,
-    CANCELLED,
+
+    /**
+     * Rejetée par la plateforme. La facture n'est **jamais entrée** dans le circuit légal :
+     * sa correction puis son redépôt sont la procédure attendue, d'où le retour possible
+     * à [DRAFT] — voir [InvoiceStatusTransition].
+     */
+    REJECTED,
+
+    /** Refusée par l'acheteur. La facture a circulé : seul un avoir peut la corriger. */
+    REFUSED,
+
+    /** Annulée par un avoir. État terminal. */
+    CANCELLED;
+
+    /** Aucun état n'est atteignable depuis un état terminal. */
+    val isTerminal: Boolean get() = InvoiceStatusTransition.allowedFrom(this).isEmpty()
 }

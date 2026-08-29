@@ -49,7 +49,7 @@ class FacturXSchemaValidationTest {
         issuer = issuer,
         recipient = recipient,
         lines = lines,
-        status = InvoiceStatus.VALIDATED,
+        status = InvoiceStatus.DEPOSITED,
     )
 
     /** Lève [SAXParseException] si le document ne satisfait pas le schéma. */
