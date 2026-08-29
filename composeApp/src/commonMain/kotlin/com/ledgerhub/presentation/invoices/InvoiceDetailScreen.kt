@@ -54,6 +54,8 @@ object InvoiceDetailScreenTags {
     const val EDIT_BUTTON = "invoices_detail_edit_button"
     const val LOCKED_HINT = "invoices_detail_locked_hint"
     const val CREDIT_NOTE_MENTION = "invoices_detail_credit_note_mention"
+    const val EXPORT_INVOICE_XML_BUTTON = "invoices_detail_export_invoice_xml"
+    const val EXPORT_CREDIT_NOTE_XML_BUTTON = "invoices_detail_export_credit_note_xml"
     const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
     const val LOCKED_BANNER = "invoices_detail_locked_banner"
     fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
@@ -65,6 +67,8 @@ fun InvoiceDetailScreen(
     viewModel: InvoiceDetailViewModel,
     onEditClick: (Invoice) -> Unit = {},
     onCreateCreditNoteClick: (Invoice) -> Unit = {},
+    onExportInvoiceXml: (Invoice) -> Unit = {},
+    onExportCreditNoteXml: (String) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     InvoiceDetailView(
@@ -72,6 +76,8 @@ fun InvoiceDetailScreen(
         onRetry = viewModel::retry,
         onEditClick = onEditClick,
         onCreateCreditNoteClick = onCreateCreditNoteClick,
+        onExportInvoiceXml = onExportInvoiceXml,
+        onExportCreditNoteXml = onExportCreditNoteXml,
     )
 }
 
@@ -81,6 +87,8 @@ internal fun InvoiceDetailView(
     onRetry: () -> Unit = {},
     onEditClick: (Invoice) -> Unit = {},
     onCreateCreditNoteClick: (Invoice) -> Unit = {},
+    onExportInvoiceXml: (Invoice) -> Unit = {},
+    onExportCreditNoteXml: (String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -100,6 +108,8 @@ internal fun InvoiceDetailView(
                 invoice = invoice,
                 onEditClick = onEditClick,
                 onCreateCreditNoteClick = onCreateCreditNoteClick,
+                onExportInvoiceXml = onExportInvoiceXml,
+                onExportCreditNoteXml = onExportCreditNoteXml,
             )
         }
     }
@@ -111,6 +121,8 @@ private fun InvoiceBody(
     invoice: Invoice,
     onEditClick: (Invoice) -> Unit,
     onCreateCreditNoteClick: (Invoice) -> Unit,
+    onExportInvoiceXml: (Invoice) -> Unit,
+    onExportCreditNoteXml: (String) -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -214,6 +226,32 @@ private fun InvoiceBody(
             .semantics { testTag = InvoiceDetailScreenTags.CREDIT_NOTE_BUTTON },
     ) {
         Text(tr(StringKey.ACTION_CANCEL_BY_CREDIT_NOTE))
+    }
+
+    HorizontalDivider()
+
+    // Export Factur-X (US-06). Toujours disponible : une facture annulée reste une pièce
+    // fiscale exportable — c'est précisément son archivage qui compte.
+    OutlinedButton(
+        onClick = { onExportInvoiceXml(invoice) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.EXPORT_INVOICE_XML_BUTTON },
+    ) {
+        Text("⬇  ${tr(StringKey.ACTION_EXPORT_INVOICE_XML)}")
+    }
+
+    // L'avoir n'a pas d'écran propre : son export se déclenche depuis la facture parente,
+    // à l'endroit même où sa mention de liaison est affichée (arbitrage PO de l'US-06).
+    uiState.creditNoteNumber?.let { creditNoteNumber ->
+        OutlinedButton(
+            onClick = { onExportCreditNoteXml(creditNoteNumber) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { testTag = InvoiceDetailScreenTags.EXPORT_CREDIT_NOTE_XML_BUTTON },
+        ) {
+            Text("⬇  ${tr(StringKey.ACTION_EXPORT_CREDIT_NOTE_XML)} $creditNoteNumber")
+        }
     }
 }
 

@@ -16,5 +16,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Partage du XML Factur-X (US-06). Depuis Android 7, transmettre une URI `file://` à une
+          autre application lève FileUriExposedException : le provider délivre une `content://`
+          assortie d'une permission temporaire. `exported=false` + `grantUriPermissions=true` :
+          aucune application ne peut interroger le provider, seule celle qui reçoit l'Intent
+          obtient l'accès, et uniquement au fichier transmis.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>
