@@ -14,6 +14,15 @@ interface ClientRepository {
     suspend fun fetchClients(): Result<List<Party>>
 
     /**
+     * Fiches dont la raison sociale commence par [query], insensible à la casse — alimente le
+     * sélecteur client du formulaire de facture (US-11).
+     *
+     * Une [query] vide ou blanche ramène la liste complète : au premier affichage du sélecteur,
+     * l'utilisateur doit voir ses clients sans avoir à taper quoi que ce soit.
+     */
+    suspend fun searchClients(query: String): Result<List<Party>>
+
+    /**
      * Crée une fiche. Échoue si le SIRET est déjà connu : la mise à jour d'une fiche existante
      * passe par [updateClient], jamais par un écrasement silencieux (règle héritée de D-03).
      */

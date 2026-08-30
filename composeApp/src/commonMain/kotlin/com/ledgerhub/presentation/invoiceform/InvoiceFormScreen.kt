@@ -46,6 +46,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.components.ClientPicker
+import com.ledgerhub.presentation.components.ClientPickerTags
+import com.ledgerhub.presentation.components.QuickClientDialog
 import com.ledgerhub.presentation.components.filterAmount
 import com.ledgerhub.presentation.components.filterQuantity
 import com.ledgerhub.presentation.components.filterSiret
@@ -61,7 +64,13 @@ object InvoiceFormTags {
     const val INVOICE_NUMBER = "invoice_form_number"
     const val ISSUE_DATE = "invoice_form_issue_date"
     const val DUE_DATE = "invoice_form_due_date"
-    const val CLIENT_NAME = "invoice_form_client_name"
+    /**
+     * Champ raison sociale — devenu le champ de recherche du sélecteur client (US-11).
+     * Alias de [ClientPickerTags.CLIENT_SEARCH_INPUT] : les tests antérieurs continuent de
+     * désigner le même nœud.
+     */
+    const val CLIENT_NAME = ClientPickerTags.CLIENT_SEARCH_INPUT
+
     const val CLIENT_SIRET = "invoice_form_client_siret"
     const val CLIENT_EMAIL = "invoice_form_client_email"
     const val ADD_LINE_BUTTON = "invoice_form_add_line_button"
@@ -147,14 +156,20 @@ internal fun InvoiceFormContent(
         }
 
         SectionCard(title = tr(StringKey.FORM_SECTION_CLIENT), glyph = "🏢") {
-            FormField(
+            // Sélecteur dynamique (US-11) : la frappe filtre l'annuaire, la sélection remplit
+            // SIRET et email, une saisie inconnue propose la création rapide.
+            ClientPicker(
                 label = tr(StringKey.FIELD_CLIENT_NAME),
-                value = uiState.clientName,
-                tag = InvoiceFormTags.CLIENT_NAME,
+                query = uiState.clientQuery,
+                suggestions = uiState.clientSuggestions,
+                isExpanded = uiState.isClientDropdownExpanded,
+                showAddNewClientButton = uiState.showAddNewClientButton,
+                enabled = enabled,
                 error = uiState.visibleErrors[InvoiceFormField.CLIENT_NAME]?.let { tr(it.stringKey) },
                 errorTag = InvoiceFormTags.errorTagFor(InvoiceFormField.CLIENT_NAME),
-                enabled = enabled,
-                onValueChange = { onIntent(InvoiceFormIntent.ClientNameChanged(it)) },
+                onQueryChanged = { onIntent(InvoiceFormIntent.OnClientQueryChanged(it)) },
+                onClientSelected = { onIntent(InvoiceFormIntent.OnClientSelected(it)) },
+                onAddNewClient = { onIntent(InvoiceFormIntent.OnOpenQuickClientDialog) },
             )
             FormField(
                 label = tr(StringKey.FIELD_CLIENT_SIRET),
@@ -298,6 +313,31 @@ internal fun InvoiceFormContent(
             tr(StringKey.FORM_ARCHIVE_NOTICE),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    // Hors de la colonne défilante : une modale ne se fait pas défiler avec le formulaire.
+    val quickClientDraft = uiState.quickClientDraft
+    if (uiState.showQuickClientDialog && quickClientDraft != null) {
+        QuickClientDialog(
+            name = quickClientDraft.name,
+            siret = quickClientDraft.siret,
+            email = quickClientDraft.email,
+            errors = quickClientDraft.errors.mapKeys { (field, _) -> field.name },
+            isSaving = quickClientDraft.isSaving,
+            onFieldChanged = { name, siret, email ->
+                onIntent(InvoiceFormIntent.OnQuickClientFieldChanged(name, siret, email))
+            },
+            onSave = {
+                onIntent(
+                    InvoiceFormIntent.OnSaveQuickClient(
+                        name = quickClientDraft.name,
+                        siret = quickClientDraft.siret,
+                        email = quickClientDraft.email,
+                    ),
+                )
+            },
+            onDismiss = { onIntent(InvoiceFormIntent.OnDismissQuickClientDialog) },
         )
     }
 }

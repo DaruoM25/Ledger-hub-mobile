@@ -28,6 +28,18 @@ WHERE siret = ?;
 selectAll:
 SELECT * FROM Customer;
 
+-- Recherche par préfixe de raison sociale, insensible à la casse (US-11, sélecteur client).
+-- `COLLATE NOCASE` porte sur la comparaison LIKE : « bou », « Bou » et « BOU » ramènent la même
+-- liste. Attention, NOCASE de SQLite ne replie que l'ASCII — « É » ne matche pas « é ». Ce n'est
+-- pas gênant pour un préfixe de raison sociale française, presque toujours saisi sans accent
+-- initial ; le jour où ça le deviendra, il faudra une colonne de nom normalisé.
+-- Aucune modification de schéma ici : une requête nommée ne participe pas au hash vérifié par
+-- verifyMigrations, la base reste en v5.
+searchByNamePrefix:
+SELECT * FROM Customer
+WHERE name LIKE ? || '%' COLLATE NOCASE
+ORDER BY name;
+
 selectBySiret:
 SELECT * FROM Customer
 WHERE siret = ?;

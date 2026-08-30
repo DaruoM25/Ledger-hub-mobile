@@ -17,6 +17,26 @@ data class InvoiceFormUiState(
     val clientName: String = "",
     val clientSiret: String = "",
     val clientEmail: String = "",
+    // ── Sélecteur client dynamique (US-11) ────────────────────────────────────
+    /**
+     * Texte tapé dans le champ de recherche client. Distinct de [clientName], qui reste la valeur
+     * retenue pour la facture : les deux coïncident après une sélection, mais [clientQuery] suit
+     * la frappe même quand elle ne correspond à aucune fiche.
+     */
+    val clientQuery: String = "",
+    /** Fiches filtrées par [clientQuery] — le modèle client du projet est [Party]. */
+    val clientSuggestions: List<Party> = emptyList(),
+    val isClientDropdownExpanded: Boolean = false,
+    val showQuickClientDialog: Boolean = false,
+    /** Fiche retenue ; repasse à `null` dès que l'utilisateur modifie un champ client à la main. */
+    val selectedClient: Party? = null,
+    /**
+     * `true` quand un annuaire client est branché. Sans annuaire, le champ raison sociale reste
+     * une saisie libre : ni suggestion, ni création rapide (qui n'aurait nulle part où écrire).
+     */
+    val isClientDirectoryAvailable: Boolean = false,
+    /** Brouillon de la modale de création rapide — `null` quand elle est fermée. */
+    val quickClientDraft: QuickClientDraft? = null,
     /**
      * Émetteur porté par la facture. Alimenté par les paramètres fiscaux enregistrés
      * ([com.ledgerhub.domain.settings.TaxSettings]) ; [CabinetIdentity] n'en est plus que le repli
@@ -65,4 +85,36 @@ data class InvoiceFormUiState(
      */
     val visibleErrors: Map<InvoiceFormField, ValidationErrorKey>
         get() = if (submitAttempted) errors else errors.filterKeys { it in touchedFields }
+
+    /**
+     * Le bouton vert « + Ajouter comme nouveau client » n'apparaît que si la saisie ne désigne
+     * aucune fiche connue : une recherche vide n'est pas un client inconnu, et un client déjà
+     * sélectionné n'a pas à être recréé.
+     */
+    val showAddNewClientButton: Boolean
+        get() = isClientDirectoryAvailable &&
+            isFormEnabled &&
+            selectedClient == null &&
+            clientQuery.isNotBlank() &&
+            clientSuggestions.isEmpty()
+}
+
+/**
+ * Champs de la modale de création rapide d'un client (US-11), avec leurs erreurs de validation.
+ * Vit dans l'état du formulaire de facture : la modale n'a pas d'état local, elle est pilotée
+ * par des intentions comme le reste de l'écran.
+ */
+data class QuickClientDraft(
+    val name: String = "",
+    val siret: String = "",
+    val email: String = "",
+    val errors: Map<QuickClientField, String> = emptyMap(),
+    val isSaving: Boolean = false,
+)
+
+/** Champ de la modale de création rapide, pour rattacher une erreur. */
+enum class QuickClientField {
+    NAME,
+    SIRET,
+    EMAIL,
 }

@@ -23,6 +23,18 @@ class SqlDelightClientRepository(
             .sortedBy { it.name.lowercase() }
     }
 
+    override suspend fun searchClients(query: String): Result<List<Party>> = runCatching {
+        val prefix = query.trim()
+        // Requête vide = pas de filtre : `selectAll` plutôt qu'un LIKE '%' inutile.
+        val rows = if (prefix.isEmpty()) {
+            database.customerQueries.selectAll().executeAsList()
+        } else {
+            database.customerQueries.searchByNamePrefix(prefix).executeAsList()
+        }
+        rows.map { Party(name = it.name, siren = it.siren, siret = it.siret, email = it.email) }
+            .sortedBy { it.name.lowercase() }
+    }
+
     override suspend fun createClient(client: Party): Result<Unit> = runCatching {
         database.transaction {
             val existing = database.customerQueries.selectBySiret(client.siret).executeAsOneOrNull()

@@ -1,6 +1,9 @@
 package com.ledgerhub.presentation.invoiceform
 
 import com.ledgerhub.data.invoice.MockInvoiceRepository
+import com.ledgerhub.domain.client.ClientRepository
+import com.ledgerhub.domain.client.DuplicateClientException
+import com.ledgerhub.domain.directory.LuhnChecksum
 import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Invoice
@@ -45,6 +48,12 @@ class InvoiceFormViewModel(
     issuer: Party = CabinetIdentity.party,
     /** Taux pré-sélectionné sur toute nouvelle ligne — configurable aux paramètres fiscaux. */
     private val defaultVatRate: VatRate = VatRate.TAUX_NORMAL,
+    /**
+     * Annuaire des fiches clients alimentant le sélecteur (US-11). `null` = pas d'annuaire
+     * branché : le champ raison sociale se comporte alors comme un champ libre, sans suggestion
+     * ni création rapide (utile aux tests qui n'ont que faire du sélecteur).
+     */
+    private val clientRepository: ClientRepository? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -55,16 +64,184 @@ class InvoiceFormViewModel(
             InvoiceFormUiState(
                 issuer = issuer,
                 lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
+                isClientDirectoryAvailable = clientRepository != null,
             ),
         ),
     )
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
 
+    init {
+        // Le sélecteur doit proposer les fiches connues dès l'ouverture, avant toute frappe.
+        refreshSuggestions(query = "")
+    }
+
     fun processIntent(intent: InvoiceFormIntent) {
         when (intent) {
             InvoiceFormIntent.SaveDraft -> submit(InvoiceStatus.DRAFT)
             InvoiceFormIntent.ValidateAndIssue -> submit(InvoiceStatus.DEPOSITED)
+
+            // Le champ raison sociale est un sélecteur depuis US-11 : les deux intentions
+            // décrivent le même geste.
+            is InvoiceFormIntent.ClientNameChanged -> onClientQueryChanged(intent.value)
+            is InvoiceFormIntent.OnClientQueryChanged -> onClientQueryChanged(intent.value)
+
+            is InvoiceFormIntent.OnClientSelected -> onClientSelected(intent.client)
+            InvoiceFormIntent.OnOpenQuickClientDialog -> openQuickClientDialog()
+            InvoiceFormIntent.OnDismissQuickClientDialog ->
+                _uiState.update { it.copy(showQuickClientDialog = false, quickClientDraft = null) }
+
+            is InvoiceFormIntent.OnQuickClientFieldChanged -> _uiState.update { current ->
+                val draft = current.quickClientDraft ?: return@update current
+                current.copy(
+                    quickClientDraft = draft.copy(
+                        name = intent.name,
+                        siret = intent.siret,
+                        email = intent.email,
+                        // La frappe efface l'erreur du champ corrigé, pas celles des autres.
+                        errors = draft.errors.filterKeys { field ->
+                            when (field) {
+                                QuickClientField.NAME -> intent.name == draft.name
+                                QuickClientField.SIRET -> intent.siret == draft.siret
+                                QuickClientField.EMAIL -> intent.email == draft.email
+                            }
+                        },
+                    ),
+                )
+            }
+
+            is InvoiceFormIntent.OnSaveQuickClient ->
+                saveQuickClient(intent.name, intent.siret, intent.email)
+
             else -> _uiState.update { current -> revalidate(applyChange(current, intent)) }
+        }
+    }
+
+    // ── Sélecteur client (US-11) ─────────────────────────────────────────────
+
+    /**
+     * Recharge les suggestions pour [query]. Chaque frappe relance une lecture : le volume d'un
+     * annuaire client tient largement en mémoire, et l'écriture reste la seule opération dont la
+     * latence se voit à l'écran.
+     */
+    private fun refreshSuggestions(query: String) {
+        val repository = clientRepository ?: return
+        scope.launch {
+            val matches = repository.searchClients(query).getOrDefault(emptyList())
+            _uiState.update { current ->
+                // La saisie a pu changer pendant la lecture : on n'écrase pas un état plus récent.
+                if (current.clientQuery != query) current
+                else current.copy(clientSuggestions = matches)
+            }
+        }
+    }
+
+    private fun onClientQueryChanged(value: String) {
+        _uiState.update { current ->
+            revalidate(
+                current.copy(
+                    clientQuery = value,
+                    clientName = value,
+                    // Toute frappe manuelle rompt le lien avec la fiche retenue : l'état ne doit
+                    // pas prétendre qu'un client est sélectionné alors que son nom a été modifié.
+                    selectedClient = current.selectedClient?.takeIf { it.name == value },
+                    isClientDropdownExpanded = true,
+                ).touch(InvoiceFormField.CLIENT_NAME),
+            )
+        }
+        refreshSuggestions(value)
+    }
+
+    private fun onClientSelected(client: Party) {
+        _uiState.update { current ->
+            revalidate(
+                current.copy(
+                    selectedClient = client,
+                    clientQuery = client.name,
+                    clientName = client.name,
+                    clientSiret = client.siret,
+                    clientEmail = client.email,
+                    isClientDropdownExpanded = false,
+                    clientSuggestions = emptyList(),
+                )
+                    .touch(InvoiceFormField.CLIENT_NAME)
+                    .touch(InvoiceFormField.CLIENT_SIRET)
+                    .touch(InvoiceFormField.CLIENT_EMAIL),
+            )
+        }
+    }
+
+    private fun openQuickClientDialog() {
+        _uiState.update { current ->
+            current.copy(
+                showQuickClientDialog = true,
+                isClientDropdownExpanded = false,
+                // Le nom déjà tapé est repris : l'utilisateur ne le ressaisit pas.
+                quickClientDraft = QuickClientDraft(name = current.clientQuery.trim()),
+            )
+        }
+    }
+
+    /**
+     * Valide puis persiste la fiche. Le SIRET est contrôlé par [LuhnChecksum.isValidSiret]
+     * (14 chiffres **et** clé de Luhn), pas seulement par la longueur : une saisie rapide est
+     * précisément le moment où une coquille passe inaperçue.
+     */
+    private fun saveQuickClient(name: String, siret: String, email: String) {
+        val repository = clientRepository ?: return
+        val current = _uiState.value
+        val draft = current.quickClientDraft ?: return
+        if (draft.isSaving) return
+
+        val trimmedName = name.trim()
+        val trimmedEmail = email.trim()
+        val errors = mutableMapOf<QuickClientField, String>()
+        if (FiscalValidation.validateCompanyName(trimmedName) is ValidationResult.Invalid) {
+            errors[QuickClientField.NAME] = "La raison sociale est obligatoire"
+        }
+        if (!LuhnChecksum.isValidSiret(siret)) {
+            errors[QuickClientField.SIRET] = "SIRET invalide : 14 chiffres et clé de Luhn correcte"
+        }
+        if (!EMAIL_REGEX.matches(trimmedEmail)) {
+            errors[QuickClientField.EMAIL] = "Adresse email invalide"
+        }
+
+        val submitted = draft.copy(name = name, siret = siret, email = email)
+        if (errors.isNotEmpty()) {
+            // La modale reste ouverte : c'est là que l'erreur se corrige.
+            _uiState.update { it.copy(quickClientDraft = submitted.copy(errors = errors)) }
+            return
+        }
+
+        _uiState.update { it.copy(quickClientDraft = submitted.copy(errors = emptyMap(), isSaving = true)) }
+
+        val client = Party(
+            name = trimmedName,
+            // Règle INSEE : le SIREN est le préfixe à 9 chiffres du SIRET, déjà validé.
+            siren = siret.take(9),
+            siret = siret,
+            email = trimmedEmail,
+        )
+        scope.launch {
+            repository.createClient(client).fold(
+                onSuccess = {
+                    _uiState.update { it.copy(showQuickClientDialog = false, quickClientDraft = null) }
+                    onClientSelected(client)
+                },
+                onFailure = { throwable ->
+                    val message = (throwable as? DuplicateClientException)
+                        ?.let { "Un client porte déjà ce SIRET" }
+                        ?: throwable.message
+                        ?: "Enregistrement du client impossible"
+                    _uiState.update {
+                        it.copy(
+                            quickClientDraft = submitted.copy(
+                                isSaving = false,
+                                errors = mapOf(QuickClientField.SIRET to message),
+                            ),
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -79,14 +256,20 @@ class InvoiceFormViewModel(
             is InvoiceFormIntent.DueDateChanged ->
                 current.copy(dueDate = intent.value).touch(InvoiceFormField.DUE_DATE)
 
-            is InvoiceFormIntent.ClientNameChanged ->
-                current.copy(clientName = intent.value).touch(InvoiceFormField.CLIENT_NAME)
-
+            // SIRET et email restent modifiables après une sélection ; les retoucher à la main
+            // rompt le lien avec la fiche (l'état cesse d'affirmer qu'un client est sélectionné).
             is InvoiceFormIntent.ClientSiretChanged ->
-                current.copy(clientSiret = intent.value).touch(InvoiceFormField.CLIENT_SIRET)
+                current.copy(
+                    clientSiret = intent.value,
+                    selectedClient = current.selectedClient?.takeIf { it.siret == intent.value },
+                ).touch(InvoiceFormField.CLIENT_SIRET)
 
             is InvoiceFormIntent.ClientEmailChanged ->
-                current.copy(clientEmail = intent.value).touch(InvoiceFormField.CLIENT_EMAIL)
+                current.copy(
+                    clientEmail = intent.value,
+                    selectedClient = current.selectedClient?.takeIf { it.email == intent.value },
+                ).touch(InvoiceFormField.CLIENT_EMAIL)
+
             is InvoiceFormIntent.ToggleFacturX -> current.copy(generateFacturX = intent.enabled)
 
             InvoiceFormIntent.AddLine ->
@@ -127,8 +310,18 @@ class InvoiceFormViewModel(
                     )
                 }
 
-            // Les deux intentions d'écriture sont interceptées en amont par processIntent.
-            InvoiceFormIntent.SaveDraft, InvoiceFormIntent.ValidateAndIssue -> current
+            // Écritures et gestes du sélecteur client : interceptés en amont par processIntent,
+            // ils n'atteignent jamais cette branche.
+            InvoiceFormIntent.SaveDraft,
+            InvoiceFormIntent.ValidateAndIssue,
+            is InvoiceFormIntent.ClientNameChanged,
+            is InvoiceFormIntent.OnClientQueryChanged,
+            is InvoiceFormIntent.OnClientSelected,
+            InvoiceFormIntent.OnOpenQuickClientDialog,
+            InvoiceFormIntent.OnDismissQuickClientDialog,
+            is InvoiceFormIntent.OnQuickClientFieldChanged,
+            is InvoiceFormIntent.OnSaveQuickClient,
+            -> current
         }
 
     /** Marque [field] comme saisi — ses erreurs deviennent affichables (voir [InvoiceFormUiState.visibleErrors]). */

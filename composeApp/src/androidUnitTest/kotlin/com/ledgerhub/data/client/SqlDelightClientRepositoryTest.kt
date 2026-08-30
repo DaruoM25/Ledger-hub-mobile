@@ -149,6 +149,91 @@ class SqlDelightClientRepositoryTest {
         assertEquals(3L, clients.countInvoicesFor("78410233600021").getOrThrow())
         assertEquals(0L, clients.countInvoicesFor("00000000000000").getOrThrow())
     }
+
+    // ── Recherche du sélecteur client (US-11) ───────────────────────────────────────────────
+
+    private suspend fun repositorySeededForSearch(): SqlDelightClientRepository {
+        val repository = SqlDelightClientRepository(newDatabase())
+        repository.createClient(client("Boulangerie Moreau SARL", "78410233600021")).getOrThrow()
+        repository.createClient(client("Bouchon Lyonnais SAS", "73282932000074")).getOrThrow()
+        repository.createClient(client("Atelier Martin", "44306184100029")).getOrThrow()
+        return repository
+    }
+
+    @Test
+    fun searchClients_matchesOnPrefix_andIsCaseInsensitive() = runTest {
+        val repository = repositorySeededForSearch()
+
+        // Même résultat quelle que soit la casse de la saisie.
+        listOf("bou", "Bou", "BOU").forEach { query ->
+            assertEquals(
+                listOf("Bouchon Lyonnais SAS", "Boulangerie Moreau SARL"),
+                repository.searchClients(query).getOrThrow().map { it.name },
+                "requête « $query »",
+            )
+        }
+    }
+
+    @Test
+    fun searchClients_isAPrefixMatch_notASubstringOne() = runTest {
+        val repository = repositorySeededForSearch()
+
+        // « Moreau » apparaît au milieu d'une raison sociale : ce n'est pas un préfixe.
+        assertTrue(repository.searchClients("Moreau").getOrThrow().isEmpty())
+        assertEquals(
+            listOf("Boulangerie Moreau SARL"),
+            repository.searchClients("Boulangerie M").getOrThrow().map { it.name },
+        )
+    }
+
+    @Test
+    fun searchClients_withABlankQuery_returnsEveryRecordSortedByName() = runTest {
+        val repository = repositorySeededForSearch()
+
+        listOf("", "   ").forEach { query ->
+            assertEquals(
+                listOf("Atelier Martin", "Bouchon Lyonnais SAS", "Boulangerie Moreau SARL"),
+                repository.searchClients(query).getOrThrow().map { it.name },
+            )
+        }
+    }
+
+    @Test
+    fun searchClients_onAnUnknownPrefix_returnsNothing() = runTest {
+        val repository = repositorySeededForSearch()
+
+        assertTrue(repository.searchClients("Client Inconnu").getOrThrow().isEmpty())
+    }
+
+    @Test
+    fun quickCreatedClient_isImmediatelyReadableBySearch_withEveryField() = runTest {
+        val repository = SqlDelightClientRepository(newDatabase())
+        val created = Party(
+            name = "Nouveau Client SAS",
+            siren = "732829320",
+            siret = "73282932000074",
+            email = "contact@nouveau.fr",
+        )
+
+        repository.createClient(created).getOrThrow()
+
+        // Relecture immédiate par le chemin qu'emprunte le sélecteur.
+        val found = repository.searchClients("Nouveau").getOrThrow().single()
+        assertEquals(created, found)
+        assertEquals(created, repository.fetchClients().getOrThrow().single())
+    }
+
+    @Test
+    fun quickCreatingAKnownSiret_isRefused_andLeavesTheRecordUntouched() = runTest {
+        val repository = SqlDelightClientRepository(newDatabase())
+        repository.createClient(client("Boulangerie Moreau SARL", "78410233600021")).getOrThrow()
+
+        val failure = repository.createClient(client("Doublon SARL", "78410233600021")).exceptionOrNull()
+
+        assertIs<DuplicateClientException>(failure)
+        assertEquals("Boulangerie Moreau SARL", repository.searchClients("Boulangerie").getOrThrow().single().name)
+        assertEquals(1, repository.fetchClients().getOrThrow().size)
+    }
 }
 
 /** Paramètres fiscaux — table mono-ligne, valeurs par défaut sur base vierge. */

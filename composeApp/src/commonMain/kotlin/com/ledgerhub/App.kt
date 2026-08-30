@@ -268,6 +268,7 @@ fun App(
                                         dashboardViewModel = dashboardViewModel,
                                         invoiceListViewModel = invoiceListViewModel,
                                         clientsViewModel = clientsViewModel,
+                                        clientRepository = clientRepository,
                                         directoryViewModel = directoryViewModel,
                                         taxSettingsViewModel = taxSettingsViewModel,
                                         taxSettings = taxSettings,
@@ -308,6 +309,7 @@ fun App(
                                     dashboardViewModel = dashboardViewModel,
                                     invoiceListViewModel = invoiceListViewModel,
                                     clientsViewModel = clientsViewModel,
+                                    clientRepository = clientRepository,
                                     directoryViewModel = directoryViewModel,
                                     taxSettingsViewModel = taxSettingsViewModel,
                                     taxSettings = taxSettings,
@@ -355,6 +357,7 @@ private fun ShellContent(
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
     clientsViewModel: ClientsViewModel,
+    clientRepository: SqlDelightClientRepository,
     directoryViewModel: DirectoryViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
     taxSettings: TaxSettings,
@@ -366,6 +369,9 @@ private fun ShellContent(
                     submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
                     issuer = taxSettings.issuerParty,
                     defaultVatRate = taxSettings.defaultVatRate,
+                    // Annuaire du sélecteur client (US-11) — même dépôt que l'écran Clients,
+                    // donc une fiche créée à la volée y apparaît immédiatement.
+                    clientRepository = clientRepository,
                 )
             }
             DisposableEffect(Unit) { onDispose { formViewModel.onCleared() } }

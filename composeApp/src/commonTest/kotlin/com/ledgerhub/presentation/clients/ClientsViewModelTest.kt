@@ -28,6 +28,12 @@ private class FakeClientRepository(
     override suspend fun fetchClients(): Result<List<Party>> =
         Result.success(clients.sortedBy { it.name.lowercase() })
 
+    override suspend fun searchClients(query: String): Result<List<Party>> =
+        Result.success(
+            clients.filter { it.name.startsWith(query.trim(), ignoreCase = true) }
+                .sortedBy { it.name.lowercase() },
+        )
+
     override suspend fun createClient(client: Party): Result<Unit> =
         if (clients.any { it.siret == client.siret }) {
             Result.failure(DuplicateClientException(client.siret))

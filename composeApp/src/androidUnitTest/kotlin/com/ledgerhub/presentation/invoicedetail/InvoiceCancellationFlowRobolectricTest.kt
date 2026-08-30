@@ -24,6 +24,7 @@ import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreen
+import com.ledgerhub.domain.creditnote.CreditNoteReason
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormTags
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
 import kotlinx.coroutines.runBlocking
@@ -101,7 +102,10 @@ class InvoiceCancellationFlowRobolectricTest {
 
         // Le motif légal est obligatoire avant validation.
         onNodeWithTag(CreditNoteFormTags.ISSUE_DATE).performScrollTo().performTextInput("2026-08-06")
-        onNodeWithTag(CreditNoteFormTags.REASON).performScrollTo().performTextInput("Erreur tarifaire")
+        // Depuis US-10 la raison légale se choisit parmi des motifs types ; le champ libre
+        // n'apparaît qu'une fois « Autre motif » retenu.
+        onNodeWithTag(CreditNoteFormTags.reasonChip(CreditNoteReason.OTHER)).performScrollTo().performClick()
+        onNodeWithTag(CreditNoteFormTags.REASON_FREE_TEXT).performScrollTo().performTextInput("Erreur tarifaire")
         onNodeWithTag(CreditNoteFormTags.SUBMIT_BUTTON).performScrollTo().performClick()
 
         waitUntil(timeoutMillis = 5_000) {
