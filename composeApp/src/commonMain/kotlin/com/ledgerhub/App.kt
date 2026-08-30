@@ -47,6 +47,9 @@ import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.data.invoice.SqlDelightInvoiceRepository
 import com.ledgerhub.data.quote.SqlDelightQuoteRepository
 import com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository
+import com.ledgerhub.data.directory.CachingDirectoryRepository
+import com.ledgerhub.data.directory.MockDirectoryRepository
+import com.ledgerhub.data.directory.SqlDelightDirectoryRepository
 import com.ledgerhub.data.audit.SqlDelightAuditRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
@@ -80,6 +83,8 @@ import com.ledgerhub.presentation.clients.ClientsScreen
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreen
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
 import com.ledgerhub.presentation.clients.ClientsViewModel
+import com.ledgerhub.presentation.directory.DirectoryScreen
+import com.ledgerhub.presentation.directory.DirectoryViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsScreen
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubColors
@@ -97,6 +102,7 @@ private enum class Destination(val titleKey: StringKey, val glyph: String) {
     OVERVIEW(StringKey.NAV_OVERVIEW, "▦"),
     INVOICES(StringKey.NAV_INVOICES, "🧾"),
     CLIENTS(StringKey.NAV_CLIENTS, "👥"),
+    DIRECTORY(StringKey.NAV_DIRECTORY, "📇"),
     SETTINGS(StringKey.NAV_SETTINGS, "⚙️"),
 }
 
@@ -136,6 +142,13 @@ fun App(
     }
     val ledgerRepository = remember(invoiceRepository) { LocalLedgerRepository(invoiceRepository) }
     val clientRepository = remember(database) { SqlDelightClientRepository(database) }
+    // Annuaire DGFIP (US-09) : résolution locale (Mock) doublée d'un cache SQLDelight persistant.
+    val directoryRepository = remember(database) {
+        CachingDirectoryRepository(
+            source = MockDirectoryRepository(),
+            cache = SqlDelightDirectoryRepository(database),
+        )
+    }
     val auditRepository = remember(database) { SqlDelightAuditRepository(database) }
     // Toute transition de statut passe par ce use case : il valide contre la machine d'états
     // avant que le dépôt n'écrive statut et trace d'audit dans une même transaction.
@@ -152,6 +165,7 @@ fun App(
     }
     val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository, creditNoteRepository) }
     val clientsViewModel = remember { ClientsViewModel(clientRepository) }
+    val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
     val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
 
     // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
@@ -254,6 +268,7 @@ fun App(
                                         dashboardViewModel = dashboardViewModel,
                                         invoiceListViewModel = invoiceListViewModel,
                                         clientsViewModel = clientsViewModel,
+                                        directoryViewModel = directoryViewModel,
                                         taxSettingsViewModel = taxSettingsViewModel,
                                         taxSettings = taxSettings,
                                     )
@@ -293,6 +308,7 @@ fun App(
                                     dashboardViewModel = dashboardViewModel,
                                     invoiceListViewModel = invoiceListViewModel,
                                     clientsViewModel = clientsViewModel,
+                                    directoryViewModel = directoryViewModel,
                                     taxSettingsViewModel = taxSettingsViewModel,
                                     taxSettings = taxSettings,
                                 )
@@ -339,6 +355,7 @@ private fun ShellContent(
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
     clientsViewModel: ClientsViewModel,
+    directoryViewModel: DirectoryViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
     taxSettings: TaxSettings,
 ) {
@@ -403,6 +420,7 @@ private fun ShellContent(
             }
 
             Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
+            Destination.DIRECTORY -> DirectoryScreen(viewModel = directoryViewModel)
             Destination.SETTINGS -> TaxSettingsScreen(viewModel = taxSettingsViewModel)
         }
     }

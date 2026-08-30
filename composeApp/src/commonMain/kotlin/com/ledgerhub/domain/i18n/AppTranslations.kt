@@ -26,6 +26,7 @@ object AppTranslations {
         StringKey.NAV_INVOICES to "Factures",
         StringKey.NAV_CLIENTS to "Clients",
         StringKey.NAV_SETTINGS to "Paramètres",
+        StringKey.NAV_DIRECTORY to "Annuaire DGFIP",
 
         StringKey.DASHBOARD_SUBTITLE to "Pilotez votre activité et votre conformité 2026",
         StringKey.DASHBOARD_LOADING to "Chargement du tableau de bord…",
@@ -188,6 +189,7 @@ object AppTranslations {
         StringKey.NAV_INVOICES to "Invoices",
         StringKey.NAV_CLIENTS to "Clients",
         StringKey.NAV_SETTINGS to "Settings",
+        StringKey.NAV_DIRECTORY to "DGFIP Directory",
 
         StringKey.DASHBOARD_SUBTITLE to "Track your activity and 2026 compliance",
         StringKey.DASHBOARD_LOADING to "Loading dashboard…",

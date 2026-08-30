@@ -1,0 +1,18 @@
+-- Migration 4 → 5 — US-09, Annuaire Centralisé DGFIP/PPF.
+--
+-- Ajout pur : une nouvelle table isolée, sans clé étrangère vers l'existant et sans reprise de
+-- données. `Schema.create` ne s'exécutant que sur base neuve, ce .sqm installe la table sur les
+-- bases déjà déployées (dette A-01, close en US-05 ; verifyMigrations = true).
+CREATE TABLE IF NOT EXISTS DirectoryEntry (
+    siren TEXT NOT NULL PRIMARY KEY,
+    siret TEXT,
+    companyName TEXT NOT NULL,
+    vatNumber TEXT,
+    routingMode TEXT NOT NULL,
+    pdpIdentifier TEXT,
+    isVatSubject INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    lastSyncAt TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS DirectoryEntry_siret ON DirectoryEntry(siret);

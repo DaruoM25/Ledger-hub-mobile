@@ -22,6 +22,7 @@ enum class StringKey {
     NAV_INVOICES,
     NAV_CLIENTS,
     NAV_SETTINGS,
+    NAV_DIRECTORY,
 
     // ── Tableau de bord ─────────────────────────────────────────────────────
     DASHBOARD_SUBTITLE,
