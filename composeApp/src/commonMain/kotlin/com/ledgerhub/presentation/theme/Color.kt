@@ -52,4 +52,13 @@ object LedgerHubColors {
     /** Brouillon / neutre — Tailwind slate. */
     val StatusDraftBg = Color(0xFF1E293B)
     val StatusDraftFg = Color(0xFF94A3B8)
+
+    // ── Activité commerciale des devis (US-12) ────────────────────────────────────
+    /**
+     * Indigo profond du KPI « Devis en attente » — Tailwind `indigo-900` / `indigo-400`.
+     * Volontairement distinct de l'[Accent] bleu des factures, du vert des encaissements
+     * ([StatusPaidBg]) et du violet des avoirs (`CreditNoteColors`).
+     */
+    val QuotePendingBg = Color(0xFF312E81)
+    val QuotePendingFg = Color(0xFF818CF8)
 }

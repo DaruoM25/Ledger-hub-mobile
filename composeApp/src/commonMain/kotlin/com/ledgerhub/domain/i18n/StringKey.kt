@@ -33,6 +33,8 @@ enum class StringKey {
     KPI_PENDING_CAPTION,
     KPI_ISSUED_TITLE,
     KPI_ISSUED_CAPTION,
+    KPI_QUOTES_PENDING_TITLE,
+    KPI_QUOTES_PENDING_CAPTION,
     REVENUE_SECTION_SUBTITLE,
     CHART_MIN,
     CHART_MAX,
@@ -42,6 +44,16 @@ enum class StringKey {
     COL_CLIENT,
     COL_DATE,
     COL_TTC,
+
+    // ── Devis à relancer (US-12) ────────────────────────────────────────────
+    QUOTES_FOLLOWUP_TITLE,
+    QUOTES_FOLLOWUP_SUBTITLE,
+    QUOTES_FOLLOWUP_EMPTY,
+    COL_QUOTE_NO,
+    COL_VALIDITY,
+    QUOTE_EXPIRED,
+    QUOTE_DUE_TODAY,
+    QUOTE_DAYS_LEFT,
 
     // ── Formulaire de facture ───────────────────────────────────────────────
     FORM_TITLE,

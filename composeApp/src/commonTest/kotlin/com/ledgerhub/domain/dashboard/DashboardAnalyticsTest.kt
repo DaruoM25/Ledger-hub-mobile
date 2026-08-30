@@ -12,6 +12,8 @@ import com.ledgerhub.domain.quote.QuoteLine
 import com.ledgerhub.domain.quote.QuoteStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Tests QA (Skill 2) de [computeDashboardAnalytics] — fonction pure, aucune base de données
@@ -237,5 +239,145 @@ class DashboardAnalyticsTest {
 
         assertEquals(3, analytics.recentDocuments.size)
         assertEquals(listOf("F-031", "DEV-001", "F-032"), analytics.recentDocuments.map { it.number })
+    }
+
+    // ── Activité commerciale des devis (US-12) ──────────────────────────────
+
+    /** Date de référence de tous les tests de relance — aucune dépendance à l'heure réelle. */
+    private val today = "2026-08-30"
+
+    private fun quote(
+        number: String,
+        status: QuoteStatus,
+        validityDate: String,
+        unitPriceHtCents: Long = 10000,
+        clientName: String = "Client SAS",
+    ) = Quote(
+        number = number,
+        issueDate = "2026-08-01",
+        validityDate = validityDate,
+        issuer = issuer,
+        recipient = recipient.copy(name = clientName),
+        lines = listOf(QuoteLine("Etude", quantity = 1, unitPriceHt = Money(unitPriceHtCents), vatRate = VatRate.TAUX_NORMAL)),
+        status = status,
+    )
+
+    private fun analyticsOf(vararg quotes: Quote) = computeDashboardAnalytics(
+        invoices = emptyList(),
+        creditNotes = emptyList(),
+        quotes = quotes.toList(),
+        today = today,
+    )
+
+    @Test
+    fun pendingQuotesTotal_sumsOnlySentQuotes_excludingTax() {
+        val analytics = analyticsOf(
+            quote("DEV-001", QuoteStatus.SENT, "2026-09-05"),      // 100,00 HT (120,00 TTC)
+            quote("DEV-002", QuoteStatus.SENT, "2026-09-06"),      // 100,00 HT
+            quote("DEV-003", QuoteStatus.DRAFT, "2026-09-07"),     // exclu
+            quote("DEV-004", QuoteStatus.ACCEPTED, "2026-09-08"),  // exclu
+            quote("DEV-005", QuoteStatus.REJECTED, "2026-09-09"),  // exclu
+        )
+
+        // Cumul HT : la TVA n'entre pas dans un indicateur de chiffre d'affaires potentiel.
+        assertEquals(20_000L, analytics.pendingQuotesTotal.cents)
+        assertEquals(2, analytics.pendingQuotesCount)
+    }
+
+    @Test
+    fun pendingQuotesTotal_isZero_whenNoQuoteIsSent() {
+        val analytics = analyticsOf(
+            quote("DEV-001", QuoteStatus.DRAFT, "2026-09-05"),
+            quote("DEV-002", QuoteStatus.ACCEPTED, "2026-09-06"),
+        )
+
+        assertEquals(Money.ZERO, analytics.pendingQuotesTotal)
+        assertEquals(0, analytics.pendingQuotesCount)
+        assertTrue(analytics.quotesToFollowUp.isEmpty())
+    }
+
+    @Test
+    fun quotesToFollowUp_areSortedByMostImminentDeadlineFirst() {
+        val analytics = analyticsOf(
+            quote("DEV-C", QuoteStatus.SENT, "2026-09-10"), // J+11
+            quote("DEV-A", QuoteStatus.SENT, "2026-08-25"), // expiré depuis 5 j
+            quote("DEV-B", QuoteStatus.SENT, "2026-09-01"), // J+2
+        )
+
+        assertEquals(listOf("DEV-A", "DEV-B", "DEV-C"), analytics.quotesToFollowUp.map { it.number })
+        assertEquals(listOf(-5, 2, 11), analytics.quotesToFollowUp.map { it.daysRemaining })
+    }
+
+    @Test
+    fun quotesToFollowUp_areLimitedToTheFourteenDayWindow() {
+        val analytics = analyticsOf(
+            quote("DEV-IN", QuoteStatus.SENT, "2026-09-13"),   // J+14 — dernier jour retenu
+            quote("DEV-OUT", QuoteStatus.SENT, "2026-09-14"),  // J+15 — hors fenêtre
+        )
+
+        assertEquals(FOLLOW_UP_WINDOW_DAYS, 14)
+        assertEquals(listOf("DEV-IN"), analytics.quotesToFollowUp.map { it.number })
+    }
+
+    @Test
+    fun expiredQuotes_stayInTheList_andAreFlaggedAsSuch() {
+        val analytics = analyticsOf(quote("DEV-OLD", QuoteStatus.SENT, "2026-07-01"))
+
+        val item = analytics.quotesToFollowUp.single()
+        assertTrue(item.isExpired)
+        assertTrue(item.daysRemaining < 0)
+        // Le KPI compte tout de même le devis : il reste une somme en attente de réponse.
+        assertEquals(10_000L, analytics.pendingQuotesTotal.cents)
+    }
+
+    @Test
+    fun aQuoteExpiringToday_isNotConsideredExpired() {
+        val analytics = analyticsOf(quote("DEV-TODAY", QuoteStatus.SENT, today))
+
+        val item = analytics.quotesToFollowUp.single()
+        assertEquals(0, item.daysRemaining)
+        assertFalse(item.isExpired)
+    }
+
+    @Test
+    fun followUpItems_carryNumberClientAmountAndValidityDate() {
+        val analytics = analyticsOf(
+            quote("DEV-042", QuoteStatus.SENT, "2026-09-02", unitPriceHtCents = 50_000, clientName = "Boulangerie Moreau SARL"),
+        )
+
+        val item = analytics.quotesToFollowUp.single()
+        assertEquals("DEV-042", item.number)
+        assertEquals("Boulangerie Moreau SARL", item.clientName)
+        // La ligne de relance reste en TTC : c'est le montant que le client paiera.
+        assertEquals(60_000L, item.totalTtc.cents) // 500,00 HT + 20 % TVA
+        // …tandis que le KPI cumule le HT.
+        assertEquals(50_000L, analytics.pendingQuotesTotal.cents)
+        assertEquals("2026-09-02", item.validityDate)
+        assertEquals(3, item.daysRemaining)
+    }
+
+    @Test
+    fun withoutAClock_theKpiIsStillComputed_butNoFollowUpIsProposed() {
+        val analytics = computeDashboardAnalytics(
+            invoices = emptyList(),
+            creditNotes = emptyList(),
+            quotes = listOf(quote("DEV-001", QuoteStatus.SENT, "2026-09-01")),
+            // today omis : aucune horloge disponible.
+        )
+
+        assertEquals(10_000L, analytics.pendingQuotesTotal.cents)
+        assertTrue(analytics.quotesToFollowUp.isEmpty(), "aucun délai inventé sans date de référence")
+    }
+
+    @Test
+    fun aMalformedValidityDate_dropsTheQuoteFromTheListWithoutFailing() {
+        val analytics = analyticsOf(
+            quote("DEV-BAD", QuoteStatus.SENT, "pas-une-date"),
+            quote("DEV-OK", QuoteStatus.SENT, "2026-09-01"),
+        )
+
+        assertEquals(listOf("DEV-OK"), analytics.quotesToFollowUp.map { it.number })
+        // Le devis illisible compte malgré tout dans le montant HT en attente.
+        assertEquals(20_000L, analytics.pendingQuotesTotal.cents)
     }
 }

@@ -7,6 +7,8 @@ import com.ledgerhub.domain.creditnote.CreditNoteRepository
 import com.ledgerhub.domain.dashboard.GetDashboardAnalyticsUseCase
 import com.ledgerhub.domain.invoice.InvoiceRepository
 import com.ledgerhub.domain.quote.QuoteRepository
+import com.ledgerhub.domain.time.Clock
+import com.ledgerhub.domain.time.SystemClock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,8 +34,15 @@ class DashboardViewModel(
         creditNoteRepository: CreditNoteRepository,
         quoteRepository: QuoteRepository,
         dispatcher: CoroutineDispatcher = Dispatchers.Default,
+        /** Horloge des relances de devis (US-12) — injectable pour des tests déterministes. */
+        clock: Clock = SystemClock,
     ) : this(
-        getDashboardAnalyticsUseCase = GetDashboardAnalyticsUseCase(invoiceRepository, creditNoteRepository, quoteRepository),
+        getDashboardAnalyticsUseCase = GetDashboardAnalyticsUseCase(
+            invoiceRepository = invoiceRepository,
+            creditNoteRepository = creditNoteRepository,
+            quoteRepository = quoteRepository,
+            clock = clock,
+        ),
         dispatcher = dispatcher,
     )
 

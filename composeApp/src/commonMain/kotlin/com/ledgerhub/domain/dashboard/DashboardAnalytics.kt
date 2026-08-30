@@ -5,10 +5,21 @@ import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.quote.Quote
+import com.ledgerhub.domain.quote.QuoteStatus
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
 
 private const val YEAR_MONTH_LENGTH = 7 // "AAAA-MM"
+private const val ISO_DATE_LENGTH = 10 // "AAAA-MM-JJ"
 private const val MONTHLY_CHART_SIZE = 6
 private const val RECENT_DOCUMENTS_SIZE = 3
+
+/**
+ * Fenêtre de relance : un devis envoyé entre dans « Devis à relancer » dès que sa validité expire
+ * dans 14 jours ou moins. Les devis **déjà expirés** y figurent aussi — ce sont les premiers à
+ * rappeler, pas ceux qu'il faut cesser de voir.
+ */
+const val FOLLOW_UP_WINDOW_DAYS = 14
 
 /** CA net (factures + avoirs) d'un mois "AAAA-MM" — un point du graphique du tableau de bord. */
 data class MonthlyRevenue(val month: String, val amount: Money)
@@ -29,6 +40,22 @@ sealed interface RecentDocument {
     }
 }
 
+/**
+ * Un devis envoyé dont la validité arrive à échéance — une ligne de « Devis à relancer » (US-12).
+ *
+ * @param daysRemaining jours restants avant [validityDate]. **Négatif si le devis est déjà
+ *   expiré** : la liste n'écarte pas ces devis, elle les met en tête.
+ */
+data class QuoteFollowUpItem(
+    val number: String,
+    val clientName: String,
+    val totalTtc: Money,
+    val validityDate: String,
+    val daysRemaining: Int,
+) {
+    val isExpired: Boolean get() = daysRemaining < 0
+}
+
 data class DashboardAnalytics(
     val collectedRevenue: Money,
     val pendingRevenue: Money,
@@ -37,6 +64,14 @@ data class DashboardAnalytics(
     val issuedCount: Int,
     val monthlyRevenue: List<MonthlyRevenue>,
     val recentDocuments: List<RecentDocument>,
+    /**
+     * Montant **HT** cumulé des devis [QuoteStatus.SENT] — 4ᵉ KPI « Devis en attente » (US-12).
+     * Hors taxes, comme tout indicateur de chiffre d'affaires potentiel.
+     */
+    val pendingQuotesTotal: Money = Money.ZERO,
+    val pendingQuotesCount: Int = 0,
+    /** Devis envoyés dont l'échéance approche, du plus urgent au moins urgent. */
+    val quotesToFollowUp: List<QuoteFollowUpItem> = emptyList(),
 )
 
 /**
@@ -61,6 +96,12 @@ fun computeDashboardAnalytics(
     invoices: List<Invoice>,
     creditNotes: List<CreditNote>,
     quotes: List<Quote> = emptyList(),
+    /**
+     * Date du jour en ISO `AAAA-MM-JJ`, fournie par l'appelant (voir
+     * [com.ledgerhub.domain.time.Clock]). Vide = pas d'horloge : le KPI des devis reste calculé,
+     * mais aucune relance n'est proposée. Mieux vaut une section vide qu'un délai inventé.
+     */
+    today: String = "",
 ): DashboardAnalytics {
     val creditNotesByInvoiceNumber = creditNotes.groupBy { it.invoiceId }
 
@@ -95,6 +136,30 @@ fun computeDashboardAnalytics(
         .sortedByDescending { it.issueDate }
         .take(RECENT_DOCUMENTS_SIZE)
 
+    // ── Activité commerciale des devis (US-12) ────────────────────────────────
+    val sentQuotes = quotes.filter { it.status == QuoteStatus.SENT }
+    // Cumul **HT** : un devis en attente mesure un chiffre d'affaires potentiel, et le CA se
+    // compte hors taxes. La TVA n'est pas un produit de l'entreprise, elle est collectée pour
+    // le Trésor — l'inclure gonflerait l'indicateur commercial d'un montant qui ne lui revient pas.
+    // Les lignes de « Devis à relancer » restent en TTC : c'est le montant que le client paiera.
+    val pendingQuotesTotal = sentQuotes.fold(Money.ZERO) { acc, quote -> acc + quote.totalHt }
+
+    val quotesToFollowUp = sentQuotes
+        .mapNotNull { quote ->
+            val daysRemaining = daysBetween(today, quote.validityDate) ?: return@mapNotNull null
+            if (daysRemaining > FOLLOW_UP_WINDOW_DAYS) return@mapNotNull null
+            QuoteFollowUpItem(
+                number = quote.number,
+                clientName = quote.recipient.name,
+                totalTtc = quote.totalTtc,
+                validityDate = quote.validityDate,
+                daysRemaining = daysRemaining,
+            )
+        }
+        // Échéance la plus imminente d'abord ; le numéro départage pour un ordre stable entre
+        // deux devis expirant le même jour.
+        .sortedWith(compareBy({ it.validityDate }, { it.number }))
+
     return DashboardAnalytics(
         collectedRevenue = collectedRevenue,
         pendingRevenue = pendingRevenue,
@@ -102,5 +167,25 @@ fun computeDashboardAnalytics(
         issuedCount = invoices.size,
         monthlyRevenue = monthlyRevenue,
         recentDocuments = recentDocuments,
+        pendingQuotesTotal = pendingQuotesTotal,
+        pendingQuotesCount = sentQuotes.size,
+        quotesToFollowUp = quotesToFollowUp,
     )
+}
+
+/**
+ * Jours séparant [from] de [to], deux dates ISO `AAAA-MM-JJ`.
+ *
+ * @return `null` si l'une des deux est vide ou malformée — une date de validité illisible écarte
+ *   le devis de la liste plutôt que de faire échouer tout le tableau de bord.
+ */
+private fun daysBetween(from: String, to: String): Int? {
+    val start = parseIsoDateOrNull(from) ?: return null
+    val end = parseIsoDateOrNull(to) ?: return null
+    return start.daysUntil(end)
+}
+
+private fun parseIsoDateOrNull(iso: String): LocalDate? {
+    if (iso.length < ISO_DATE_LENGTH) return null
+    return runCatching { LocalDate.parse(iso.take(ISO_DATE_LENGTH)) }.getOrNull()
 }

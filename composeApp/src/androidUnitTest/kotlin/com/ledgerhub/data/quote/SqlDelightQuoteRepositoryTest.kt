@@ -106,6 +106,28 @@ class SqlDelightQuoteRepositoryTest {
         assertEquals(2, fetched.single().lines.size)
     }
 
+    // ── Alimentation du tableau de bord (US-12) ─────────────────────────────
+
+    @Test
+    fun fetchQuotes_roundTripsSentQuotesWithTheirValidityDate_forTheDashboard() = runTest {
+        val repository = SqlDelightQuoteRepository(newDatabase(), userEmail = "qa@ledgerhub.app")
+        // Aucune requête SQL dédiée n'a été ajoutée : le tableau de bord filtre en mémoire ce que
+        // fetchQuotes() lui rend déjà. Ce test verrouille donc le contrat dont il dépend —
+        // statut et date de validité relus intacts.
+        repository.submitQuote(quote(number = "DEV-2026-010", status = QuoteStatus.SENT)).getOrThrow()
+        repository.submitQuote(quote(number = "DEV-2026-011", status = QuoteStatus.DRAFT)).getOrThrow()
+
+        val fetched = repository.fetchQuotes().getOrThrow()
+
+        val sent = fetched.single { it.status == QuoteStatus.SENT }
+        assertEquals("DEV-2026-010", sent.number)
+        assertEquals("2026-09-06", sent.validityDate)
+        assertEquals("Client SAS", sent.recipient.name)
+        // 2 × 50,00 HT @20 % => 100,00 HT + 20,00 TVA = 120,00 TTC (voir quote()).
+        assertEquals(12_000L, sent.totalTtc.cents)
+        assertEquals(2, fetched.size)
+    }
+
     // ── Intégration bout en bout avec le "bouton magique" (Skill 1) ──────────
 
     @Test
