@@ -1,0 +1,19 @@
+-- Migration 3 → 4 — US-08, e-Reporting DGFIP 2026.
+--
+-- Ajout pur : une nouvelle table isolée, sans clé étrangère vers l'existant et sans reprise de
+-- données. `Schema.create` ne s'exécutant que sur base neuve, ce .sqm est ce qui installe la
+-- table sur les bases déjà déployées (cf. dette A-01, close en US-05 ; verifyMigrations = true).
+CREATE TABLE IF NOT EXISTS EReporting (
+    id TEXT NOT NULL PRIMARY KEY,
+    period TEXT NOT NULL,
+    type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'DRAFT',
+    ackNumber TEXT,
+    totalHt REAL NOT NULL DEFAULT 0.0,
+    totalVat REAL NOT NULL DEFAULT 0.0,
+    totalTtc REAL NOT NULL DEFAULT 0.0,
+    transactionCount INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS EReporting_createdAt ON EReporting(createdAt);

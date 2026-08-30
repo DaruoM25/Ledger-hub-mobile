@@ -115,6 +115,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             @OptIn(ExperimentalComposeLibrary::class)
             implementation(compose.uiTest)
+            implementation(libs.compose.ui.test.junit4)
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.core)
             implementation(libs.androidx.test.junit)

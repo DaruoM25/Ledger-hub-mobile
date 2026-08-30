@@ -861,11 +861,11 @@ Installation **par-dessus** une base v2, sans désinstallation, après injection
 - **Le remappage `VALIDATED`/`SENT` → `DEPOSITED` est irréversible** et perd la nuance « validée mais pas encore transmise ». Elle n'existe pas au référentiel DGFIP : c'est un choix de conformité, pas une perte accidentelle.
 - **Aucun horodatage n'est encore affiché en format local** : la PAF montre l'ISO brut. Lisible en audit, perfectible en interface.
 
-## 📊 Bilan de Recette Automatisée — Émulateur Android (Pixel 5 API 35)
+## 📊 Bilan de Recette Automatisée — US-08 e-Reporting (Pixel 5 API 35)
 - **Date & Cible** : 2026-08-30 | Émulateur Pixel 5 API 35 | Package com.ledgerhub.app.debug
-- **Total des tests exécutés** : 1
-- **Succès** : 1 (100%) | **Échecs** : 0 | **Ignorés** : 0
-- **Durée totale** : 0 min 15 s
-- **Périmètre validé** : US-07 Cycle de vie DGFIP, Piste d’audit, Immuabilité, Sécurisation du semis de données, Activation des clés étrangères SQLite, validation des migrations SQLDelight, cohérence fonctionnelle des écrans et repositories.
+- **Total des tests exécutés** : 2
+- **Succès** : 2 (100%) | **Échecs** : 0 | **Ignorés** : 0
+- **Durée totale** : 21.742 s (≈ 0 min 22 s)
+- **Périmètre validé** : US-08 e-Reporting DGFIP 2026, badge de conformité, transmission PPF, accusé `ACK-2026-`, snackbar d’acquittement, persistance SQLDelight, cycle de vie DRAFT → ACKNOWLEDGED, cohérence écran / ViewModel / repository.
 - **Statut final** : ✅ CONFORME / REPETABLE
-- **Composants testés** : Package(s) : com.ledgerhub ; Classe(s) : com.ledgerhub.LanguageUiTest
+- **Composants testés** : `com.ledgerhub.LanguageUiTest`, `com.ledgerhub.presentation.ereporting.EReportingScreenInstrumentedTest`
