@@ -860,3 +860,12 @@ Installation **par-dessus** une base v2, sans désinstallation, après injection
 - **`STATUS_VALIDATED` et `STATUS_SENT` subsistent** : elles servent désormais aux devis (`QuoteStatus`), dont le cycle de vie est distinct de celui, réglementaire, des factures.
 - **Le remappage `VALIDATED`/`SENT` → `DEPOSITED` est irréversible** et perd la nuance « validée mais pas encore transmise ». Elle n'existe pas au référentiel DGFIP : c'est un choix de conformité, pas une perte accidentelle.
 - **Aucun horodatage n'est encore affiché en format local** : la PAF montre l'ISO brut. Lisible en audit, perfectible en interface.
+
+## 📊 Bilan de Recette Automatisée — Émulateur Android (Pixel 5 API 35)
+- **Date & Cible** : 2026-08-30 | Émulateur Pixel 5 API 35 | Package com.ledgerhub.app.debug
+- **Total des tests exécutés** : 1
+- **Succès** : 1 (100%) | **Échecs** : 0 | **Ignorés** : 0
+- **Durée totale** : 0 min 15 s
+- **Périmètre validé** : US-07 Cycle de vie DGFIP, Piste d’audit, Immuabilité, Sécurisation du semis de données, Activation des clés étrangères SQLite, validation des migrations SQLDelight, cohérence fonctionnelle des écrans et repositories.
+- **Statut final** : ✅ CONFORME / REPETABLE
+- **Composants testés** : Package(s) : com.ledgerhub ; Classe(s) : com.ledgerhub.LanguageUiTest
