@@ -1,11 +1,15 @@
 package com.ledgerhub.presentation.quoteform
 
 import com.ledgerhub.data.quote.MockQuoteRepository
+import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.quote.SubmitQuoteUseCase
+import com.ledgerhub.presentation.components.QuickClientField
+import com.ledgerhub.presentation.invoiceform.InMemoryClientRepository
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -234,5 +238,189 @@ class QuoteFormViewModelTest {
         assertIs<SubmissionStatus.Error>(state.submissionStatus)
         assertTrue(state.isFormEnabled)
         assertNull(state.submittedQuote)
+    }
+
+    // ── Sélecteur client (US-11) — parité avec le formulaire de facture ──────
+
+    // SIRET Luhn-valides (voir LuhnChecksum) : la création rapide contrôle la clé, pas seulement
+    // la longueur — les SIRET historiques des fixtures ne la satisfont pas.
+    private val boulangerie = Party("Boulangerie Moreau SARL", "784102336", "78410233600004", "compta@moreau.fr")
+    private val bouchon = Party("Bouchon Lyonnais SAS", "732829320", "73282932000074", "contact@bouchon.fr")
+
+    private fun viewModelWithDirectory(vararg clients: Party): Pair<QuoteFormViewModel, InMemoryClientRepository> {
+        val repository = InMemoryClientRepository(clients.toList())
+        val viewModel = QuoteFormViewModel(
+            dispatcher = UnconfinedTestDispatcher(),
+            clientRepository = repository,
+        )
+        return viewModel to repository
+    }
+
+    @Test
+    fun clientPicker_offersEveryKnownClient_beforeAnyKeystroke() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie, bouchon)
+
+        assertEquals(2, viewModel.uiState.value.clientSuggestions.size)
+        assertNull(viewModel.uiState.value.selectedClient)
+    }
+
+    @Test
+    fun typingAPrefix_narrowsTheSuggestions_caseInsensitively() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie, bouchon)
+
+        viewModel.processIntent(QuoteFormIntent.OnClientQueryChanged("BOULANGERIE"))
+
+        assertEquals(
+            listOf("Boulangerie Moreau SARL"),
+            viewModel.uiState.value.clientSuggestions.map { it.name },
+        )
+        assertTrue(viewModel.uiState.value.isClientDropdownExpanded)
+    }
+
+    @Test
+    fun selectingAClient_fillsRecipientNameSirenAndSiret() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie)
+
+        viewModel.processIntent(QuoteFormIntent.OnClientSelected(boulangerie))
+
+        val state = viewModel.uiState.value
+        assertEquals("Boulangerie Moreau SARL", state.recipientName)
+        assertEquals("Boulangerie Moreau SARL", state.clientQuery)
+        // Le SIREN vient de la fiche, il n'est pas dérivé du SIRET.
+        assertEquals("784102336", state.recipientSiren)
+        assertEquals("78410233600004", state.recipientSiret)
+        assertEquals(boulangerie, state.selectedClient)
+        assertFalse(state.isClientDropdownExpanded)
+        assertNull(state.errors[QuoteFormField.RECIPIENT_NAME])
+        assertNull(state.errors[QuoteFormField.RECIPIENT_SIREN])
+        assertNull(state.errors[QuoteFormField.RECIPIENT_SIRET])
+    }
+
+    @Test
+    fun editingSiretByHand_afterASelection_breaksTheLinkToTheRecord() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie)
+        viewModel.processIntent(QuoteFormIntent.OnClientSelected(boulangerie))
+        assertNotNull(viewModel.uiState.value.selectedClient)
+
+        viewModel.processIntent(QuoteFormIntent.RecipientSiretChanged("78410233600099"))
+
+        assertEquals("78410233600099", viewModel.uiState.value.recipientSiret)
+        assertNull(viewModel.uiState.value.selectedClient)
+    }
+
+    @Test
+    fun legacyRecipientNameChanged_behavesAsAQuery() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie, bouchon)
+
+        viewModel.processIntent(QuoteFormIntent.RecipientNameChanged("Bou"))
+
+        val state = viewModel.uiState.value
+        assertEquals("Bou", state.clientQuery)
+        assertEquals("Bou", state.recipientName)
+        assertEquals(2, state.clientSuggestions.size)
+    }
+
+    @Test
+    fun addButton_appearsOnlyForAnUnknownNonEmptyQuery() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie)
+
+        assertFalse(viewModel.uiState.value.showAddNewClientButton, "requête vide")
+
+        viewModel.processIntent(QuoteFormIntent.OnClientQueryChanged("Boul"))
+        assertFalse(viewModel.uiState.value.showAddNewClientButton, "des suggestions subsistent")
+
+        viewModel.processIntent(QuoteFormIntent.OnClientQueryChanged("Client Inconnu SAS"))
+        assertTrue(viewModel.uiState.value.showAddNewClientButton, "aucune fiche ne correspond")
+    }
+
+    @Test
+    fun withoutADirectory_theRecipientFieldStaysAFreeInput() = runTest {
+        val viewModel = QuoteFormViewModel(dispatcher = UnconfinedTestDispatcher())
+
+        viewModel.processIntent(QuoteFormIntent.RecipientNameChanged("Client Manuel SARL"))
+
+        val state = viewModel.uiState.value
+        assertEquals("Client Manuel SARL", state.recipientName)
+        assertTrue(state.clientSuggestions.isEmpty())
+        assertFalse(state.showAddNewClientButton)
+    }
+
+    // ── Création rapide depuis un devis ─────────────────────────────────────
+
+    @Test
+    fun openingTheQuickDialog_prefillsTheNameWithTheTypedText() = runTest {
+        val (viewModel, _) = viewModelWithDirectory(boulangerie)
+        viewModel.processIntent(QuoteFormIntent.OnClientQueryChanged("  Client Inconnu SAS  "))
+
+        viewModel.processIntent(QuoteFormIntent.OnOpenQuickClientDialog)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.showQuickClientDialog)
+        assertEquals("Client Inconnu SAS", state.quickClientDraft?.name)
+    }
+
+    @Test
+    fun savingAValidQuickClient_persistsSelectsAndClosesTheDialog() = runTest {
+        val (viewModel, repository) = viewModelWithDirectory()
+        viewModel.processIntent(QuoteFormIntent.OnClientQueryChanged("Nouveau Client SAS"))
+        viewModel.processIntent(QuoteFormIntent.OnOpenQuickClientDialog)
+
+        viewModel.processIntent(
+            QuoteFormIntent.OnSaveQuickClient("Nouveau Client SAS", "73282932000074", "contact@nouveau.fr"),
+        )
+
+        val state = viewModel.uiState.value
+        assertFalse(state.showQuickClientDialog)
+        assertNull(state.quickClientDraft)
+        assertEquals("Nouveau Client SAS", state.recipientName)
+        assertEquals("732829320", state.recipientSiren)
+        assertEquals("73282932000074", state.recipientSiret)
+        assertNotNull(state.selectedClient)
+        assertEquals("Nouveau Client SAS", repository.clients.single().name)
+    }
+
+    @Test
+    fun savingWithASiretFailingTheLuhnKey_isRefused_andKeepsTheDialogOpen() = runTest {
+        val (viewModel, repository) = viewModelWithDirectory()
+        viewModel.processIntent(QuoteFormIntent.OnOpenQuickClientDialog)
+
+        // 14 chiffres, mais clé de Luhn fausse — la seule longueur ne suffit pas.
+        viewModel.processIntent(
+            QuoteFormIntent.OnSaveQuickClient("Nouveau Client SAS", "78410233600022", "contact@nouveau.fr"),
+        )
+
+        val state = viewModel.uiState.value
+        assertTrue(state.showQuickClientDialog, "la modale reste ouverte pour corriger")
+        assertNotNull(state.quickClientDraft?.errors?.get(QuickClientField.SIRET))
+        assertTrue(repository.clients.isEmpty())
+    }
+
+    @Test
+    fun savingAnAlreadyKnownSiret_isRefused_withoutOverwritingTheRecord() = runTest {
+        val (viewModel, repository) = viewModelWithDirectory(boulangerie)
+        viewModel.processIntent(QuoteFormIntent.OnOpenQuickClientDialog)
+
+        viewModel.processIntent(
+            QuoteFormIntent.OnSaveQuickClient("Doublon SARL", boulangerie.siret, "doublon@test.fr"),
+        )
+
+        val state = viewModel.uiState.value
+        assertTrue(state.showQuickClientDialog)
+        assertNotNull(state.quickClientDraft?.errors?.get(QuickClientField.SIRET))
+        assertEquals(1, repository.clients.size)
+        assertEquals("Boulangerie Moreau SARL", repository.clients.single().name)
+    }
+
+    @Test
+    fun dismissingTheQuickDialog_persistsNothing() = runTest {
+        val (viewModel, repository) = viewModelWithDirectory()
+        viewModel.processIntent(QuoteFormIntent.OnClientQueryChanged("Client Inconnu SAS"))
+        viewModel.processIntent(QuoteFormIntent.OnOpenQuickClientDialog)
+
+        viewModel.processIntent(QuoteFormIntent.OnDismissQuickClientDialog)
+
+        assertFalse(viewModel.uiState.value.showQuickClientDialog)
+        assertNull(viewModel.uiState.value.quickClientDraft)
+        assertTrue(repository.clients.isEmpty())
     }
 }

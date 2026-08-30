@@ -3,7 +3,6 @@ package com.ledgerhub.presentation.invoiceform
 import com.ledgerhub.data.invoice.MockInvoiceRepository
 import com.ledgerhub.domain.client.ClientRepository
 import com.ledgerhub.domain.client.DuplicateClientException
-import com.ledgerhub.domain.directory.LuhnChecksum
 import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Invoice
@@ -18,6 +17,9 @@ import com.ledgerhub.domain.invoice.parseAmountToCents
 import com.ledgerhub.domain.invoice.totalHtOf
 import com.ledgerhub.domain.invoice.totalTtcOf
 import com.ledgerhub.domain.invoice.totalVatOf
+import com.ledgerhub.presentation.components.QuickClientDraft
+import com.ledgerhub.presentation.components.QuickClientField
+import com.ledgerhub.presentation.components.validateQuickClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -194,16 +196,8 @@ class InvoiceFormViewModel(
 
         val trimmedName = name.trim()
         val trimmedEmail = email.trim()
-        val errors = mutableMapOf<QuickClientField, String>()
-        if (FiscalValidation.validateCompanyName(trimmedName) is ValidationResult.Invalid) {
-            errors[QuickClientField.NAME] = "La raison sociale est obligatoire"
-        }
-        if (!LuhnChecksum.isValidSiret(siret)) {
-            errors[QuickClientField.SIRET] = "SIRET invalide : 14 chiffres et clé de Luhn correcte"
-        }
-        if (!EMAIL_REGEX.matches(trimmedEmail)) {
-            errors[QuickClientField.EMAIL] = "Adresse email invalide"
-        }
+        // Règles partagées avec le formulaire de devis — source unique (voir ClientPicker.kt).
+        val errors = validateQuickClient(name, siret, email)
 
         val submitted = draft.copy(name = name, siret = siret, email = email)
         if (errors.isNotEmpty()) {

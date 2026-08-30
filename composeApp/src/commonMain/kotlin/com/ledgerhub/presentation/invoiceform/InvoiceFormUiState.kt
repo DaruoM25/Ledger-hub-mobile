@@ -4,6 +4,7 @@ import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
+import com.ledgerhub.presentation.components.QuickClientDraft
 
 /**
  * État immuable du formulaire — pattern UDF. Les champs sont stockés en texte brut (saisie
@@ -97,24 +98,4 @@ data class InvoiceFormUiState(
             selectedClient == null &&
             clientQuery.isNotBlank() &&
             clientSuggestions.isEmpty()
-}
-
-/**
- * Champs de la modale de création rapide d'un client (US-11), avec leurs erreurs de validation.
- * Vit dans l'état du formulaire de facture : la modale n'a pas d'état local, elle est pilotée
- * par des intentions comme le reste de l'écran.
- */
-data class QuickClientDraft(
-    val name: String = "",
-    val siret: String = "",
-    val email: String = "",
-    val errors: Map<QuickClientField, String> = emptyMap(),
-    val isSaving: Boolean = false,
-)
-
-/** Champ de la modale de création rapide, pour rattacher une erreur. */
-enum class QuickClientField {
-    NAME,
-    SIRET,
-    EMAIL,
 }

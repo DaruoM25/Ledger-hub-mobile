@@ -1,6 +1,8 @@
 package com.ledgerhub.presentation.quoteform
 
 import com.ledgerhub.data.quote.MockQuoteRepository
+import com.ledgerhub.domain.client.ClientRepository
+import com.ledgerhub.domain.client.DuplicateClientException
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
@@ -12,6 +14,9 @@ import com.ledgerhub.domain.quote.SubmitQuoteUseCase
 import com.ledgerhub.domain.quote.totalHtOf
 import com.ledgerhub.domain.quote.totalTtcOf
 import com.ledgerhub.domain.quote.totalVatOf
+import com.ledgerhub.presentation.components.QuickClientDraft
+import com.ledgerhub.presentation.components.QuickClientField
+import com.ledgerhub.presentation.components.validateQuickClient
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -39,20 +44,172 @@ private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
 class QuoteFormViewModel(
     private val submitQuoteUseCase: SubmitQuoteUseCase = SubmitQuoteUseCase(MockQuoteRepository()),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * Annuaire des fiches clients alimentant le sélecteur (US-11). `null` = pas d'annuaire
+     * branché : le champ raison sociale du destinataire se comporte alors comme un champ libre,
+     * sans suggestion ni création rapide.
+     */
+    private val clientRepository: ClientRepository? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     // L'état initial doit lui aussi refléter les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
-    private val _uiState = MutableStateFlow(revalidate(QuoteFormUiState()))
+    private val _uiState = MutableStateFlow(
+        revalidate(QuoteFormUiState(isClientDirectoryAvailable = clientRepository != null)),
+    )
     val uiState: StateFlow<QuoteFormUiState> = _uiState.asStateFlow()
 
+    init {
+        // Le sélecteur doit proposer les fiches connues dès l'ouverture, avant toute frappe.
+        refreshSuggestions(query = "")
+    }
+
     fun processIntent(intent: QuoteFormIntent) {
-        if (intent is QuoteFormIntent.Submit) {
-            submit()
+        when (intent) {
+            QuoteFormIntent.Submit -> submit()
+
+            // Le champ raison sociale est un sélecteur depuis US-11 : les deux intentions
+            // décrivent le même geste.
+            is QuoteFormIntent.RecipientNameChanged -> onClientQueryChanged(intent.value)
+            is QuoteFormIntent.OnClientQueryChanged -> onClientQueryChanged(intent.value)
+
+            is QuoteFormIntent.OnClientSelected -> onClientSelected(intent.client)
+            QuoteFormIntent.OnOpenQuickClientDialog -> openQuickClientDialog()
+            QuoteFormIntent.OnDismissQuickClientDialog ->
+                _uiState.update { it.copy(showQuickClientDialog = false, quickClientDraft = null) }
+
+            is QuoteFormIntent.OnQuickClientFieldChanged -> _uiState.update { current ->
+                val draft = current.quickClientDraft ?: return@update current
+                current.copy(
+                    quickClientDraft = draft.copy(
+                        name = intent.name,
+                        siret = intent.siret,
+                        email = intent.email,
+                        // La frappe efface l'erreur du champ corrigé, pas celles des autres.
+                        errors = draft.errors.filterKeys { field ->
+                            when (field) {
+                                QuickClientField.NAME -> intent.name == draft.name
+                                QuickClientField.SIRET -> intent.siret == draft.siret
+                                QuickClientField.EMAIL -> intent.email == draft.email
+                            }
+                        },
+                    ),
+                )
+            }
+
+            is QuoteFormIntent.OnSaveQuickClient ->
+                saveQuickClient(intent.name, intent.siret, intent.email)
+
+            else -> _uiState.update { current -> revalidate(applyChange(current, intent)) }
+        }
+    }
+
+    // ── Sélecteur client (US-11) — symétrique à InvoiceFormViewModel ─────────
+
+    private fun refreshSuggestions(query: String) {
+        val repository = clientRepository ?: return
+        scope.launch {
+            val matches = repository.searchClients(query).getOrDefault(emptyList())
+            _uiState.update { current ->
+                // La saisie a pu changer pendant la lecture : on n'écrase pas un état plus récent.
+                if (current.clientQuery != query) current
+                else current.copy(clientSuggestions = matches)
+            }
+        }
+    }
+
+    private fun onClientQueryChanged(value: String) {
+        _uiState.update { current ->
+            revalidate(
+                current.copy(
+                    clientQuery = value,
+                    recipientName = value,
+                    // Toute frappe manuelle rompt le lien avec la fiche retenue.
+                    selectedClient = current.selectedClient?.takeIf { it.name == value },
+                    isClientDropdownExpanded = true,
+                ),
+            )
+        }
+        refreshSuggestions(value)
+    }
+
+    /**
+     * Reprend la fiche dans le devis. Le devis porte SIREN **et** SIRET du destinataire : les
+     * deux viennent de la fiche, sans dériver le SIREN du SIRET.
+     */
+    private fun onClientSelected(client: Party) {
+        _uiState.update { current ->
+            revalidate(
+                current.copy(
+                    selectedClient = client,
+                    clientQuery = client.name,
+                    recipientName = client.name,
+                    recipientSiren = client.siren,
+                    recipientSiret = client.siret,
+                    isClientDropdownExpanded = false,
+                    clientSuggestions = emptyList(),
+                ),
+            )
+        }
+    }
+
+    private fun openQuickClientDialog() {
+        _uiState.update { current ->
+            current.copy(
+                showQuickClientDialog = true,
+                isClientDropdownExpanded = false,
+                // Le nom déjà tapé est repris : l'utilisateur ne le ressaisit pas.
+                quickClientDraft = QuickClientDraft(name = current.clientQuery.trim()),
+            )
+        }
+    }
+
+    private fun saveQuickClient(name: String, siret: String, email: String) {
+        val repository = clientRepository ?: return
+        val draft = _uiState.value.quickClientDraft ?: return
+        if (draft.isSaving) return
+
+        // Règles partagées avec le formulaire de facture — source unique (voir ClientPicker.kt).
+        val errors = validateQuickClient(name, siret, email)
+        val submitted = draft.copy(name = name, siret = siret, email = email)
+        if (errors.isNotEmpty()) {
+            // La modale reste ouverte : c'est là que l'erreur se corrige.
+            _uiState.update { it.copy(quickClientDraft = submitted.copy(errors = errors)) }
             return
         }
-        _uiState.update { current -> revalidate(applyChange(current, intent)) }
+
+        _uiState.update { it.copy(quickClientDraft = submitted.copy(errors = emptyMap(), isSaving = true)) }
+
+        val client = Party(
+            name = name.trim(),
+            // Règle INSEE : le SIREN est le préfixe à 9 chiffres du SIRET, déjà validé.
+            siren = siret.take(9),
+            siret = siret,
+            email = email.trim(),
+        )
+        scope.launch {
+            repository.createClient(client).fold(
+                onSuccess = {
+                    _uiState.update { it.copy(showQuickClientDialog = false, quickClientDraft = null) }
+                    onClientSelected(client)
+                },
+                onFailure = { throwable ->
+                    val message = (throwable as? DuplicateClientException)
+                        ?.let { "Un client porte déjà ce SIRET" }
+                        ?: throwable.message
+                        ?: "Enregistrement du client impossible"
+                    _uiState.update {
+                        it.copy(
+                            quickClientDraft = submitted.copy(
+                                isSaving = false,
+                                errors = mapOf(QuickClientField.SIRET to message),
+                            ),
+                        )
+                    }
+                },
+            )
+        }
     }
 
     private fun applyChange(current: QuoteFormUiState, intent: QuoteFormIntent): QuoteFormUiState =
@@ -63,9 +220,19 @@ class QuoteFormViewModel(
             is QuoteFormIntent.IssuerNameChanged -> current.copy(issuerName = intent.value)
             is QuoteFormIntent.IssuerSirenChanged -> current.copy(issuerSiren = intent.value)
             is QuoteFormIntent.IssuerSiretChanged -> current.copy(issuerSiret = intent.value)
-            is QuoteFormIntent.RecipientNameChanged -> current.copy(recipientName = intent.value)
-            is QuoteFormIntent.RecipientSirenChanged -> current.copy(recipientSiren = intent.value)
-            is QuoteFormIntent.RecipientSiretChanged -> current.copy(recipientSiret = intent.value)
+            // SIREN et SIRET restent modifiables après une sélection ; les retoucher à la main
+            // rompt le lien avec la fiche (l'état cesse d'affirmer qu'un client est sélectionné).
+            is QuoteFormIntent.RecipientSirenChanged ->
+                current.copy(
+                    recipientSiren = intent.value,
+                    selectedClient = current.selectedClient?.takeIf { it.siren == intent.value },
+                )
+
+            is QuoteFormIntent.RecipientSiretChanged ->
+                current.copy(
+                    recipientSiret = intent.value,
+                    selectedClient = current.selectedClient?.takeIf { it.siret == intent.value },
+                )
 
             QuoteFormIntent.AddLine ->
                 current.copy(lines = current.lines + QuoteLineFormState())
@@ -97,7 +264,17 @@ class QuoteFormViewModel(
                     )
                 }
 
-            QuoteFormIntent.Submit -> current
+            // Soumission et gestes du sélecteur client : interceptés en amont par processIntent,
+            // ils n'atteignent jamais cette branche.
+            QuoteFormIntent.Submit,
+            is QuoteFormIntent.RecipientNameChanged,
+            is QuoteFormIntent.OnClientQueryChanged,
+            is QuoteFormIntent.OnClientSelected,
+            QuoteFormIntent.OnOpenQuickClientDialog,
+            QuoteFormIntent.OnDismissQuickClientDialog,
+            is QuoteFormIntent.OnQuickClientFieldChanged,
+            is QuoteFormIntent.OnSaveQuickClient,
+            -> current
         }
 
     private fun revalidate(state: QuoteFormUiState): QuoteFormUiState {

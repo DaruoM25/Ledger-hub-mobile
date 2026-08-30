@@ -27,7 +27,10 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.directory.LuhnChecksum
+import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Party
+import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.presentation.theme.LedgerHubColors
 
 /**
@@ -49,6 +52,53 @@ object ClientPickerTags {
     fun suggestionItem(siret: String) = "CLIENT_SUGGESTION_ITEM_$siret"
 
     fun quickClientError(field: String) = "QUICK_CLIENT_ERROR_$field"
+}
+
+/** Champ de la modale de création rapide, pour rattacher une erreur. */
+enum class QuickClientField {
+    NAME,
+    SIRET,
+    EMAIL,
+}
+
+/**
+ * Brouillon de la modale de création rapide, avec ses erreurs de validation.
+ *
+ * Vit dans l'état du formulaire hôte (facture, devis) : la modale n'a pas d'état local, elle est
+ * pilotée par des intentions comme le reste de l'écran.
+ */
+data class QuickClientDraft(
+    val name: String = "",
+    val siret: String = "",
+    val email: String = "",
+    val errors: Map<QuickClientField, String> = emptyMap(),
+    val isSaving: Boolean = false,
+)
+
+private val QUICK_CLIENT_EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
+
+/**
+ * Règles de validation d'une fiche créée à la volée — **source unique** partagée par les
+ * formulaires de facture et de devis.
+ *
+ * Le SIRET passe par [LuhnChecksum.isValidSiret] (14 chiffres **et** clé de Luhn), et non par le
+ * seul contrôle de longueur : une saisie rapide est précisément le moment où une coquille passe
+ * inaperçue.
+ *
+ * @return les erreurs par champ ; vide si la fiche est enregistrable.
+ */
+fun validateQuickClient(name: String, siret: String, email: String): Map<QuickClientField, String> {
+    val errors = mutableMapOf<QuickClientField, String>()
+    if (FiscalValidation.validateCompanyName(name.trim()) is ValidationResult.Invalid) {
+        errors[QuickClientField.NAME] = "La raison sociale est obligatoire"
+    }
+    if (!LuhnChecksum.isValidSiret(siret)) {
+        errors[QuickClientField.SIRET] = "SIRET invalide : 14 chiffres et clé de Luhn correcte"
+    }
+    if (!QUICK_CLIENT_EMAIL_REGEX.matches(email.trim())) {
+        errors[QuickClientField.EMAIL] = "Adresse email invalide"
+    }
+    return errors
 }
 
 /** Vert d'action positive du bouton d'ajout — Tailwind `emerald-600`. */

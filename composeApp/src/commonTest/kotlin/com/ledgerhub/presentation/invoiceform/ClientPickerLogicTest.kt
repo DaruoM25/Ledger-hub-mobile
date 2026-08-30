@@ -3,6 +3,7 @@ package com.ledgerhub.presentation.invoiceform
 import com.ledgerhub.domain.client.ClientRepository
 import com.ledgerhub.domain.client.DuplicateClientException
 import com.ledgerhub.domain.invoice.Party
+import com.ledgerhub.presentation.components.QuickClientField
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest

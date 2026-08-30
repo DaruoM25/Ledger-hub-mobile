@@ -30,6 +30,9 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.components.ClientPicker
+import com.ledgerhub.presentation.components.ClientPickerTags
+import com.ledgerhub.presentation.components.QuickClientDialog
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
@@ -41,7 +44,13 @@ object QuoteFormTags {
     const val ISSUER_NAME = "quote_form_issuer_name"
     const val ISSUER_SIREN = "quote_form_issuer_siren"
     const val ISSUER_SIRET = "quote_form_issuer_siret"
-    const val RECIPIENT_NAME = "quote_form_recipient_name"
+    /**
+     * Raison sociale du destinataire — devenue le champ de recherche du sélecteur client (US-11).
+     * Alias de [ClientPickerTags.CLIENT_SEARCH_INPUT] : les tests antérieurs continuent de
+     * désigner le même nœud.
+     */
+    const val RECIPIENT_NAME = ClientPickerTags.CLIENT_SEARCH_INPUT
+
     const val RECIPIENT_SIREN = "quote_form_recipient_siren"
     const val RECIPIENT_SIRET = "quote_form_recipient_siret"
     const val ADD_LINE_BUTTON = "quote_form_add_line_button"
@@ -145,14 +154,20 @@ internal fun QuoteFormContent(
 
         HorizontalDivider()
         SectionTitle("Destinataire")
-        FormField(
+        // Sélecteur dynamique (US-11) : la frappe filtre l'annuaire, la sélection remplit
+        // SIREN et SIRET, une saisie inconnue propose la création rapide.
+        ClientPicker(
             label = "Raison sociale",
-            value = uiState.recipientName,
-            tag = QuoteFormTags.RECIPIENT_NAME,
+            query = uiState.clientQuery,
+            suggestions = uiState.clientSuggestions,
+            isExpanded = uiState.isClientDropdownExpanded,
+            showAddNewClientButton = uiState.showAddNewClientButton,
+            enabled = fieldsEnabled,
             error = uiState.errors[QuoteFormField.RECIPIENT_NAME],
             errorTag = QuoteFormTags.errorTagFor(QuoteFormField.RECIPIENT_NAME),
-            enabled = fieldsEnabled,
-            onValueChange = { onIntent(QuoteFormIntent.RecipientNameChanged(it)) },
+            onQueryChanged = { onIntent(QuoteFormIntent.OnClientQueryChanged(it)) },
+            onClientSelected = { onIntent(QuoteFormIntent.OnClientSelected(it)) },
+            onAddNewClient = { onIntent(QuoteFormIntent.OnOpenQuickClientDialog) },
         )
         FormField(
             label = "SIREN (9 chiffres)",
@@ -227,6 +242,31 @@ internal fun QuoteFormContent(
         ) {
             Text("Créer le devis")
         }
+    }
+
+    // Hors de la colonne défilante : une modale ne se fait pas défiler avec le formulaire.
+    val quickClientDraft = uiState.quickClientDraft
+    if (uiState.showQuickClientDialog && quickClientDraft != null) {
+        QuickClientDialog(
+            name = quickClientDraft.name,
+            siret = quickClientDraft.siret,
+            email = quickClientDraft.email,
+            errors = quickClientDraft.errors.mapKeys { (field, _) -> field.name },
+            isSaving = quickClientDraft.isSaving,
+            onFieldChanged = { name, siret, email ->
+                onIntent(QuoteFormIntent.OnQuickClientFieldChanged(name, siret, email))
+            },
+            onSave = {
+                onIntent(
+                    QuoteFormIntent.OnSaveQuickClient(
+                        name = quickClientDraft.name,
+                        siret = quickClientDraft.siret,
+                        email = quickClientDraft.email,
+                    ),
+                )
+            },
+            onDismiss = { onIntent(QuoteFormIntent.OnDismissQuickClientDialog) },
+        )
     }
 }
 
