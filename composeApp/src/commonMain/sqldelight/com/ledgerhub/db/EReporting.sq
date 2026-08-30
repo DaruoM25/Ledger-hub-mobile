@@ -1,0 +1,44 @@
+-- e-Reporting DGFIP 2026 (US-08) — déclarations de transmission des données de transaction
+-- au Portail Public de Facturation (PPF).
+--
+-- Une déclaration agrège, pour une période mensuelle donnée, les montants d'un flux qui échappe
+-- à la facturation électronique obligatoire (ventes B2C, opérations internationales, encaissements)
+-- et doit malgré tout être communiqué à l'administration.
+--
+-- Cycle de vie volontairement binaire : DRAFT tant que la déclaration est modifiable localement,
+-- ACKNOWLEDGED une fois l'accusé de réception du PPF enregistré. Le passage est irréversible —
+-- une correction se fait par une nouvelle déclaration, jamais par réécriture d'un accusé.
+--
+-- ackNumber est NULL en DRAFT et porte le numéro d'accusé 'ACK-2026-XXXX' après acquittement.
+-- createdAt est un horodatage ISO 8601 UTC produit par une horloge réelle (voir domain.time.Clock).
+CREATE TABLE EReporting (
+    id TEXT NOT NULL PRIMARY KEY,
+    period TEXT NOT NULL,
+    type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'DRAFT',
+    ackNumber TEXT,
+    totalHt REAL NOT NULL DEFAULT 0.0,
+    totalVat REAL NOT NULL DEFAULT 0.0,
+    totalTtc REAL NOT NULL DEFAULT 0.0,
+    transactionCount INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL
+);
+
+-- Index de lecture : la liste est toujours affichée de la plus récente à la plus ancienne.
+CREATE INDEX EReporting_createdAt ON EReporting(createdAt);
+
+selectAll:
+SELECT * FROM EReporting ORDER BY createdAt DESC;
+
+selectById:
+SELECT * FROM EReporting WHERE id = ?;
+
+insertReport:
+INSERT OR REPLACE INTO EReporting(id, period, type, status, ackNumber, totalHt, totalVat, totalTtc, transactionCount, createdAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateStatusAndAck:
+UPDATE EReporting SET status = ?, ackNumber = ? WHERE id = ?;
+
+deleteReport:
+DELETE FROM EReporting WHERE id = ?;
