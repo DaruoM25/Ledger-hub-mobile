@@ -1,0 +1,38 @@
+-- Annuaire Centralisé DGFIP/PPF (US-09) — cache local des fiches d'entreprise résolues.
+--
+-- En production, ces lignes proviendraient de la synchronisation avec l'annuaire centralisé ;
+-- ici elles servent de cache alimenté par MockDirectoryRepository et par les résolutions
+-- réussies. Table isolée, sans clé étrangère vers l'existant.
+--
+-- siret / vatNumber / pdpIdentifier sont nullables : résolution au niveau SIREN, entreprise en
+-- franchise de TVA, routage PPF (pas de PDP). isVatSubject est un booléen stocké en 0/1.
+-- lastSyncAt : horodatage ISO 8601 UTC (voir domain.time.Clock).
+CREATE TABLE DirectoryEntry (
+    siren TEXT NOT NULL PRIMARY KEY,
+    siret TEXT,
+    companyName TEXT NOT NULL,
+    vatNumber TEXT,
+    routingMode TEXT NOT NULL,
+    pdpIdentifier TEXT,
+    isVatSubject INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    lastSyncAt TEXT NOT NULL
+);
+
+CREATE INDEX DirectoryEntry_siret ON DirectoryEntry(siret);
+
+selectAll:
+SELECT * FROM DirectoryEntry ORDER BY companyName;
+
+selectBySiren:
+SELECT * FROM DirectoryEntry WHERE siren = ?;
+
+selectBySiret:
+SELECT * FROM DirectoryEntry WHERE siret = ?;
+
+upsert:
+INSERT OR REPLACE INTO DirectoryEntry(siren, siret, companyName, vatNumber, routingMode, pdpIdentifier, isVatSubject, status, lastSyncAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteBySiren:
+DELETE FROM DirectoryEntry WHERE siren = ?;

@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.creditnoteform
 
 import com.ledgerhub.domain.creditnote.CreditNote
+import com.ledgerhub.domain.creditnote.CreditNoteReason
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.VatBreakdown
@@ -30,7 +31,12 @@ data class CreditNoteFormUiState(
     val totalTtc: Money = Money.ZERO,
     val creditNoteNumber: String = "",
     val issueDate: String = "",
+    /** Raison légale **effective** transmise au domaine — label d'un motif type, ou texte libre. */
     val reason: String = "",
+    /** US-10 : motif type sélectionné dans le formulaire (`null` tant qu'aucun choix). */
+    val reasonKind: CreditNoteReason? = null,
+    /** US-10 : texte saisi quand [CreditNoteReason.OTHER] est sélectionné. */
+    val reasonFreeText: String = "",
     val errors: Map<CreditNoteFormField, String> = emptyMap(),
     val touchedFields: Set<CreditNoteFormField> = emptySet(),
     val submitAttempted: Boolean = false,

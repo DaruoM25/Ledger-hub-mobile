@@ -3,6 +3,7 @@ package com.ledgerhub.presentation.creditnoteform
 import com.ledgerhub.data.creditnote.MockCreditNoteRepository
 import com.ledgerhub.domain.creditnote.CreateCreditNoteUseCase
 import com.ledgerhub.domain.creditnote.CreditNoteNumbering
+import com.ledgerhub.domain.creditnote.CreditNoteReason
 import com.ledgerhub.domain.creditnote.CreditNoteRepository
 import com.ledgerhub.domain.creditnote.InvoiceAlreadyCreditedException
 import com.ledgerhub.domain.creditnote.SubmitCreditNoteUseCase
@@ -98,9 +99,30 @@ class CreditNoteFormViewModel(
                     touchedFields = current.touchedFields + CreditNoteFormField.ISSUE_DATE,
                 )
 
+            // Motif libre historique : équivaut à choisir « Autre motif » et saisir la valeur.
             is CreditNoteFormIntent.ReasonChanged ->
                 current.copy(
                     reason = intent.value,
+                    reasonKind = CreditNoteReason.OTHER,
+                    reasonFreeText = intent.value,
+                    touchedFields = current.touchedFields + CreditNoteFormField.REASON,
+                )
+
+            is CreditNoteFormIntent.ReasonKindChanged ->
+                current.copy(
+                    reasonKind = intent.kind,
+                    reason = CreditNoteReason.resolveReason(intent.kind, current.reasonFreeText).getOrDefault(""),
+                    touchedFields = current.touchedFields + CreditNoteFormField.REASON,
+                )
+
+            is CreditNoteFormIntent.ReasonFreeTextChanged ->
+                current.copy(
+                    reasonFreeText = intent.value,
+                    reason = if (current.reasonKind == CreditNoteReason.OTHER) {
+                        CreditNoteReason.resolveReason(CreditNoteReason.OTHER, intent.value).getOrDefault("")
+                    } else {
+                        current.reason
+                    },
                     touchedFields = current.touchedFields + CreditNoteFormField.REASON,
                 )
 
@@ -117,7 +139,7 @@ class CreditNoteFormViewModel(
             errors[CreditNoteFormField.ISSUE_DATE] = "Date attendue au format AAAA-MM-JJ"
         }
         if (state.reason.isBlank()) {
-            errors[CreditNoteFormField.REASON] = "Le motif d'annulation est obligatoire"
+            errors[CreditNoteFormField.REASON] = "La raison légale de l'avoir est obligatoire"
         }
 
         return state.copy(errors = errors)

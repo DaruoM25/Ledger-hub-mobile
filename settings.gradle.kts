@@ -1,4 +1,21 @@
 val sqliteTmp = java.io.File(rootDir, "build/tmp/sqlite").apply { mkdirs() }
+
+fun cleanupWindowsSqliteArtifacts() {
+    val osName = System.getProperty("os.name") ?: ""
+    if (!osName.lowercase().contains("win")) return
+
+    val windowsDir = java.io.File("C:/Windows")
+    if (!windowsDir.exists()) return
+
+    windowsDir.listFiles { file ->
+        file.name.startsWith("sqlite-") && (file.name.endsWith(".dll") || file.name.endsWith(".dll.lck") || file.name.endsWith(".dll.lock"))
+    }?.forEach { stale ->
+        runCatching { stale.delete() }
+        runCatching { stale.deleteOnExit() }
+    }
+}
+
+cleanupWindowsSqliteArtifacts()
 System.setProperty("org.sqlite.tmpdir", sqliteTmp.absolutePath)
 System.setProperty("java.io.tmpdir", sqliteTmp.absolutePath)
 

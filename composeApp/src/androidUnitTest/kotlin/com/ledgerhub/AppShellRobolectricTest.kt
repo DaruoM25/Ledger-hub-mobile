@@ -10,6 +10,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.ledgerhub.db.LedgerHubDatabase
 import com.ledgerhub.presentation.dashboard.DashboardTags
+import com.ledgerhub.presentation.directory.DirectoryTags
 import com.ledgerhub.presentation.invoiceform.InvoiceFormTags
 import com.ledgerhub.presentation.placeholder.PlaceholderTags
 import org.junit.runner.RunWith
@@ -53,6 +54,22 @@ class AppShellRobolectricTest {
         onNodeWithText("Clients").performClick()
 
         onNodeWithTag(PlaceholderTags.CLIENTS).assertIsDisplayed()
+    }
+
+    @Test
+    fun bottomBar_navigatesToDgfipDirectory() = runComposeUiTest {
+        setContent { App(database = newDatabase()) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithText("Annuaire DGFIP").performClick()
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DirectoryTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(DirectoryTags.SCREEN).assertIsDisplayed()
     }
 
     @Test

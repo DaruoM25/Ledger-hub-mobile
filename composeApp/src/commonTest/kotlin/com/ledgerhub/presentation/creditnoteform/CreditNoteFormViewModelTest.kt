@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.creditnoteform
 
 import com.ledgerhub.data.creditnote.MockCreditNoteRepository
+import com.ledgerhub.domain.creditnote.CreditNoteReason
 import com.ledgerhub.domain.creditnote.SubmitCreditNoteUseCase
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
@@ -290,5 +291,65 @@ class CreditNoteFormViewModelTest {
 
         assertNull(viewModel.uiState.value.submittedCreditNote)
         assertEquals(1, repository.fetchCreditNotes().getOrThrow().size)
+    }
+
+    // ── US-10 : raison légale par motif type / motif libre ───────────────────
+
+    @Test
+    fun reasonKindChanged_toPreset_setsEffectiveReasonToItsLabel_andClearsError() {
+        val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice())
+
+        viewModel.processIntent(CreditNoteFormIntent.ReasonKindChanged(CreditNoteReason.COMMERCIAL_DISCOUNT))
+
+        val state = viewModel.uiState.value
+        assertEquals(CreditNoteReason.COMMERCIAL_DISCOUNT, state.reasonKind)
+        assertEquals("Remise commerciale", state.reason)
+        assertNull(state.errors[CreditNoteFormField.REASON])
+    }
+
+    @Test
+    fun reasonKindChanged_toOther_withBlankFreeText_keepsReasonBlank_andBlocksSubmit() {
+        val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice())
+
+        viewModel.processIntent(CreditNoteFormIntent.ReasonKindChanged(CreditNoteReason.OTHER))
+
+        val state = viewModel.uiState.value
+        assertEquals("", state.reason)
+        assertNotNull(state.errors[CreditNoteFormField.REASON])
+        assertFalse(state.isSubmitEnabled)
+    }
+
+    @Test
+    fun reasonFreeTextChanged_whenOtherSelected_updatesEffectiveReason() {
+        val viewModel = CreditNoteFormViewModel(sourceInvoice = invoice())
+        viewModel.processIntent(CreditNoteFormIntent.ReasonKindChanged(CreditNoteReason.OTHER))
+
+        viewModel.processIntent(CreditNoteFormIntent.ReasonFreeTextChanged("  Litige transporteur  "))
+
+        val state = viewModel.uiState.value
+        assertEquals("Litige transporteur", state.reason)
+        assertNull(state.errors[CreditNoteFormField.REASON])
+    }
+
+    @Test
+    fun submit_withPresetReason_transmitsTheLabelToTheDomain() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val source = invoice()
+        val useCase = SubmitCreditNoteUseCase(MockCreditNoteRepository(simulatedDelayMillis = 0L))
+        val viewModel = CreditNoteFormViewModel(
+            sourceInvoice = source,
+            submitCreditNoteUseCase = useCase,
+            dispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        viewModel.processIntent(CreditNoteFormIntent.IssueDateChanged("2026-08-06"))
+        viewModel.processIntent(CreditNoteFormIntent.ReasonKindChanged(CreditNoteReason.GOODS_RETURN))
+        viewModel.processIntent(CreditNoteFormIntent.Submit)
+        advanceUntilIdle()
+
+        val creditNote = viewModel.uiState.value.submittedCreditNote
+        assertNotNull(creditNote)
+        assertEquals("Retour de marchandise", creditNote.reason)
     }
 }

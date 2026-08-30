@@ -4,11 +4,14 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
+import com.ledgerhub.domain.creditnote.CreditNoteReason
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.InvoiceStatus
@@ -37,21 +40,33 @@ class CreditNoteFormScreenRobolectricTest {
     )
 
     @Test
-    fun initialState_prefillsInvertedNegativeTotal_andSubmitButtonIsDisabled() = runComposeUiTest {
+    fun initialState_showsDraftBadgeAndCartridge_andSubmitButtonIsDisabled() = runComposeUiTest {
         setContent { CreditNoteFormScreen(viewModel = CreditNoteFormViewModel(sourceInvoice = sourceInvoice())) }
 
-        onNodeWithTag(CreditNoteFormTags.TOTAL_TTC).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(CreditNoteFormTags.DRAFT_BADGE).performScrollTo().assertIsDisplayed()
+        onNodeWithContentDescription("AVOIR EN BROUILLON").assertIsDisplayed()
+        onNodeWithTag(CreditNoteFormTags.TOTALS_CARTRIDGE).performScrollTo().assertIsDisplayed()
         onNodeWithTag(CreditNoteFormTags.SUBMIT_BUTTON).performScrollTo().assertIsNotEnabled()
     }
 
     @Test
-    fun clearingTheReason_displaysFieldError() = runComposeUiTest {
+    fun theFourLegalReasonOptionsAreDisplayed() = runComposeUiTest {
         setContent { CreditNoteFormScreen(viewModel = CreditNoteFormViewModel(sourceInvoice = sourceInvoice())) }
 
-        // Le motif ne s'allume qu'une fois saisi puis vidé : un champ jamais touché reste neutre
-        // tant qu'aucune émission n'a été tentée (même règle que le formulaire de facture, D-02).
-        onNodeWithTag(CreditNoteFormTags.REASON).performScrollTo().performTextInput("Erreur")
-        onNodeWithTag(CreditNoteFormTags.REASON).performTextClearance()
+        onNodeWithTag(CreditNoteFormTags.REASON_SECTION).performScrollTo().assertIsDisplayed()
+        CreditNoteReason.entries.forEach { kind ->
+            onNodeWithTag(CreditNoteFormTags.reasonChip(kind)).performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun choosingOther_revealsFreeTextField_thenClearingIt_showsReasonError() = runComposeUiTest {
+        setContent { CreditNoteFormScreen(viewModel = CreditNoteFormViewModel(sourceInvoice = sourceInvoice())) }
+
+        onNodeWithTag(CreditNoteFormTags.reasonChip(CreditNoteReason.OTHER)).performScrollTo().performClick()
+        onNodeWithTag(CreditNoteFormTags.REASON_FREE_TEXT).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(CreditNoteFormTags.REASON_FREE_TEXT).performTextInput("Erreur")
+        onNodeWithTag(CreditNoteFormTags.REASON_FREE_TEXT).performTextClearance()
 
         onNodeWithTag(CreditNoteFormTags.errorTagFor(CreditNoteFormField.REASON))
             .performScrollTo()
@@ -59,11 +74,11 @@ class CreditNoteFormScreenRobolectricTest {
     }
 
     @Test
-    fun fillingAllFields_enablesSubmitButton() = runComposeUiTest {
+    fun pickingAPresetReasonAndADate_enablesSubmitButton() = runComposeUiTest {
         setContent { CreditNoteFormScreen(viewModel = CreditNoteFormViewModel(sourceInvoice = sourceInvoice())) }
 
         onNodeWithTag(CreditNoteFormTags.ISSUE_DATE).performScrollTo().performTextInput("2026-08-06")
-        onNodeWithTag(CreditNoteFormTags.REASON).performScrollTo().performTextInput("Erreur tarifaire")
+        onNodeWithTag(CreditNoteFormTags.reasonChip(CreditNoteReason.BILLING_ERROR)).performScrollTo().performClick()
 
         onNodeWithTag(CreditNoteFormTags.SUBMIT_BUTTON).performScrollTo().assertIsEnabled()
     }

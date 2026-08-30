@@ -18,6 +18,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +43,9 @@ object InvoiceListTags {
     const val EMPTY = "invoice_list_empty"
     const val LIST = "invoice_list_items"
     fun filterChip(filter: InvoiceStatusFilter) = "invoice_list_filter_${filter.name}"
+
+    /** US-10 : action « Créer un avoir » proposée sous une facture finalisée non encore créditée. */
+    fun creditNoteAction(number: String) = "invoice_list_credit_note_action_$number"
 }
 
 /** Composable stateful — observe [InvoiceListViewModel] et délègue la navigation au parent. */
@@ -49,12 +53,14 @@ object InvoiceListTags {
 fun InvoiceListScreen(
     viewModel: InvoiceListViewModel,
     onInvoiceClick: (String) -> Unit,
+    onCreateCreditNote: (Invoice) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     InvoiceListView(
         uiState = uiState,
         onIntent = viewModel::processIntent,
         onInvoiceClick = onInvoiceClick,
+        onCreateCreditNote = onCreateCreditNote,
     )
 }
 
@@ -63,6 +69,7 @@ internal fun InvoiceListView(
     uiState: InvoiceListUiState,
     onIntent: (InvoiceListIntent) -> Unit,
     onInvoiceClick: (String) -> Unit,
+    onCreateCreditNote: (Invoice) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -88,7 +95,7 @@ internal fun InvoiceListView(
             is InvoiceListContent.Error -> ErrorState { onIntent(InvoiceListIntent.Retry) }
             InvoiceListContent.Empty -> EmptyState()
             is InvoiceListContent.Success ->
-                InvoiceList(content.invoices, onInvoiceClick, uiState.creditNotesByInvoice)
+                InvoiceList(content.invoices, onInvoiceClick, onCreateCreditNote, uiState.creditNotesByInvoice)
         }
     }
 }
@@ -189,6 +196,7 @@ private fun EmptyState() {
 private fun InvoiceList(
     invoices: List<Invoice>,
     onInvoiceClick: (String) -> Unit,
+    onCreateCreditNote: (Invoice) -> Unit,
     creditNotesByInvoice: Map<String, String>,
 ) {
     LazyColumn(
@@ -198,11 +206,26 @@ private fun InvoiceList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(invoices, key = { it.number }) { invoice ->
-            InvoiceCard(
-                invoice = invoice,
-                onClick = { onInvoiceClick(invoice.number) },
-                creditNoteNumber = creditNotesByInvoice[invoice.number],
-            )
+            val alreadyCredited = creditNotesByInvoice[invoice.number]
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                InvoiceCard(
+                    invoice = invoice,
+                    onClick = { onInvoiceClick(invoice.number) },
+                    creditNoteNumber = alreadyCredited,
+                )
+                // Émission d'un avoir directement depuis la liste (US-10) : seulement sur une
+                // facture finalisée qui ne porte pas déjà un avoir.
+                if (invoice.isCancellableByCreditNote && alreadyCredited == null) {
+                    TextButton(
+                        onClick = { onCreateCreditNote(invoice) },
+                        modifier = Modifier.semantics {
+                            testTag = InvoiceListTags.creditNoteAction(invoice.number)
+                        },
+                    ) {
+                        Text("Créer un avoir")
+                    }
+                }
+            }
         }
     }
 }
