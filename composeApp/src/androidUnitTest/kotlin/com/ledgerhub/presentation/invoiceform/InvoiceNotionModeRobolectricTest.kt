@@ -1,15 +1,17 @@
 package com.ledgerhub.presentation.invoiceform
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.domain.i18n.AppLanguage
@@ -53,13 +55,13 @@ class InvoiceNotionModeRobolectricTest {
     fun switchingBetweenModes_isReversible_andUpdatesTheSelectedSegment() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
 
         onNodeWithTag(InvoicePaperCanvasTags.CANVAS).assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).assertIsSelected()
         onNodeWithTag(InvoiceFormTags.SCREEN).assertDoesNotExist()
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.CLASSIC)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.CLASSIC)).selectMode()
 
         onNodeWithTag(InvoiceFormTags.SCREEN).assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.CLASSIC)).assertIsSelected()
@@ -79,14 +81,14 @@ class InvoiceNotionModeRobolectricTest {
         onNodeWithTag(InvoiceFormTags.lineUnitPriceTag(0)).performScrollTo().performTextInput("100.00")
 
         // La feuille blanche montre la même ligne, et le même total.
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
         onNodeWithTag(InvoicePaperCanvasTags.lineLabelTag(0)).performScrollTo().assertTextEquals("Conseil")
         onNodeWithTag(InvoicePaperCanvasTags.lineUnitPriceTag(0)).performScrollTo().assertTextEquals("100.00")
         onNodeWithTag(InvoicePaperCanvasTags.lineTotalTag(0)).performScrollTo().assertTextEquals(fr)
 
         // Correction sur la feuille, puis retour au formulaire : la valeur corrigée a suivi.
         onNodeWithTag(InvoicePaperCanvasTags.CLIENT_NAME).performScrollTo().performTextInput("Boulangerie Moreau SARL")
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.CLASSIC)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.CLASSIC)).selectMode()
         onNodeWithTag(InvoiceFormTags.CLIENT_NAME).performScrollTo().assertTextEquals("Boulangerie Moreau SARL")
     }
 
@@ -100,7 +102,7 @@ class InvoiceNotionModeRobolectricTest {
     fun typingInTheSheetCells_recalculatesLineAndSummaryTotalsLive() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
 
         onNodeWithTag(InvoicePaperCanvasTags.lineLabelTag(0)).performScrollTo().performTextInput("Prestation")
         onNodeWithTag(InvoicePaperCanvasTags.lineUnitPriceTag(0)).performScrollTo().performTextInput("250.00")
@@ -125,7 +127,7 @@ class InvoiceNotionModeRobolectricTest {
     fun theFifthColumn_showsTheLineTotalExcludingVat() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
         onNodeWithTag(InvoicePaperCanvasTags.lineLabelTag(0)).performScrollTo().performTextInput("Prestation")
         onNodeWithTag(InvoicePaperCanvasTags.lineUnitPriceTag(0)).performScrollTo().performTextInput("100.00")
 
@@ -141,7 +143,7 @@ class InvoiceNotionModeRobolectricTest {
     fun numericCells_rejectNonNumericKeystrokes() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
 
         onNodeWithTag(InvoicePaperCanvasTags.lineUnitPriceTag(0)).performScrollTo().performTextInput("12a,b50")
 
@@ -177,7 +179,7 @@ class InvoiceNotionModeRobolectricTest {
         onNodeWithText("Form Mode").assertIsDisplayed()
         onNodeWithText("Blank Page Mode").assertIsDisplayed()
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
 
         // En-têtes de colonnes et encart client traduits — plus aucun libellé français en dur.
         onNodeWithText("Bill to").performScrollTo().assertIsDisplayed()
@@ -193,3 +195,17 @@ class InvoiceNotionModeRobolectricTest {
             .assertTextEquals("Total incl. tax : ${formatMoney(12_000, AppLanguage.EN)}")
     }
 }
+
+/**
+ * Sélectionne un segment du sélecteur de mode.
+ *
+ * `performClick()` — injection tactile synthétique — reste **sans effet** sur un
+ * `SegmentedButton` sous Robolectric : le nœud expose bien son action `OnClick`, mais l'événement
+ * tactile n'atteint jamais le `Modifier.clickable` du segment, et le mode ne bascule pas. On passe
+ * donc par l'action sémantique, exactement ce que déclenche un service d'accessibilité.
+ *
+ * Le vrai geste du doigt n'est pas perdu pour autant : il est couvert sur émulateur Pixel 5 par
+ * `InvoiceNotionModeInstrumentedTest`, dont c'est précisément la raison d'être.
+ */
+private fun SemanticsNodeInteraction.selectMode(): SemanticsNodeInteraction =
+    performSemanticsAction(SemanticsActions.OnClick)

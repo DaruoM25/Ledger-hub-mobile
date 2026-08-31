@@ -1,6 +1,8 @@
 package com.ledgerhub.presentation.invoiceform
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -8,6 +10,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.domain.i18n.AppLanguage
@@ -106,7 +109,7 @@ class InvoiceFormScreenTest {
         onNodeWithTag(InvoiceFormTags.MODE_SELECTOR).assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.SCREEN).assertIsDisplayed()
 
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
 
         onNodeWithTag(InvoicePaperCanvasTags.CANVAS).assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.SCREEN).assertDoesNotExist()
@@ -118,7 +121,7 @@ class InvoiceFormScreenTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
         // Bascule vers le mode Page Blanche.
-        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
         onNodeWithTag(InvoicePaperCanvasTags.CANVAS).assertIsDisplayed()
 
         // Saisie directement "sur le papier" : la quantité par défaut de la première ligne est
@@ -139,3 +142,17 @@ class InvoiceFormScreenTest {
             .assertTextEquals("Total TTC : ${formatMoney(12_000, AppLanguage.FR)}")
     }
 }
+
+/**
+ * Sélectionne un segment du sélecteur de mode.
+ *
+ * `performClick()` — injection tactile synthétique — reste **sans effet** sur un
+ * `SegmentedButton` sous Robolectric : le nœud expose bien son action `OnClick`, mais l'événement
+ * tactile n'atteint jamais le `Modifier.clickable` du segment, et le mode ne bascule pas. On passe
+ * donc par l'action sémantique, exactement ce que déclenche un service d'accessibilité.
+ *
+ * Le vrai geste du doigt n'est pas perdu pour autant : il est couvert sur émulateur Pixel 5 par
+ * `InvoiceNotionModeInstrumentedTest`, dont c'est précisément la raison d'être.
+ */
+private fun SemanticsNodeInteraction.selectMode(): SemanticsNodeInteraction =
+    performSemanticsAction(SemanticsActions.OnClick)
