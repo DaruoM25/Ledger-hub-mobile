@@ -5,9 +5,10 @@ package com.ledgerhub.domain.i18n
  * dictionnaire Web (Prompt 2). Chaque clé DOIT être traduite dans les deux langues (garanti par
  * `AppTranslationsTest`). Regroupées par zone fonctionnelle.
  *
- * Hors périmètre US-02 (restent en français) : l'aperçu WYSIWYG `InvoicePaperCanvas`, l'écran
- * `LoginScreen` (avant navigation), le corps prosaïque du détail facture (émetteur/ventilation TVA/
- * boutons d'action) et les modules Devis/Avoir.
+ * Hors périmètre US-02 (restent en français) : l'écran `LoginScreen` (avant navigation), le corps
+ * prosaïque du détail facture (émetteur/ventilation TVA/boutons d'action) et les modules
+ * Devis/Avoir. L'aperçu WYSIWYG `InvoicePaperCanvas` en est sorti avec l'US-15 : devenu un mode de
+ * saisie à part entière, il est traduit comme le formulaire classique.
  */
 enum class StringKey {
     // ── Application / shell ──────────────────────────────────────────────────
@@ -205,6 +206,14 @@ enum class StringKey {
     PREVIEW_BANK_DETAILS,
     PREVIEW_IBAN,
     PREVIEW_BIC,
+
+    // ── Mode de saisie de la facture (US-15) ───────────────────────────────
+    FORM_MODE_SELECTOR_LABEL,
+    FORM_MODE_CLASSIC,
+    FORM_MODE_BLANK_PAGE,
+    // Ventilation TVA de la feuille blanche : « TVA 20 % sur 100,00 € : 20,00 € ».
+    PAPER_VAT_LABEL,
+    PAPER_VAT_BASE_ON,
 
     // ── Erreurs de validation (résolues depuis ValidationErrorKey) ──────────
     VALIDATION_INVOICE_NUMBER_REQUIRED,

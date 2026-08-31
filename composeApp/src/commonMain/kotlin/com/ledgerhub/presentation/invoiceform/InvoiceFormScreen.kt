@@ -19,12 +19,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -34,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,7 +88,10 @@ object InvoiceFormTags {
     const val LOADING_INDICATOR = "invoice_form_loading_indicator"
     const val SUCCESS_MESSAGE = "invoice_form_success_message"
     const val ERROR_MESSAGE = "invoice_form_error_message"
-    const val PREVIEW_MODE_TOGGLE = "invoice_form_preview_mode_toggle"
+    /** Sélecteur de mode de saisie (US-15) — voir [InvoiceFormMode]. */
+    const val MODE_SELECTOR = "invoice_form_mode_selector"
+
+    fun modeSegmentTag(mode: InvoiceFormMode) = "invoice_form_mode_segment_${mode.name}"
 
     fun errorTagFor(field: InvoiceFormField) = "invoice_form_error_${field.name}"
 
@@ -102,30 +110,60 @@ fun InvoiceFormScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Bascule purement visuelle — n'affecte ni l'état ni la validation (même InvoiceFormUiState pour les deux vues).
-    var isPreviewMode by remember { mutableStateOf(false) }
+    // Le mode est un état DE VUE, jamais un champ de l'InvoiceFormUiState : basculer change la
+    // représentation, pas la facture. rememberSaveable pour survivre à une rotation d'écran —
+    // repartir en mode Formulaire après avoir tourné le téléphone serait vécu comme une perte.
+    var mode by rememberSaveable { mutableStateOf(InvoiceFormMode.CLASSIC) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        PreviewModeToggle(isPreviewMode = isPreviewMode, onToggle = { isPreviewMode = !isPreviewMode })
-        if (isPreviewMode) {
-            InvoicePaperCanvas(uiState = uiState, onIntent = viewModel::processIntent)
-        } else {
-            InvoiceFormContent(uiState = uiState, onIntent = viewModel::processIntent)
+        InvoiceFormModeSelector(selected = mode, onModeSelected = { mode = it })
+        when (mode) {
+            InvoiceFormMode.CLASSIC -> InvoiceFormContent(uiState = uiState, onIntent = viewModel::processIntent)
+            InvoiceFormMode.BLANK_PAGE -> InvoicePaperCanvas(uiState = uiState, onIntent = viewModel::processIntent)
         }
     }
 }
 
+/**
+ * Sélecteur « Mode Formulaire / Mode Page Blanche » en tête d'écran (US-15). Choix unique
+ * exclusif : un `SingleChoiceSegmentedButtonRow` M3, dont la sémantique de groupe radio est
+ * annoncée telle quelle aux lecteurs d'écran — ce qu'un bouton bascule ne fait pas.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PreviewModeToggle(isPreviewMode: Boolean, onToggle: () -> Unit) {
-    Row(
+private fun InvoiceFormModeSelector(
+    selected: InvoiceFormMode,
+    onModeSelected: (InvoiceFormMode) -> Unit,
+) {
+    val modes = InvoiceFormMode.entries
+    Column(
         modifier = Modifier.fillMaxWidth().padding(20.dp, 16.dp, 20.dp, 0.dp),
-        horizontalArrangement = Arrangement.End,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        OutlinedButton(
-            onClick = onToggle,
-            modifier = Modifier.semantics { testTag = InvoiceFormTags.PREVIEW_MODE_TOGGLE },
+        Text(
+            text = tr(StringKey.FORM_MODE_SELECTOR_LABEL),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { testTag = InvoiceFormTags.MODE_SELECTOR },
         ) {
-            Text(if (isPreviewMode) "Formulaire" else "Aperçu visuel")
+            modes.forEachIndexed { index, mode ->
+                val label = tr(mode.labelKey)
+                SegmentedButton(
+                    selected = mode == selected,
+                    onClick = { onModeSelected(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                    modifier = Modifier.semantics {
+                        testTag = InvoiceFormTags.modeSegmentTag(mode)
+                        contentDescription = label
+                    },
+                ) {
+                    Text(label)
+                }
+            }
         }
     }
 }
@@ -604,15 +642,4 @@ private fun StatusBanner(text: String, tag: String, containerColor: Color, conte
                 },
         )
     }
-}
-
-/**
- * Formate des centimes en chaîne décimale simple (ex: 1250 -> "12.50"), sans dépendre de
- * NumberFormat (JVM-only). `internal` pour rester réutilisé par [InvoicePaperCanvas],
- * seconde représentation du même [InvoiceFormUiState].
- */
-internal fun formatCents(cents: Long): String {
-    val whole = cents / 100
-    val fraction = (cents % 100).toString().padStart(2, '0')
-    return "$whole.$fraction"
 }
