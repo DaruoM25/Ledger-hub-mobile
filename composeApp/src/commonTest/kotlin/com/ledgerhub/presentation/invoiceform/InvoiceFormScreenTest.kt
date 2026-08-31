@@ -1,6 +1,8 @@
 package com.ledgerhub.presentation.invoiceform
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -8,8 +10,11 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
+import com.ledgerhub.domain.i18n.AppLanguage
+import com.ledgerhub.presentation.invoices.formatMoney
 import kotlin.test.Test
 import kotlin.test.assertNull
 
@@ -94,26 +99,29 @@ class InvoiceFormScreenTest {
         onNodeWithTag(InvoiceFormTags.lineLabelTag(0)).performScrollTo().assertIsDisplayed()
     }
 
-    // ── Aperçu WYSIWYG (feuille A4) ─────────────────────────────────────────────
+    // ── Mode Page Blanche — feuille A4 éditable (US-15) ─────────────────────────
 
     @Test
-    fun previewModeToggle_switchesFromFormToPaperCanvas() = runComposeUiTest {
+    fun modeSelector_switchesFromFormToBlankPage() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
+        // Le sélecteur de mode (US-15) coiffe les deux vues et reste affiché dans les deux.
+        onNodeWithTag(InvoiceFormTags.MODE_SELECTOR).assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.SCREEN).assertIsDisplayed()
 
-        onNodeWithTag(InvoiceFormTags.PREVIEW_MODE_TOGGLE).performClick()
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
 
         onNodeWithTag(InvoicePaperCanvasTags.CANVAS).assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.SCREEN).assertDoesNotExist()
+        onNodeWithTag(InvoiceFormTags.MODE_SELECTOR).assertIsDisplayed()
     }
 
     @Test
-    fun paperCanvas_editingLinePriceInPlace_recalculatesLiveTotals() = runComposeUiTest {
+    fun blankPageMode_editingLinePriceInPlace_recalculatesLiveTotals() = runComposeUiTest {
         setContent { InvoiceFormScreen(viewModel = InvoiceFormViewModel()) }
 
-        // Bascule vers l'aperçu visuel de la feuille.
-        onNodeWithTag(InvoiceFormTags.PREVIEW_MODE_TOGGLE).performClick()
+        // Bascule vers le mode Page Blanche.
+        onNodeWithTag(InvoiceFormTags.modeSegmentTag(InvoiceFormMode.BLANK_PAGE)).selectMode()
         onNodeWithTag(InvoicePaperCanvasTags.CANVAS).assertIsDisplayed()
 
         // Saisie directement "sur le papier" : la quantité par défaut de la première ligne est
@@ -123,11 +131,28 @@ class InvoiceFormScreenTest {
         onNodeWithTag(InvoicePaperCanvasTags.lineLabelTag(0)).performScrollTo().performTextInput("Prestation")
         onNodeWithTag(InvoicePaperCanvasTags.lineUnitPriceTag(0)).performScrollTo().performTextInput("100.00")
 
-        // 100.00 € HT * 1 + 20 % de TVA = 120.00 € TTC, reflété à la fois sur le total de ligne
-        // et sur le total général — preuve que la recalculation est bien en direct (WYSIWYG).
+        // 100,00 € HT x 1 : la 5e colonne porte le total de ligne **HT** (US-15, aligné sur la
+        // présentation PPF 2026 de l'aperçu A4), le bas de feuille porte le TTC après 20 % de
+        // TVA — preuve que la recalculation est bien en direct, sur les deux horizons.
         onNodeWithTag(InvoicePaperCanvasTags.lineTotalTag(0)).performScrollTo()
-            .assertTextEquals("120.00 €")
+            .assertTextEquals(formatMoney(10_000, AppLanguage.FR))
+        onNodeWithTag(InvoicePaperCanvasTags.TOTAL_HT).performScrollTo()
+            .assertTextEquals("Total HT : ${formatMoney(10_000, AppLanguage.FR)}")
         onNodeWithTag(InvoicePaperCanvasTags.TOTAL_TTC).performScrollTo()
-            .assertTextEquals("Total TTC : 120.00 €")
+            .assertTextEquals("Total TTC : ${formatMoney(12_000, AppLanguage.FR)}")
     }
 }
+
+/**
+ * Sélectionne un segment du sélecteur de mode.
+ *
+ * `performClick()` — injection tactile synthétique — reste **sans effet** sur un
+ * `SegmentedButton` sous Robolectric : le nœud expose bien son action `OnClick`, mais l'événement
+ * tactile n'atteint jamais le `Modifier.clickable` du segment, et le mode ne bascule pas. On passe
+ * donc par l'action sémantique, exactement ce que déclenche un service d'accessibilité.
+ *
+ * Le vrai geste du doigt n'est pas perdu pour autant : il est couvert sur émulateur Pixel 5 par
+ * `InvoiceNotionModeInstrumentedTest`, dont c'est précisément la raison d'être.
+ */
+private fun SemanticsNodeInteraction.selectMode(): SemanticsNodeInteraction =
+    performSemanticsAction(SemanticsActions.OnClick)

@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,17 +31,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.invoice.computeVatBreakdown
 import com.ledgerhub.domain.invoice.parseAmountToCents
+import com.ledgerhub.presentation.components.filterAmount
+import com.ledgerhub.presentation.components.filterQuantity
+import com.ledgerhub.presentation.components.filterSiret
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
+import com.ledgerhub.presentation.i18n.tr
+import com.ledgerhub.presentation.invoices.formatMoney
 
 /** Tags de test — contrat partagé entre l'aperçu WYSIWYG (UI) et les tests. */
 object InvoicePaperCanvasTags {
@@ -54,12 +66,15 @@ object InvoicePaperCanvasTags {
     fun lineLabelTag(index: Int) = "invoice_paper_line_${index}_label"
     fun lineQuantityTag(index: Int) = "invoice_paper_line_${index}_quantity"
     fun lineUnitPriceTag(index: Int) = "invoice_paper_line_${index}_unit_price"
-    fun lineTotalTag(index: Int) = "invoice_paper_line_${index}_total_ttc"
+    fun lineTotalTag(index: Int) = "invoice_paper_line_${index}_total_ht"
     fun vatBreakdownTag(rate: VatRate) = "invoice_paper_vat_breakdown_${rate.name}"
 }
 
 /** Couleur d'accent affichée sur le contour d'un champ transparent lorsqu'il a le focus. */
-private val PaperFieldFocusOutline = Color(0xFF64B5F6)
+private val PaperFieldFocusOutline = Color(0xFF1E88E5)
+
+/** Aplat tres leger revele au focus — signale la cellule active sans casser l'illusion papier. */
+private val PaperFieldFocusFill = Color(0x141E88E5)
 private val PaperDeskBackground = Color(0xFFE3E3E8)
 private val PaperDividerColor = Color(0xFFE0E0E0)
 private val PaperMutedText = Color(0xFF757575)
@@ -144,7 +159,11 @@ private fun PaperHeader(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("Facturé à", style = MaterialTheme.typography.labelSmall, color = PaperMutedText)
+            Text(
+                text = tr(StringKey.PREVIEW_BILL_TO),
+                style = MaterialTheme.typography.labelSmall,
+                color = PaperMutedText,
+            )
             PaperField(
                 value = uiState.clientName,
                 tag = InvoicePaperCanvasTags.CLIENT_NAME,
@@ -157,6 +176,8 @@ private fun PaperHeader(
                 tag = InvoicePaperCanvasTags.CLIENT_SIRET,
                 enabled = enabled,
                 textStyle = MaterialTheme.typography.bodySmall.copy(color = PaperMutedText),
+                keyboardType = KeyboardType.Number,
+                inputFilter = ::filterSiret,
                 onValueChange = { onIntent(InvoiceFormIntent.ClientSiretChanged(it)) },
             )
         }
@@ -171,10 +192,10 @@ private fun PaperLinesTable(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            TableHeaderCell("Description", weight = 3f)
-            TableHeaderCell("Qté", weight = 1f)
-            TableHeaderCell("PU HT", weight = 1.5f)
-            TableHeaderCell("Total TTC", weight = 1.5f, textAlign = TextAlign.End)
+            TableHeaderCell(tr(StringKey.PREVIEW_COL_DESCRIPTION), weight = 3f)
+            TableHeaderCell(tr(StringKey.PREVIEW_COL_QUANTITY), weight = 1f)
+            TableHeaderCell(tr(StringKey.PREVIEW_COL_UNIT_PRICE_HT), weight = 1.5f)
+            TableHeaderCell(tr(StringKey.PREVIEW_COL_TOTAL_HT), weight = 1.5f, textAlign = TextAlign.End)
         }
         uiState.lines.forEachIndexed { index, line ->
             PaperLineRow(index = index, line = line, enabled = enabled, onIntent = onIntent)
@@ -198,6 +219,8 @@ private fun PaperLineRow(
         onIntent(InvoiceFormIntent.UpdateLine(index, label, quantity, unitPriceHt, vatRate))
     }
 
+    val language = LocalAppLanguage.current
+
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         PaperField(
             value = line.label,
@@ -211,6 +234,8 @@ private fun PaperLineRow(
             tag = InvoicePaperCanvasTags.lineQuantityTag(index),
             enabled = enabled,
             modifier = Modifier.weight(1f),
+            keyboardType = KeyboardType.Number,
+            inputFilter = ::filterQuantity,
             onValueChange = { update(quantity = it) },
         )
         PaperField(
@@ -218,12 +243,15 @@ private fun PaperLineRow(
             tag = InvoicePaperCanvasTags.lineUnitPriceTag(index),
             enabled = enabled,
             modifier = Modifier.weight(1.5f),
+            keyboardType = KeyboardType.Decimal,
+            inputFilter = ::filterAmount,
             onValueChange = { update(unitPriceHt = it) },
         )
-        // Total de ligne en lecture seule — calculé à la volée depuis la saisie brute, jamais
-        // stocké : évite toute divergence avec le total général calculé par le ViewModel.
+        // Total de ligne en lecture seule — **HT**, comme la 5e colonne de l'aperçu A4 (US-14) et
+        // comme l'exige la présentation PPF 2026. Calculé à la volée depuis la saisie brute et
+        // jamais stocké : aucune divergence possible avec le total général du ViewModel.
         Text(
-            text = "${formatCents(line.liveTotalTtcCents())} €",
+            text = formatMoney(line.liveTotalHtCents(), language),
             modifier = Modifier
                 .weight(1.5f)
                 .semantics { testTag = InvoicePaperCanvasTags.lineTotalTag(index) },
@@ -234,33 +262,54 @@ private fun PaperLineRow(
 
 @Composable
 private fun PaperFooterTotals(uiState: InvoiceFormUiState) {
+    val language = LocalAppLanguage.current
     val breakdown = computeVatBreakdown(uiState.liveValidDomainLines())
+    val vatLabel = tr(StringKey.PAPER_VAT_LABEL)
+    val onLabel = tr(StringKey.PAPER_VAT_BASE_ON)
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-        Text(
-            text = "Total HT : ${formatCents(uiState.totalHt.cents)} €",
-            modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.TOTAL_HT },
+        PaperTotalLine(
+            label = tr(StringKey.PREVIEW_TOTAL_HT),
+            value = formatMoney(uiState.totalHt.cents, language),
+            tag = InvoicePaperCanvasTags.TOTAL_HT,
         )
         breakdown.forEach { vatBreakdown ->
             Text(
-                text = "TVA ${vatBreakdown.rate.label} sur ${formatCents(vatBreakdown.baseHt.cents)} € : " +
-                    "${formatCents(vatBreakdown.vatAmount.cents)} €",
+                text = "$vatLabel ${vatBreakdown.rate.label} $onLabel " +
+                    "${formatMoney(vatBreakdown.baseHt.cents, language)} : " +
+                    formatMoney(vatBreakdown.vatAmount.cents, language),
                 style = MaterialTheme.typography.bodySmall,
                 color = PaperMutedText,
                 modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.vatBreakdownTag(vatBreakdown.rate) },
             )
         }
-        Text(
-            text = "Total TVA : ${formatCents(uiState.totalVat.cents)} €",
-            modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.TOTAL_VAT },
+        PaperTotalLine(
+            label = tr(StringKey.PREVIEW_TOTAL_VAT),
+            value = formatMoney(uiState.totalVat.cents, language),
+            tag = InvoicePaperCanvasTags.TOTAL_VAT,
         )
-        Text(
-            text = "Total TTC : ${formatCents(uiState.totalTtc.cents)} €",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.semantics { testTag = InvoicePaperCanvasTags.TOTAL_TTC },
+        PaperTotalLine(
+            label = tr(StringKey.PREVIEW_TOTAL_TTC),
+            value = formatMoney(uiState.totalTtc.cents, language),
+            tag = InvoicePaperCanvasTags.TOTAL_TTC,
+            emphasize = true,
         )
     }
+}
+
+/** Ligne du bloc récapitulatif — même composition « Libellé : montant » que l'aperçu A4 (US-14). */
+@Composable
+private fun PaperTotalLine(label: String, value: String, tag: String, emphasize: Boolean = false) {
+    val text = "$label : $value"
+    Text(
+        text = text,
+        style = if (emphasize) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyMedium,
+        fontWeight = if (emphasize) FontWeight.Bold else FontWeight.Normal,
+        modifier = Modifier.semantics {
+            testTag = tag
+            contentDescription = text
+        },
+    )
 }
 
 @Composable
@@ -288,31 +337,41 @@ private fun PaperField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    /** Normalisation de la frappe — mêmes règles que le formulaire classique (voir `InputFilters`). */
+    inputFilter: ((String) -> String)? = null,
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val outlineColor = if (isFocused) PaperFieldFocusOutline else Color.Transparent
+    val fillColor = if (isFocused) PaperFieldFocusFill else Color.Transparent
 
     BasicTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { raw -> onValueChange(inputFilter?.invoke(raw) ?: raw) },
         enabled = enabled,
         singleLine = true,
         textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(PaperFieldFocusOutline),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         modifier = modifier
-            .semantics { testTag = tag }
             .onFocusChanged { isFocused = it.isFocused }
-            .border(width = 1.dp, color = outlineColor, shape = RoundedCornerShape(4.dp))
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            // 48 dp : cible tactile minimale Material — une cellule de tableau reste tapable au
+            // doigt même quand son texte ne fait qu'une ligne.
+            .height(48.dp)
+            .background(fillColor, RoundedCornerShape(4.dp))
+            .border(width = 1.5.dp, color = outlineColor, shape = RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 12.dp)
+            .requiredHeight(48.dp)
+            .semantics(mergeDescendants = true) { testTag = tag },
     )
 }
 
 /**
- * Total TTC d'une ligne recalculé en direct depuis la saisie brute (texte), sans passer par la
+ * Total HT d'une ligne recalculé en direct depuis la saisie brute (texte), sans passer par la
  * revalidation du ViewModel — nécessaire pour que le total de ligne se mette à jour à chaque
  * frappe, y compris pendant une saisie intermédiaire encore invalide (auquel cas 0 est affiché).
  */
-private fun InvoiceLineFormState.liveTotalTtcCents(): Long = toLiveDomainLineOrNull()?.totalTtc?.cents ?: 0L
+private fun InvoiceLineFormState.liveTotalHtCents(): Long = toLiveDomainLineOrNull()?.totalHt?.cents ?: 0L
 
 /** Lignes valides recalculées en direct — même règle que le ViewModel : une ligne invalide n'entre pas dans les totaux. */
 private fun InvoiceFormUiState.liveValidDomainLines(): List<InvoiceLine> = lines.mapNotNull { it.toLiveDomainLineOrNull() }

@@ -62,6 +62,18 @@ class AppTranslationsTest {
         )
     }
 
+    /**
+     * Sélecteur de mode de saisie (US-15). La formulation est imposée par la spécification
+     * fonctionnelle : elle est figée par sentinelle, au même titre que les statuts PPF.
+     */
+    @Test
+    fun invoiceFormModes_useTheSpecifiedWording() {
+        assertEquals("Mode Formulaire", AppTranslations.get(StringKey.FORM_MODE_CLASSIC, AppLanguage.FR))
+        assertEquals("Form Mode", AppTranslations.get(StringKey.FORM_MODE_CLASSIC, AppLanguage.EN))
+        assertEquals("Mode Page Blanche", AppTranslations.get(StringKey.FORM_MODE_BLANK_PAGE, AppLanguage.FR))
+        assertEquals("Blank Page Mode", AppTranslations.get(StringKey.FORM_MODE_BLANK_PAGE, AppLanguage.EN))
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())

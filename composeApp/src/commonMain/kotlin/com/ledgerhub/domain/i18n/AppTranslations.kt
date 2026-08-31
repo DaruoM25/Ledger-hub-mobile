@@ -208,6 +208,12 @@ object AppTranslations {
         StringKey.PREVIEW_IBAN to "IBAN",
         StringKey.PREVIEW_BIC to "BIC",
 
+        StringKey.FORM_MODE_SELECTOR_LABEL to "Mode de saisie",
+        StringKey.FORM_MODE_CLASSIC to "Mode Formulaire",
+        StringKey.FORM_MODE_BLANK_PAGE to "Mode Page Blanche",
+        StringKey.PAPER_VAT_LABEL to "TVA",
+        StringKey.PAPER_VAT_BASE_ON to "sur",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -412,6 +418,12 @@ object AppTranslations {
         StringKey.PREVIEW_BANK_DETAILS to "Bank details",
         StringKey.PREVIEW_IBAN to "IBAN",
         StringKey.PREVIEW_BIC to "BIC",
+
+        StringKey.FORM_MODE_SELECTOR_LABEL to "Input mode",
+        StringKey.FORM_MODE_CLASSIC to "Form Mode",
+        StringKey.FORM_MODE_BLANK_PAGE to "Blank Page Mode",
+        StringKey.PAPER_VAT_LABEL to "VAT",
+        StringKey.PAPER_VAT_BASE_ON to "on",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",
