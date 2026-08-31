@@ -22,6 +22,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -41,6 +44,7 @@ import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.formatIsoDate
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.components.FacturXBadge
+import com.ledgerhub.presentation.invoices.components.InvoicePreviewDialog
 import com.ledgerhub.presentation.invoices.components.StatusTag
 import com.ledgerhub.presentation.invoices.format
 
@@ -59,6 +63,7 @@ object InvoiceDetailScreenTags {
     const val EDIT_BUTTON = "invoices_detail_edit_button"
     const val LOCKED_HINT = "invoices_detail_locked_hint"
     const val CREDIT_NOTE_MENTION = "invoices_detail_credit_note_mention"
+    const val PREVIEW_BUTTON = "invoices_detail_preview_button"
     const val EXPORT_INVOICE_XML_BUTTON = "invoices_detail_export_invoice_xml"
     const val EXPORT_CREDIT_NOTE_XML_BUTTON = "invoices_detail_export_credit_note_xml"
     const val LIFECYCLE_SECTION = "invoices_detail_lifecycle"
@@ -113,6 +118,11 @@ internal fun InvoiceDetailView(
     onConfirmTransition: () -> Unit = {},
     onCancelTransition: () -> Unit = {},
 ) {
+    // Ouverture de l'aperçu A4 : état d'affichage pur, sans effet sur le domaine ni sur le
+    // chargement. Le remonter au ViewModel n'ajouterait qu'un aller-retour d'intention pour une
+    // feuille qui ne fait que relire la facture déjà en état.
+    var previewedInvoice by remember { mutableStateOf<Invoice?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,8 +144,16 @@ internal fun InvoiceDetailView(
                 onExportInvoiceXml = onExportInvoiceXml,
                 onExportCreditNoteXml = onExportCreditNoteXml,
                 onStartTransition = onStartTransition,
+                onPreviewClick = { previewedInvoice = it },
             )
         }
+    }
+
+    previewedInvoice?.let { invoiceToPreview ->
+        InvoicePreviewDialog(
+            invoice = invoiceToPreview,
+            onDismiss = { previewedInvoice = null },
+        )
     }
 
     uiState.pendingTransition?.let { target ->
@@ -158,6 +176,7 @@ private fun InvoiceBody(
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
     onStartTransition: (InvoiceStatus) -> Unit,
+    onPreviewClick: (Invoice) -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -264,6 +283,17 @@ private fun InvoiceBody(
     }
 
     HorizontalDivider()
+
+    // Aperçu A4 (US-14). Disponible quel que soit le statut, annulation comprise : consulter
+    // le document tel qu'il a été émis ne le modifie pas.
+    OutlinedButton(
+        onClick = { onPreviewClick(invoice) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = InvoiceDetailScreenTags.PREVIEW_BUTTON },
+    ) {
+        Text("📄  ${tr(StringKey.ACTION_PREVIEW_INVOICE)}")
+    }
 
     // Export Factur-X (US-06). Toujours disponible : une facture annulée reste une pièce
     // fiscale exportable — c'est précisément son archivage qui compte.

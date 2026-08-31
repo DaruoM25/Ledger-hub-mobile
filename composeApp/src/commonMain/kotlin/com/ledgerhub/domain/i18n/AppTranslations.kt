@@ -180,6 +180,34 @@ object AppTranslations {
         StringKey.VALIDATION_LINE_QUANTITY_INVALID to "La quantité doit être un entier positif",
         StringKey.VALIDATION_LINE_UNIT_PRICE_INVALID to "Le prix unitaire HT doit être un montant positif",
 
+        // ── Aperçu A4 de la facture (US-14) ────────────────────────────────
+        StringKey.ACTION_PREVIEW_INVOICE to "Aperçu de la facture",
+        StringKey.PREVIEW_TITLE to "Aperçu de la facture",
+        StringKey.PREVIEW_CLOSE to "Fermer",
+        StringKey.PREVIEW_BILL_TO to "Facturé à",
+        StringKey.PREVIEW_INVOICE_NUMBER to "Facture n°",
+        StringKey.PREVIEW_DUE_DATE to "Date d'échéance",
+        StringKey.PREVIEW_SIRET to "SIRET",
+        StringKey.PREVIEW_SIREN to "SIREN",
+        StringKey.PREVIEW_VAT_NUMBER to "TVA intracommunautaire",
+        StringKey.PREVIEW_COL_DESCRIPTION to "Description",
+        StringKey.PREVIEW_COL_QUANTITY to "Qté",
+        StringKey.PREVIEW_COL_UNIT_PRICE_HT to "Prix unitaire HT",
+        StringKey.PREVIEW_COL_VAT_RATE to "Taux TVA",
+        StringKey.PREVIEW_COL_TOTAL_HT to "Total HT",
+        StringKey.PREVIEW_TOTAL_HT to "Total HT",
+        StringKey.PREVIEW_TOTAL_VAT to "Total TVA",
+        StringKey.PREVIEW_TOTAL_TTC to "Total TTC",
+        StringKey.PREVIEW_LEGAL_ASSOCIATION to
+            "Membre d'une association agréée, le règlement par chèque et carte bancaire est accepté.",
+        StringKey.PREVIEW_LEGAL_LATE_PENALTY to
+            "En cas de retard de paiement, des pénalités seront appliquées au taux de",
+        StringKey.PREVIEW_LEGAL_FIXED_INDEMNITY to
+            "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement :",
+        StringKey.PREVIEW_BANK_DETAILS to "Coordonnées bancaires",
+        StringKey.PREVIEW_IBAN to "IBAN",
+        StringKey.PREVIEW_BIC to "BIC",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -356,6 +384,34 @@ object AppTranslations {
         StringKey.VALIDATION_LINE_LABEL_REQUIRED to "Description is required",
         StringKey.VALIDATION_LINE_QUANTITY_INVALID to "Quantity must be a positive integer",
         StringKey.VALIDATION_LINE_UNIT_PRICE_INVALID to "Unit price excl. tax must be a positive amount",
+
+        // ── Aperçu A4 de la facture (US-14) ────────────────────────────────
+        StringKey.ACTION_PREVIEW_INVOICE to "Preview invoice",
+        StringKey.PREVIEW_TITLE to "Invoice preview",
+        StringKey.PREVIEW_CLOSE to "Close",
+        StringKey.PREVIEW_BILL_TO to "Bill to",
+        StringKey.PREVIEW_INVOICE_NUMBER to "Invoice no.",
+        StringKey.PREVIEW_DUE_DATE to "Due date",
+        StringKey.PREVIEW_SIRET to "SIRET",
+        StringKey.PREVIEW_SIREN to "SIREN",
+        StringKey.PREVIEW_VAT_NUMBER to "VAT number",
+        StringKey.PREVIEW_COL_DESCRIPTION to "Description",
+        StringKey.PREVIEW_COL_QUANTITY to "Qty",
+        StringKey.PREVIEW_COL_UNIT_PRICE_HT to "Unit price excl. tax",
+        StringKey.PREVIEW_COL_VAT_RATE to "VAT rate",
+        StringKey.PREVIEW_COL_TOTAL_HT to "Total excl. VAT",
+        StringKey.PREVIEW_TOTAL_HT to "Total excl. tax",
+        StringKey.PREVIEW_TOTAL_VAT to "Total VAT",
+        StringKey.PREVIEW_TOTAL_TTC to "Total incl. tax",
+        StringKey.PREVIEW_LEGAL_ASSOCIATION to
+            "Member of an approved management association; payment by cheque and credit card is accepted.",
+        StringKey.PREVIEW_LEGAL_LATE_PENALTY to
+            "In the event of late payment, penalties will be charged at a rate of",
+        StringKey.PREVIEW_LEGAL_FIXED_INDEMNITY to
+            "Fixed recovery-cost indemnity in the event of late payment:",
+        StringKey.PREVIEW_BANK_DETAILS to "Bank details",
+        StringKey.PREVIEW_IBAN to "IBAN",
+        StringKey.PREVIEW_BIC to "BIC",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",

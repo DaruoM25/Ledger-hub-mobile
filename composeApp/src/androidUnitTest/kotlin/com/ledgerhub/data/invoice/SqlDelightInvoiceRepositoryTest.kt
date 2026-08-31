@@ -38,6 +38,7 @@ class SqlDelightInvoiceRepositoryTest {
         number: String = "F-2026-001",
         status: InvoiceStatus = InvoiceStatus.DRAFT,
         sourceQuoteId: String? = null,
+        dueDate: String = "",
         lines: List<InvoiceLine> = listOf(
             InvoiceLine("Conseil", quantity = 2, unitPriceHt = Money(5000), vatRate = VatRate.TAUX_NORMAL),
         ),
@@ -49,6 +50,7 @@ class SqlDelightInvoiceRepositoryTest {
         lines = lines,
         status = status,
         sourceQuoteId = sourceQuoteId,
+        dueDate = dueDate,
     )
 
     @Test
@@ -145,6 +147,34 @@ class SqlDelightInvoiceRepositoryTest {
         repository.submitInvoice(invoice(sourceQuoteId = null))
 
         assertNull(repository.fetchInvoices().getOrThrow().single().sourceQuoteId)
+    }
+
+    @Test
+    fun invoicePreviewRoundTrip_preservesItemLinesAmountsAndVatBreakdown() = runTest {
+        val repository = SqlDelightInvoiceRepository(newDatabase(), userEmail = "qa@ledgerhub.app")
+        val original = invoice(
+            number = "F-2026-PREVIEW",
+            status = InvoiceStatus.DEPOSITED,
+            dueDate = "2026-09-15",
+            lines = listOf(
+                InvoiceLine("Prestation de conseil", quantity = 3, unitPriceHt = Money(125_050), vatRate = VatRate.TAUX_NORMAL),
+                InvoiceLine("Documentation fiscale", quantity = 1, unitPriceHt = Money(4_500), vatRate = VatRate.TAUX_REDUIT),
+            ),
+        )
+
+        repository.submitInvoice(original).getOrThrow()
+
+        val roundTripped = repository.fetchInvoices().getOrThrow().single()
+        assertEquals(original.number, roundTripped.number)
+        assertEquals(original.dueDate, roundTripped.dueDate)
+        assertEquals(original.status, roundTripped.status)
+        assertEquals(original.lines.map { it.label }, roundTripped.lines.map { it.label })
+        assertEquals(original.lines.map { it.quantity }, roundTripped.lines.map { it.quantity })
+        assertEquals(original.lines.map { it.unitPriceHt.cents }, roundTripped.lines.map { it.unitPriceHt.cents })
+        assertEquals(original.lines.map { it.vatRate }, roundTripped.lines.map { it.vatRate })
+        assertEquals(original.totalHt, roundTripped.totalHt)
+        assertEquals(original.totalVat, roundTripped.totalVat)
+        assertEquals(original.totalTtc, roundTripped.totalTtc)
     }
 
     // ── Immutabilité du destinataire (anomalie D-03, recette du 29/08/2026) ──────────────────
