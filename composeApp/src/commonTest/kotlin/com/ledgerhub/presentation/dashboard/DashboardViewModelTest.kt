@@ -48,7 +48,9 @@ class DashboardViewModelTest {
         assertTrue(state.collectedRevenueCents > 0)
         assertTrue(state.pendingRevenueCents > 0)
         assertEquals(0L, state.overdueRevenueCents) // aucun calcul de retard câblé — voir DashboardAnalytics.kt
-        assertEquals(8, state.issuedCount) // MockInvoiceRepository sème 8 factures (F-2026-101..108)
+        // MockInvoiceRepository sème 10 factures (F-2026-101..110) depuis l'US-13, qui a ajouté
+        // une facture APPROVED et une REJECTED au jeu de démo pour exposer les statuts PPF.
+        assertEquals(10, state.issuedCount)
         assertEquals(6, state.monthlyRevenue.size)
         assertEquals(3, state.recentDocuments.size)
     }

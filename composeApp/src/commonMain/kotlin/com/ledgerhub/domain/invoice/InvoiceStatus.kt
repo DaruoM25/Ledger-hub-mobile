@@ -13,8 +13,19 @@ enum class InvoiceStatus {
     /** Brouillon — seul état modifiable et supprimable. */
     DRAFT,
 
-    /** Déposée sur le portail public de facturation ou une plateforme agréée. */
+    /**
+     * Déposée sur le portail public de facturation ou une plateforme agréée — le `SUBMITTED`
+     * du référentiel PPF. Le nom historique est conservé : il est persisté tel quel en base
+     * (`Invoice.status TEXT`), le renommer imposerait une migration pour aucun gain.
+     */
     DEPOSITED,
+
+    /**
+     * Approuvée par l'administration. Pendant favorable de [REJECTED] : le portail public de
+     * facturation a accepté le flux, la facture est entrée dans le circuit légal et n'attend
+     * plus que son encaissement.
+     */
+    APPROVED,
 
     /** Encaissée. */
     PAID,

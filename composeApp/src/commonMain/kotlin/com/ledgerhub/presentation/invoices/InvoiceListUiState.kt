@@ -10,6 +10,7 @@ enum class InvoiceStatusFilter(val label: String) {
     TOUTES("Toutes"),
     DRAFT("Brouillons"),
     DEPOSITED("Déposées"),
+    APPROVED("Approuvées"),
     PAID("Encaissées"),
     REJECTED("Rejetées"),
     REFUSED("Refusées"),
@@ -19,6 +20,7 @@ enum class InvoiceStatusFilter(val label: String) {
         TOUTES -> true
         DRAFT -> status == InvoiceStatus.DRAFT
         DEPOSITED -> status == InvoiceStatus.DEPOSITED
+        APPROVED -> status == InvoiceStatus.APPROVED
         PAID -> status == InvoiceStatus.PAID
         REJECTED -> status == InvoiceStatus.REJECTED
         REFUSED -> status == InvoiceStatus.REFUSED

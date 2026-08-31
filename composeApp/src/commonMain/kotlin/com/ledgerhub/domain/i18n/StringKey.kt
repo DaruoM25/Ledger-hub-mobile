@@ -106,6 +106,7 @@ enum class StringKey {
     // ── Cycle de vie DGFIP & Piste d'Audit Fiable (US-07) ───────────────────
     ACTION_MARK_DEPOSITED,
     ACTION_MARK_PAID,
+    ACTION_MARK_APPROVED,
     ACTION_MARK_REJECTED,
     ACTION_MARK_REFUSED,
     ACTION_REOPEN_DRAFT,
@@ -124,6 +125,7 @@ enum class StringKey {
     FILTER_ALL,
     FILTER_DRAFT,
     FILTER_DEPOSITED,
+    FILTER_APPROVED,
     FILTER_REJECTED,
     FILTER_REFUSED,
     FILTER_PAID,
@@ -136,6 +138,7 @@ enum class StringKey {
     STATUS_VALIDATED,
     STATUS_SENT,
     STATUS_DEPOSITED,
+    STATUS_APPROVED,
     STATUS_REJECTED,
     STATUS_REFUSED,
     STATUS_PAID,

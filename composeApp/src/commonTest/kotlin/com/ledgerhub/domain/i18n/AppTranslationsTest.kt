@@ -36,6 +36,32 @@ class AppTranslationsTest {
         )
     }
 
+    /**
+     * Libellés réglementaires PPF 2026 (US-13). Leur formulation est imposée par le référentiel :
+     * elle est donc figée par des sentinelles, et non laissée à l'appréciation d'une relecture.
+     */
+    @Test
+    fun ppfRegulatoryStatuses_useTheOfficialWording() {
+        assertEquals("Déposée", AppTranslations.get(StringKey.STATUS_DEPOSITED, AppLanguage.FR))
+        assertEquals("Submitted", AppTranslations.get(StringKey.STATUS_DEPOSITED, AppLanguage.EN))
+        assertEquals(
+            "Approuvée par l'administration",
+            AppTranslations.get(StringKey.STATUS_APPROVED, AppLanguage.FR),
+        )
+        assertEquals(
+            "Approved by administration",
+            AppTranslations.get(StringKey.STATUS_APPROVED, AppLanguage.EN),
+        )
+        assertEquals(
+            "Rejetée par la plateforme",
+            AppTranslations.get(StringKey.STATUS_REJECTED, AppLanguage.FR),
+        )
+        assertEquals(
+            "Rejected by platform",
+            AppTranslations.get(StringKey.STATUS_REJECTED, AppLanguage.EN),
+        )
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())

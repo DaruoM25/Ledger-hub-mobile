@@ -84,8 +84,10 @@ data class DashboardAnalytics(
  *   intégrale (seul type supporté, voir [CreditNote.init] : montants toujours négatifs) ramène
  *   donc la contribution nette de sa facture à 0, ce qui reflète bien un encaissement remboursé
  *   en totalité plutôt qu'un encaissement qui aurait simplement disparu du rapport.
- * - "En attente" = factures Envoyées, pas encore payées ([InvoiceStatus.DEPOSITED]). Une facture
- *   Validée mais pas encore envoyée n'est pas encore "en attente de paiement" côté client.
+ * - "En attente" = factures déposées ([InvoiceStatus.DEPOSITED]) ou approuvées par
+ *   l'administration ([InvoiceStatus.APPROVED]), pas encore payées. Une facture Validée mais
+ *   pas encore envoyée n'est pas encore "en attente de paiement" côté client ; à l'inverse,
+ *   l'approbation PPF ne change rien à l'attente d'encaissement, elle la confirme.
  * - "En retard" est TOUJOURS 0 : le domaine [Invoice] n'a pas de date d'échéance en v1 (seule
  *   [Invoice.issueDate] existe) — impossible de déterminer un retard réel sans ce champ, et
  *   mieux vaut l'absence explicite d'un chiffre que d'en simuler un non mesurable.
@@ -119,7 +121,7 @@ fun computeDashboardAnalytics(
     val collectedRevenue = collectedEntries.fold(Money.ZERO) { acc, invoice -> acc + netTtcOf(invoice) }
 
     val pendingRevenue = invoices
-        .filter { it.status == InvoiceStatus.DEPOSITED }
+        .filter { it.status == InvoiceStatus.DEPOSITED || it.status == InvoiceStatus.APPROVED }
         .fold(Money.ZERO) { acc, invoice -> acc + invoice.totalTtc }
 
     val overdueRevenue = Money.ZERO

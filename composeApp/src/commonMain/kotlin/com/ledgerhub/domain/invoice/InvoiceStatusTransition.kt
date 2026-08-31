@@ -1,5 +1,6 @@
 package com.ledgerhub.domain.invoice
 
+import com.ledgerhub.domain.invoice.InvoiceStatus.APPROVED
 import com.ledgerhub.domain.invoice.InvoiceStatus.CANCELLED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DEPOSITED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DRAFT
@@ -12,12 +13,14 @@ import com.ledgerhub.domain.invoice.InvoiceStatus.REJECTED
  *
  * La table est **déclarative et exhaustive** : chaque statut y figure, y compris les terminaux
  * avec un ensemble vide. Une cascade de `if` laisserait des chemins implicites — ici, ce qui
- * n'est pas écrit est interdit, et le test parcourt les 36 cases.
+ * n'est pas écrit est interdit, et le test parcourt les 49 cases.
  *
  * Deux règles méritent d'être explicitées :
  * - **[REJECTED] → [DRAFT]** est le seul retour en arrière. Un rejet de plateforme signifie que
  *   la facture n'est jamais entrée dans le circuit légal ; la corriger et la redéposer est la
  *   procédure attendue. À l'inverse [REFUSED], qui a circulé, ne se corrige que par un avoir.
+ * - **[APPROVED]** est l'issue favorable du dépôt, exclusive de [REJECTED]. Elle ne réintroduit
+ *   aucun retour en arrière : une facture approuvée a circulé, seul un avoir la corrige.
  * - **[CANCELLED]** n'est jamais atteint par une action d'interface : seule l'émission d'un avoir
  *   y conduit, dans la transaction atomique de
  *   [SqlDelightCreditNoteRepository][com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository].
@@ -27,7 +30,8 @@ object InvoiceStatusTransition {
 
     private val TRANSITIONS: Map<InvoiceStatus, Set<InvoiceStatus>> = mapOf(
         DRAFT to setOf(DEPOSITED),
-        DEPOSITED to setOf(PAID, REJECTED, REFUSED, CANCELLED),
+        DEPOSITED to setOf(APPROVED, PAID, REJECTED, REFUSED, CANCELLED),
+        APPROVED to setOf(PAID, REFUSED, CANCELLED),
         PAID to setOf(CANCELLED),
         REJECTED to setOf(DRAFT),
         REFUSED to setOf(CANCELLED),

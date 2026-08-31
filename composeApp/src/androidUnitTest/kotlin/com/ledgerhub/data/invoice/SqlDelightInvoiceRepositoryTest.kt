@@ -77,6 +77,23 @@ class SqlDelightInvoiceRepositoryTest {
         assertEquals(original.totalTtc, roundTripped.totalTtc)
     }
 
+    /**
+     * N2 (US-13) — le nouveau statut réglementaire `APPROVED` survit à un aller-retour SQLite.
+     * `status` est persisté en `TEXT` via `InvoiceStatus.name` / `.valueOf` (voir
+     * [SqlDelightInvoiceRepository]) : un statut ajouté à l'enum sans migration doit rester
+     * lisible tel quel, ce que ce test garantit indépendamment du reste de la suite.
+     */
+    @Test
+    fun submitInvoice_withApprovedStatus_roundTripsWithoutMigration() = runTest {
+        val repository = SqlDelightInvoiceRepository(newDatabase(), userEmail = "qa@ledgerhub.app")
+        val original = invoice(number = "F-2026-APPROVED", status = InvoiceStatus.APPROVED)
+
+        repository.submitInvoice(original).getOrThrow()
+        val fetched = repository.fetchInvoices().getOrThrow().single()
+
+        assertEquals(InvoiceStatus.APPROVED, fetched.status)
+    }
+
     @Test
     fun fetchInvoices_onEmptyDatabase_returnsEmptyList() = runTest {
         val repository = SqlDelightInvoiceRepository(newDatabase(), userEmail = "qa@ledgerhub.app")

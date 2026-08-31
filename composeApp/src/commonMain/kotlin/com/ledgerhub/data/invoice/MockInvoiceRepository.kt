@@ -38,6 +38,10 @@ class MockInvoiceRepository(
         sampleInvoice("F-2026-106", InvoiceStatus.PAID, "2026-08-01", unitPriceHtCents = 70000),
         sampleInvoice("F-2026-107", InvoiceStatus.DEPOSITED, "2026-08-10", unitPriceHtCents = 45000),
         sampleInvoice("F-2026-108", InvoiceStatus.DRAFT, "2026-08-15", unitPriceHtCents = 20000),
+        // US-13 — les trois statuts réglementaires PPF sont représentés dans le jeu de démo
+        // (dépôt en 107) pour que les trois pastilles soient visibles sans manipulation.
+        sampleInvoice("F-2026-109", InvoiceStatus.APPROVED, "2026-08-18", unitPriceHtCents = 110000),
+        sampleInvoice("F-2026-110", InvoiceStatus.REJECTED, "2026-08-22", unitPriceHtCents = 35000),
     )
 
     override suspend fun submitInvoice(invoice: Invoice): Result<Unit> {

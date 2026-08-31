@@ -1,5 +1,6 @@
 package com.ledgerhub.domain.invoice
 
+import com.ledgerhub.domain.invoice.InvoiceStatus.APPROVED
 import com.ledgerhub.domain.invoice.InvoiceStatus.CANCELLED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DEPOSITED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DRAFT
@@ -13,9 +14,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Machine d'états DGFIP 2026 — **matrice exhaustive 6 × 6**, pas un échantillon.
+ * Machine d'états DGFIP 2026 — **matrice exhaustive 7 × 7**, pas un échantillon.
  *
- * Les 36 cases sont énumérées explicitement : un statut ajouté au référentiel sans mise à jour
+ * Les 49 cases sont énumérées explicitement : un statut ajouté au référentiel sans mise à jour
  * de la table ferait échouer [everyPairIsCovered], et non passer un test silencieusement.
  */
 class InvoiceStatusTransitionTest {
@@ -28,22 +29,34 @@ class InvoiceStatusTransitionTest {
         // Depuis DRAFT : seul le dépôt.
         (DRAFT to DRAFT) to false,
         (DRAFT to DEPOSITED) to true,
+        (DRAFT to APPROVED) to false,
         (DRAFT to PAID) to false,
         (DRAFT to REJECTED) to false,
         (DRAFT to REFUSED) to false,
         (DRAFT to CANCELLED) to false,
 
-        // Depuis DEPOSITED : les quatre issues possibles d'une facture en circulation.
+        // Depuis DEPOSITED : les cinq issues d'une facture déposée, approbation PPF comprise.
         (DEPOSITED to DRAFT) to false,
         (DEPOSITED to DEPOSITED) to false,
+        (DEPOSITED to APPROVED) to true,
         (DEPOSITED to PAID) to true,
         (DEPOSITED to REJECTED) to true,
         (DEPOSITED to REFUSED) to true,
         (DEPOSITED to CANCELLED) to true,
 
+        // Depuis APPROVED : validée par l'administration, elle a circulé — plus de rejet possible.
+        (APPROVED to DRAFT) to false,
+        (APPROVED to DEPOSITED) to false,
+        (APPROVED to APPROVED) to false,
+        (APPROVED to PAID) to true,
+        (APPROVED to REJECTED) to false,
+        (APPROVED to REFUSED) to true,
+        (APPROVED to CANCELLED) to true,
+
         // Depuis PAID : encaissée, seul l'avoir peut encore intervenir.
         (PAID to DRAFT) to false,
         (PAID to DEPOSITED) to false,
+        (PAID to APPROVED) to false,
         (PAID to PAID) to false,
         (PAID to REJECTED) to false,
         (PAID to REFUSED) to false,
@@ -52,6 +65,7 @@ class InvoiceStatusTransitionTest {
         // Depuis REJECTED : jamais entrée dans le circuit légal, la correction est la procédure.
         (REJECTED to DRAFT) to true,
         (REJECTED to DEPOSITED) to false,
+        (REJECTED to APPROVED) to false,
         (REJECTED to PAID) to false,
         (REJECTED to REJECTED) to false,
         (REJECTED to REFUSED) to false,
@@ -60,6 +74,7 @@ class InvoiceStatusTransitionTest {
         // Depuis REFUSED : la facture a circulé, seul un avoir la corrige.
         (REFUSED to DRAFT) to false,
         (REFUSED to DEPOSITED) to false,
+        (REFUSED to APPROVED) to false,
         (REFUSED to PAID) to false,
         (REFUSED to REJECTED) to false,
         (REFUSED to REFUSED) to false,
@@ -68,6 +83,7 @@ class InvoiceStatusTransitionTest {
         // Depuis CANCELLED : terminal.
         (CANCELLED to DRAFT) to false,
         (CANCELLED to DEPOSITED) to false,
+        (CANCELLED to APPROVED) to false,
         (CANCELLED to PAID) to false,
         (CANCELLED to REJECTED) to false,
         (CANCELLED to REFUSED) to false,
@@ -76,10 +92,10 @@ class InvoiceStatusTransitionTest {
 
     @Test
     fun everyPairIsCovered() {
-        // Garde-fou : un septième statut rendrait la matrice incomplète et le signalerait ici.
+        // Garde-fou : un huitième statut rendrait la matrice incomplète et le signalerait ici.
         val statuses = InvoiceStatus.entries
-        assertEquals(6, statuses.size, "Le référentiel DGFIP compte six statuts")
-        assertEquals(36, expected.size, "La matrice doit énumérer les 36 combinaisons")
+        assertEquals(7, statuses.size, "Le référentiel PPF compte sept statuts")
+        assertEquals(49, expected.size, "La matrice doit énumérer les 49 combinaisons")
         statuses.forEach { from ->
             statuses.forEach { to ->
                 assertTrue(
@@ -107,11 +123,31 @@ class InvoiceStatusTransitionTest {
     @Test
     fun allowedFrom_listsExactlyTheAuthorisedTargets() {
         assertEquals(setOf(DEPOSITED), InvoiceStatusTransition.allowedFrom(DRAFT))
-        assertEquals(setOf(PAID, REJECTED, REFUSED, CANCELLED), InvoiceStatusTransition.allowedFrom(DEPOSITED))
+        assertEquals(
+            setOf(APPROVED, PAID, REJECTED, REFUSED, CANCELLED),
+            InvoiceStatusTransition.allowedFrom(DEPOSITED),
+        )
+        assertEquals(setOf(PAID, REFUSED, CANCELLED), InvoiceStatusTransition.allowedFrom(APPROVED))
         assertEquals(setOf(CANCELLED), InvoiceStatusTransition.allowedFrom(PAID))
         assertEquals(setOf(DRAFT), InvoiceStatusTransition.allowedFrom(REJECTED))
         assertEquals(setOf(CANCELLED), InvoiceStatusTransition.allowedFrom(REFUSED))
         assertEquals(emptySet(), InvoiceStatusTransition.allowedFrom(CANCELLED))
+    }
+
+    /**
+     * Parcours nominal de la réforme PPF : dépôt sur le portail, approbation par
+     * l'administration, puis encaissement. Le rejet est exclusif de ce chemin.
+     */
+    @Test
+    fun ppfHappyPath_depositThenApprovalThenPayment_isWalkable() {
+        assertTrue(InvoiceStatusTransition.isAllowed(DRAFT, DEPOSITED))
+        assertTrue(InvoiceStatusTransition.isAllowed(DEPOSITED, APPROVED))
+        assertTrue(InvoiceStatusTransition.isAllowed(APPROVED, PAID))
+
+        // Une facture approuvée est entrée dans le circuit légal : la plateforme ne peut plus
+        // la rejeter, et elle ne repasse pas en brouillon.
+        assertFalse(InvoiceStatusTransition.isAllowed(APPROVED, REJECTED))
+        assertFalse(InvoiceStatusTransition.isAllowed(APPROVED, DRAFT))
     }
 
     @Test
@@ -138,7 +174,11 @@ class InvoiceStatusTransitionTest {
                 "Aucune action utilisateur ne doit mener à CANCELLED depuis $from",
             )
         }
-        assertEquals(setOf(PAID, REJECTED, REFUSED), InvoiceStatusTransition.userActionableFrom(DEPOSITED))
+        assertEquals(
+            setOf(APPROVED, PAID, REJECTED, REFUSED),
+            InvoiceStatusTransition.userActionableFrom(DEPOSITED),
+        )
+        assertEquals(setOf(PAID, REFUSED), InvoiceStatusTransition.userActionableFrom(APPROVED))
         assertEquals(emptySet(), InvoiceStatusTransition.userActionableFrom(PAID))
     }
 
@@ -159,7 +199,7 @@ class InvoiceStatusTransitionTest {
         InvoiceStatus.entries.forEach { status ->
             assertEquals(
                 InvoiceStatusTransition.isAllowed(status, CANCELLED),
-                status in setOf(DEPOSITED, PAID, REFUSED),
+                status in setOf(DEPOSITED, APPROVED, PAID, REFUSED),
                 "Cohérence avoir/machine d'états pour $status",
             )
         }

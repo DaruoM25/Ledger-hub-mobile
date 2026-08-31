@@ -2,10 +2,13 @@ package com.ledgerhub.presentation.invoices.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -20,6 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
@@ -27,8 +31,11 @@ import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.formatIsoDate
 import com.ledgerhub.presentation.i18n.tr
+import com.ledgerhub.presentation.invoices.containerColor
 import com.ledgerhub.presentation.invoices.format
+import com.ledgerhub.presentation.invoices.glyph
 import com.ledgerhub.presentation.invoices.labelKey
+import com.ledgerhub.presentation.invoices.onContainerColor
 import com.ledgerhub.presentation.invoices.tagColor
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
@@ -133,24 +140,45 @@ fun InvoiceCard(
     }
 }
 
-/** Pastille de statut réutilisable (liste + détail). [tag] permet de la cibler en test. */
+/**
+ * Pastille de statut réutilisable (liste + détail).
+ *
+ * Trois canaux redondants portent l'information, pour ne dépendre ni de la seule couleur ni du
+ * seul texte : le point d'accent, le glyphe d'alerte des issues défavorables, et le libellé
+ * réglementaire complet — également exposé en `contentDescription`. [tag] permet de la cibler
+ * en test.
+ */
 @Composable
 internal fun StatusTag(status: InvoiceStatus, tag: String) {
     val label = tr(status.labelKey())
     Surface(
-        color = status.tagColor(),
-        contentColor = Color.White,
+        color = status.containerColor(),
+        contentColor = status.onContainerColor(),
         shape = RoundedCornerShape(50),
         modifier = Modifier.semantics {
             testTag = tag
             contentDescription = label
         },
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.padding(PaddingValues(horizontal = 10.dp, vertical = 4.dp)),
-            style = MaterialTheme.typography.labelMedium,
-        )
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(status.tagColor(), CircleShape),
+            )
+            status.glyph()?.let { glyph ->
+                Text(text = glyph, style = MaterialTheme.typography.labelMedium)
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 

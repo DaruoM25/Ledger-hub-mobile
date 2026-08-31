@@ -221,7 +221,7 @@ class InvoiceLifecycleUiTest {
         onNodeWithTag(InvoiceDetailScreenTags.auditEntry("a1"), useUnmergedTree = true).assertIsDisplayed()
         onNodeWithTag(InvoiceDetailScreenTags.auditEntry("a2"), useUnmergedTree = true).assertIsDisplayed()
         onNodeWithText("Brouillon  →  Déposée").assertIsDisplayed()
-        onNodeWithText("Déposée  →  Rejetée").assertIsDisplayed()
+        onNodeWithText("Déposée  →  Rejetée par la plateforme").assertIsDisplayed()
         onNodeWithText("2026-08-29T10:01:00Z").assertIsDisplayed()
         onNodeWithText("SIRET destinataire invalide").assertIsDisplayed()
     }

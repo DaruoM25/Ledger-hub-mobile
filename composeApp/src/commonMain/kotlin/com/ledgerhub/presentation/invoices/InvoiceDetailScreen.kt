@@ -339,6 +339,7 @@ private fun LifecycleSection(
 /** Libelle de l'action menant a ce statut : c'est le geste qui est nomme, pas l'etat d'arrivee. */
 private fun InvoiceStatus.actionKey(): StringKey = when (this) {
     InvoiceStatus.DEPOSITED -> StringKey.ACTION_MARK_DEPOSITED
+    InvoiceStatus.APPROVED -> StringKey.ACTION_MARK_APPROVED
     InvoiceStatus.PAID -> StringKey.ACTION_MARK_PAID
     InvoiceStatus.REJECTED -> StringKey.ACTION_MARK_REJECTED
     InvoiceStatus.REFUSED -> StringKey.ACTION_MARK_REFUSED
