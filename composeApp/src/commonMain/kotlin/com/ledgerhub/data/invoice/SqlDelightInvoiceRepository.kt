@@ -93,6 +93,7 @@ class SqlDelightInvoiceRepository(
                 dueDate = invoice.dueDate,
                 // SQLite n'a pas de type booléen — 1/0 en INTEGER, reconverti dans toDomain().
                 facturX = if (invoice.facturX) 1L else 0L,
+                applyB2bPenalties = if (invoice.applyB2bPenalties) 1L else 0L,
             )
             // Remplacement intégral des lignes — plus simple et moins sujet aux bugs qu'un diff
             // ligne à ligne, pour un volume de lignes par facture qui reste faible en pratique.
@@ -164,6 +165,7 @@ class SqlDelightInvoiceRepository(
             sourceQuoteId = sourceQuoteId,
             dueDate = dueDate,
             facturX = facturX == 1L,
+            applyB2bPenalties = applyB2bPenalties == 1L,
         )
     }
 

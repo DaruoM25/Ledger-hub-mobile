@@ -1,12 +1,14 @@
 package com.ledgerhub.presentation.invoiceform
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -44,8 +47,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -90,6 +96,16 @@ object InvoiceFormTags {
     const val ERROR_MESSAGE = "invoice_form_error_message"
     /** Sélecteur de mode de saisie (US-15) — voir [InvoiceFormMode]. */
     const val MODE_SELECTOR = "invoice_form_mode_selector"
+
+    /**
+     * Pénalités de retard B2B (US-16). Ces deux tags sont **partagés par les deux modes de
+     * saisie** : `InvoiceFormScreen` n'en compose jamais qu'un à la fois (voir le `when (mode)`),
+     * donc aucun nœud n'est ambigu, et une même suite de tests couvre les deux représentations.
+     */
+    const val B2B_PENALTIES_CHECKBOX = "invoice_b2b_penalties_checkbox"
+
+    /** Pied de page légal : mention L.441-10 ou formule de courtoisie, jamais vide. */
+    const val LEGAL_FOOTER = "invoice_legal_footer"
 
     fun modeSegmentTag(mode: InvoiceFormMode) = "invoice_form_mode_segment_${mode.name}"
 
@@ -309,6 +325,15 @@ internal fun InvoiceFormContent(
             checked = uiState.generateFacturX,
             onToggle = { onIntent(InvoiceFormIntent.ToggleFacturX(it)) },
         )
+
+        SectionCard(title = tr(StringKey.FORM_SECTION_B2B), glyph = "\u2696\uFE0F") {
+            B2bPenaltiesCheckbox(
+                checked = uiState.applyB2bPenalties,
+                enabled = enabled,
+                onToggle = { onIntent(InvoiceFormIntent.ToggleB2bPenalties(it)) },
+            )
+            LegalFooterText(applyB2bPenalties = uiState.applyB2bPenalties)
+        }
 
         when (val status = uiState.submissionStatus) {
             SubmissionStatus.Loading -> LoadingIndicator()
@@ -642,4 +667,73 @@ private fun StatusBanner(text: String, tag: String, containerColor: Color, conte
                 },
         )
     }
+}
+
+/**
+ * Case « Appliquer les pénalités de retard légales (B2B) » (US-16).
+ *
+ * Le `toggleable` porte la ligne entière plutôt que la seule case : le libellé d'une mention
+ * légale est long, et l'obliger à viser un carré de 20 dp serait une cible tactile hostile. La
+ * `Checkbox` reçoit donc `onCheckedChange = null` — sans quoi elle exposerait un second nœud
+ * cochable concurrent de celui de la ligne.
+ *
+ * Désactivée dès que le formulaire l'est ([InvoiceFormUiState.isFormEnabled]) : sur une facture
+ * déposée, les mentions légales sont figées au même titre que les montants.
+ */
+@Composable
+internal fun B2bPenaltiesCheckbox(
+    checked: Boolean,
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    val label = tr(StringKey.B2B_PENALTIES_CHECKBOX)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Checkbox,
+                onValueChange = onToggle,
+            )
+            .semantics {
+                testTag = InvoiceFormTags.B2B_PENALTIES_CHECKBOX
+                contentDescription = label
+            },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * Pied de page légal de la facture (US-16) — mention de l'article L.441-10 du Code de commerce
+ * quand les pénalités B2B s'appliquent, formule de courtoisie sinon.
+ *
+ * Le pied n'est **jamais vide** : les deux textes occupent le même emplacement, ce qui évite un
+ * saut de mise en page à la bascule et donne au test N3a une alternance observable sur un nœud
+ * unique. `contentDescription` recopie le texte pour le rendre assertable et lisible par TalkBack.
+ */
+@Composable
+internal fun LegalFooterText(
+    applyB2bPenalties: Boolean,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodySmall,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    val text = tr(
+        if (applyB2bPenalties) StringKey.B2B_LEGAL_MENTION else StringKey.B2B_COURTESY_MENTION,
+    )
+    Text(
+        text = text,
+        style = style,
+        color = color,
+        modifier = modifier.fillMaxWidth().semantics {
+            testTag = InvoiceFormTags.LEGAL_FOOTER
+            contentDescription = text
+        },
+    )
 }

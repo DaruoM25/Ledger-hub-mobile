@@ -19,6 +19,17 @@ data class Invoice(
      * Défaut `true` : la conformité 2026 est la norme, le formulaire permet de la désactiver au cas par cas.
      */
     val facturX: Boolean = true,
+    /**
+     * `true` si la facture porte les pénalités de retard légales entre professionnels — mention
+     * de l'article L.441-10 du Code de commerce (3 fois le taux d'intérêt légal + indemnité
+     * forfaitaire de 40 €). Défaut `true` : la mention est obligatoire en B2B, et son omission
+     * est sanctionnable ; une facture à un particulier peut la retirer explicitement.
+     *
+     * Porté par la facture et **non par [Letterhead]** : c'est un choix par pièce, gelé à
+     * l'émission au même titre que [facturX]. Le loger dans l'en-tête permettrait de réimprimer
+     * une facture déjà déposée sous d'autres mentions légales.
+     */
+    val applyB2bPenalties: Boolean = true,
 ) {
     init {
         require(lines.isNotEmpty()) { "Une facture doit contenir au moins une ligne de facturation" }

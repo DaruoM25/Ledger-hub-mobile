@@ -22,12 +22,16 @@ CREATE TABLE Invoice (
     dueDate TEXT NOT NULL DEFAULT '',
     -- Génération au format légal Factur-X (1 = oui). DEFAULT 1 : conformité 2026 par défaut.
     facturX INTEGER NOT NULL DEFAULT 1,
+    -- Pénalités de retard légales B2B, art. L.441-10 du Code de commerce (1 = oui).
+    -- DEFAULT 1 : la mention est obligatoire entre professionnels, y compris pour les factures
+    -- héritées, dont l'aperçu imprimait déjà des pénalités de retard inconditionnellement.
+    applyB2bPenalties INTEGER NOT NULL DEFAULT 1,
     FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
 );
 
 insertOrReplace:
-INSERT OR REPLACE INTO Invoice(number, issueDate, status, sourceQuoteId, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret, recipientName, recipientEmail, dueDate, facturX)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO Invoice(number, issueDate, status, sourceQuoteId, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret, recipientName, recipientEmail, dueDate, facturX, applyB2bPenalties)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectAll:
 SELECT * FROM Invoice;

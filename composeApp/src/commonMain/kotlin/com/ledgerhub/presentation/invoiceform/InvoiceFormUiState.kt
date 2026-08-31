@@ -55,6 +55,13 @@ data class InvoiceFormUiState(
     val totalTtc: Money = Money.ZERO,
     /** Toggle « Générer au format légal Factur-X » — activé par défaut (conformité 2026). */
     val generateFacturX: Boolean = true,
+    /**
+     * Pénalités de retard légales B2B (US-16) — activées par défaut, comme [generateFacturX] :
+     * l'article L.441-10 du Code de commerce rend la mention obligatoire entre professionnels,
+     * et une omission par défaut produirait silencieusement des factures non conformes. Le
+     * décocher reste possible au cas par cas (facture à un particulier).
+     */
+    val applyB2bPenalties: Boolean = true,
     val submittedInvoice: Invoice? = null,
     val submissionStatus: SubmissionStatus = SubmissionStatus.Idle,
 ) {

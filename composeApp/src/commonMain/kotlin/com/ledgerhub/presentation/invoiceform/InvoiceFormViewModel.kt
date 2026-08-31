@@ -266,6 +266,11 @@ class InvoiceFormViewModel(
 
             is InvoiceFormIntent.ToggleFacturX -> current.copy(generateFacturX = intent.enabled)
 
+            // Mention légale, pas champ de saisie : aucune erreur à produire, aucun total à
+            // recalculer — d'où l'absence de `touch(...)` ici.
+            is InvoiceFormIntent.ToggleB2bPenalties ->
+                current.copy(applyB2bPenalties = intent.enabled)
+
             InvoiceFormIntent.AddLine ->
                 current.copy(lines = current.lines + InvoiceLineFormState(vatRate = defaultVatRate))
 
@@ -408,6 +413,7 @@ class InvoiceFormViewModel(
         },
         dueDate = state.dueDate,
         facturX = state.generateFacturX,
+        applyB2bPenalties = state.applyB2bPenalties,
     )
 
     /**
