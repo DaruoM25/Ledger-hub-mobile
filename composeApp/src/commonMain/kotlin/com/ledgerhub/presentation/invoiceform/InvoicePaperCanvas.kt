@@ -117,6 +117,8 @@ fun InvoicePaperCanvas(
                 PaperLinesTable(uiState = uiState, enabled = fieldsEnabled, onIntent = onIntent)
                 HorizontalDivider(color = PaperDividerColor)
                 PaperFooterTotals(uiState = uiState)
+                HorizontalDivider(color = PaperDividerColor)
+                PaperLegalFooter(uiState = uiState, enabled = fieldsEnabled, onIntent = onIntent)
             }
         }
     }
@@ -385,4 +387,36 @@ private fun InvoiceLineFormState.toLiveDomainLineOrNull(): InvoiceLine? {
     val unitPriceCents = parseAmountToCents(unitPriceHt) ?: return null
     if (unitPriceCents <= 0) return null
     return InvoiceLine(label = label, quantity = quantity, unitPriceHt = Money(unitPriceCents), vatRate = vatRate)
+}
+
+/**
+ * Pied de page réglementaire de la feuille (US-16) : la mention de l'article L.441-10 — ou la
+ * formule de courtoisie — suivie de la case qui les commute.
+ *
+ * Corps réduit et encre grisée, comme le pied de l'aperçu A4 (US-14) : ces mentions sont
+ * obligatoires mais ne doivent pas concurrencer le montant à payer. La case, elle, réutilise
+ * telle quelle celle du formulaire classique — même composable, même tag, même sémantique : les
+ * deux modes de saisie restent deux vues d'un seul état, jamais deux implémentations.
+ */
+@Composable
+private fun PaperLegalFooter(
+    uiState: InvoiceFormUiState,
+    enabled: Boolean,
+    onIntent: (InvoiceFormIntent) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LegalFooterText(
+            applyB2bPenalties = uiState.applyB2bPenalties,
+            style = MaterialTheme.typography.bodySmall,
+            color = PaperMutedText,
+        )
+        B2bPenaltiesCheckbox(
+            checked = uiState.applyB2bPenalties,
+            enabled = enabled,
+            onToggle = { onIntent(InvoiceFormIntent.ToggleB2bPenalties(it)) },
+        )
+    }
 }

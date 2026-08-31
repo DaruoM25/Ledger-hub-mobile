@@ -214,6 +214,14 @@ object AppTranslations {
         StringKey.PAPER_VAT_LABEL to "TVA",
         StringKey.PAPER_VAT_BASE_ON to "sur",
 
+        StringKey.FORM_SECTION_B2B to "Réglementation B2B",
+        StringKey.B2B_PENALTIES_CHECKBOX to "Appliquer les pénalités de retard légales (B2B)",
+        StringKey.B2B_LEGAL_MENTION to
+            "En cas de retard de paiement, une pénalité égale à 3 fois le taux d'intérêt légal " +
+            "sera appliquée, ainsi qu'une indemnité forfaitaire de 40€ pour frais de recouvrement " +
+            "conformément à l'article L.441-10 du Code de commerce.",
+        StringKey.B2B_COURTESY_MENTION to "Merci pour votre confiance.",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -424,6 +432,14 @@ object AppTranslations {
         StringKey.FORM_MODE_BLANK_PAGE to "Blank Page Mode",
         StringKey.PAPER_VAT_LABEL to "VAT",
         StringKey.PAPER_VAT_BASE_ON to "on",
+
+        StringKey.FORM_SECTION_B2B to "B2B Regulations",
+        StringKey.B2B_PENALTIES_CHECKBOX to "Apply statutory late payment penalties (B2B)",
+        StringKey.B2B_LEGAL_MENTION to
+            "In the event of late payment, a penalty equal to 3 times the legal interest rate " +
+            "will apply, along with a fixed recovery fee of €40 pursuant to Article L.441-10 of " +
+            "the French Commercial Code.",
+        StringKey.B2B_COURTESY_MENTION to "Thank you for your trust.",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",

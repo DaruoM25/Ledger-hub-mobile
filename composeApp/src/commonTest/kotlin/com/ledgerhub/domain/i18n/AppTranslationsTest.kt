@@ -74,6 +74,48 @@ class AppTranslationsTest {
         assertEquals("Blank Page Mode", AppTranslations.get(StringKey.FORM_MODE_BLANK_PAGE, AppLanguage.EN))
     }
 
+    /**
+     * Mentions légales B2B (US-16). La formulation de la mention de retard est **imposée par
+     * l'article L.441-10 du Code de commerce** : elle est figée caractère pour caractère, et non
+     * laissée à l'appréciation d'une relecture — même traitement que les statuts PPF de l'US-13.
+     */
+    @Test
+    fun b2bLegalMentions_useTheStatutoryWording() {
+        assertEquals("Réglementation B2B", AppTranslations.get(StringKey.FORM_SECTION_B2B, AppLanguage.FR))
+        assertEquals("B2B Regulations", AppTranslations.get(StringKey.FORM_SECTION_B2B, AppLanguage.EN))
+
+        assertEquals(
+            "Appliquer les pénalités de retard légales (B2B)",
+            AppTranslations.get(StringKey.B2B_PENALTIES_CHECKBOX, AppLanguage.FR),
+        )
+        assertEquals(
+            "Apply statutory late payment penalties (B2B)",
+            AppTranslations.get(StringKey.B2B_PENALTIES_CHECKBOX, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "En cas de retard de paiement, une pénalité égale à 3 fois le taux d'intérêt légal " +
+                "sera appliquée, ainsi qu'une indemnité forfaitaire de 40€ pour frais de " +
+                "recouvrement conformément à l'article L.441-10 du Code de commerce.",
+            AppTranslations.get(StringKey.B2B_LEGAL_MENTION, AppLanguage.FR),
+        )
+        assertEquals(
+            "In the event of late payment, a penalty equal to 3 times the legal interest rate " +
+                "will apply, along with a fixed recovery fee of €40 pursuant to Article L.441-10 " +
+                "of the French Commercial Code.",
+            AppTranslations.get(StringKey.B2B_LEGAL_MENTION, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Merci pour votre confiance.",
+            AppTranslations.get(StringKey.B2B_COURTESY_MENTION, AppLanguage.FR),
+        )
+        assertEquals(
+            "Thank you for your trust.",
+            AppTranslations.get(StringKey.B2B_COURTESY_MENTION, AppLanguage.EN),
+        )
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())

@@ -1,0 +1,11 @@
+-- Migration 5 → 6 — US-16, Mentions légales B2B et pénalités de retard.
+--
+-- Ajout d'une colonne à Invoice. `Schema.create` ne s'exécutant que sur base neuve, ce .sqm
+-- installe la colonne sur les bases déjà déployées (dette A-01, close en US-05 ;
+-- verifyMigrations = true).
+--
+-- DEFAULT 1 : les factures héritées héritent de la mention L.441-10 activée. C'est le choix
+-- conservateur au sens fiscal — leur aperçu A4 (US-14) imprimait déjà des pénalités de retard
+-- sans condition, et une migration ne doit pas retirer rétroactivement une mention obligatoire
+-- d'une pièce déjà émise.
+ALTER TABLE Invoice ADD COLUMN applyB2bPenalties INTEGER NOT NULL DEFAULT 1;

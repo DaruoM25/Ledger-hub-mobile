@@ -215,6 +215,18 @@ enum class StringKey {
     PAPER_VAT_LABEL,
     PAPER_VAT_BASE_ON,
 
+    // ── Réglementation B2B et pénalités de retard (US-16) ──────────────────
+    FORM_SECTION_B2B,
+    B2B_PENALTIES_CHECKBOX,
+    /**
+     * Mention imposée par l'article L.441-10 du Code de commerce. Sa formulation est
+     * réglementaire, pas rédactionnelle : elle est figée par sentinelle dans
+     * `AppTranslationsTest`, comme les statuts PPF de l'US-13.
+     */
+    B2B_LEGAL_MENTION,
+    /** Repli quand les pénalités B2B ne s'appliquent pas — le pied de facture n'est jamais vide. */
+    B2B_COURTESY_MENTION,
+
     // ── Erreurs de validation (résolues depuis ValidationErrorKey) ──────────
     VALIDATION_INVOICE_NUMBER_REQUIRED,
     VALIDATION_DATE_FORMAT_INVALID,

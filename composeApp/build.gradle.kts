@@ -194,6 +194,17 @@ android {
     }
 }
 
+/**
+ * Les JVM de test sont **forkées** : elles n'héritent ni des `System.setProperty` du build, ni du
+ * `doFirst` plus bas, qui ne valent que pour la JVM Gradle. Sans cette ligne, l'extraction de la
+ * bibliothèque native de sqlite-jdbc retombe sur le Temp partagé du poste — la collision de DLL
+ * diagnostiquée en US-16.
+ */
+tasks.withType<Test>().configureEach {
+    val sqliteTmp = rootDir.resolve("build/tmp/sqlite").apply { mkdirs() }
+    systemProperty("org.sqlite.tmpdir", sqliteTmp.invariantSeparatorsPath)
+}
+
 // HelloScreenTest (commonTest) reste valide pour iosTest ; côté Android local, son équivalent
 // Robolectric (HelloScreenRobolectricTest, androidUnitTest) le remplace — voir commentaire ci-dessus.
 tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach {
@@ -205,6 +216,9 @@ tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach
     }
 }
 
+// Filet de sécurité hérité de l'US-08. La pose effective a désormais lieu à la **configuration**
+// (root build.gradle.kts) : un `doFirst` s'exécute après le chargement éventuel du natif par une
+// tâche antérieure de la même JVM, et arrivait alors trop tard.
 tasks.configureEach {
     doFirst {
         val sqliteTmp = rootDir.resolve("build/tmp/sqlite").apply { mkdirs() }

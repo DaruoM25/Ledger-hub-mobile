@@ -52,6 +52,13 @@ sealed interface InvoiceFormIntent {
     /** Bascule « Générer au format légal Factur-X ». */
     data class ToggleFacturX(val enabled: Boolean) : InvoiceFormIntent
 
+    /**
+     * Bascule « Appliquer les pénalités de retard légales (B2B) » (US-16). Commande le pied de
+     * page de la facture : mention de l'article L.441-10 quand elle est active, formule de
+     * courtoisie sinon. Aucun impact sur les montants — c'est une mention, pas un calcul.
+     */
+    data class ToggleB2bPenalties(val enabled: Boolean) : InvoiceFormIntent
+
     /** Ajoute une ligne de prestation vierge en fin de liste. */
     data object AddLine : InvoiceFormIntent
 
