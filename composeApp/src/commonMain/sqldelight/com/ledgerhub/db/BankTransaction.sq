@@ -1,0 +1,36 @@
+-- Écritures bancaires à rapprocher (US-18).
+--
+-- Reflet d'un relevé : la table est alimentée par la source bancaire (aujourd'hui le semis de
+-- MockBankTransactionRepository) et jamais par une action d'interface. Aucun UPDATE de montant
+-- ni de libellé n'est exposé — réécrire une écriture bancaire ferait diverger l'application du
+-- relevé qui fait foi.
+--
+-- amountCents est SIGNÉ : positif pour un encaissement, négatif pour un décaissement. Le signe
+-- est porté par le montant plutôt que par une colonne « sens », de sorte que l'écart avec une
+-- facture se calcule par simple soustraction.
+--
+-- L'état « rapprochée » ne figure PAS ici : il se déduit de l'existence d'une ligne dans
+-- ReconciliationMatch. Deux marqueurs du même fait finiraient par diverger.
+CREATE TABLE BankTransaction (
+    id TEXT NOT NULL PRIMARY KEY,
+    label TEXT NOT NULL,
+    amountCents INTEGER NOT NULL,
+    valueDate TEXT NOT NULL,
+    counterparty TEXT NOT NULL DEFAULT ''
+);
+
+-- Index de lecture : le relevé est toujours présenté de la plus récente à la plus ancienne.
+CREATE INDEX BankTransaction_valueDate ON BankTransaction(valueDate);
+
+insert:
+INSERT OR REPLACE INTO BankTransaction(id, label, amountCents, valueDate, counterparty)
+VALUES (?, ?, ?, ?, ?);
+
+-- Tri secondaire sur l'id : deux écritures de même date de valeur doivent ressortir dans un ordre
+-- stable, sans quoi la liste se réordonnerait d'une lecture à l'autre.
+selectAll:
+SELECT * FROM BankTransaction
+ORDER BY valueDate DESC, id ASC;
+
+countAll:
+SELECT COUNT(*) FROM BankTransaction;

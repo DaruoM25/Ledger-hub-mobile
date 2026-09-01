@@ -49,6 +49,8 @@ import com.ledgerhub.data.quote.SqlDelightQuoteRepository
 import com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository
 import com.ledgerhub.data.directory.CachingDirectoryRepository
 import com.ledgerhub.data.directory.MockDirectoryRepository
+import com.ledgerhub.data.reconciliation.MockBankTransactionRepository
+import com.ledgerhub.data.reconciliation.SqlDelightReconciliationRepository
 import com.ledgerhub.data.directory.SqlDelightDirectoryRepository
 import com.ledgerhub.data.audit.SqlDelightAuditRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
@@ -85,6 +87,8 @@ import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
 import com.ledgerhub.presentation.clients.ClientsViewModel
 import com.ledgerhub.presentation.directory.DirectoryScreen
 import com.ledgerhub.presentation.directory.DirectoryViewModel
+import com.ledgerhub.presentation.reconciliation.ReconciliationScreen
+import com.ledgerhub.presentation.reconciliation.ReconciliationViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsScreen
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubColors
@@ -103,6 +107,7 @@ private enum class Destination(val titleKey: StringKey, val glyph: String) {
     INVOICES(StringKey.NAV_INVOICES, "🧾"),
     CLIENTS(StringKey.NAV_CLIENTS, "👥"),
     DIRECTORY(StringKey.NAV_DIRECTORY, "📇"),
+    RECONCILIATION(StringKey.NAV_RECONCILIATION, "🔗"),
     SETTINGS(StringKey.NAV_SETTINGS, "⚙️"),
 }
 
@@ -150,6 +155,10 @@ fun App(
         )
     }
     val auditRepository = remember(database) { SqlDelightAuditRepository(database) }
+    // Rapprochement bancaire (US-18) : releve simule (aucun connecteur bancaire n'existe encore),
+    // lettrages persistes en SQLDelight.
+    val reconciliationRepository = remember(database) { SqlDelightReconciliationRepository(database) }
+    val bankTransactionRepository = remember { MockBankTransactionRepository() }
     // Toute transition de statut passe par ce use case : il valide contre la machine d'états
     // avant que le dépôt n'écrive statut et trace d'audit dans une même transaction.
     val changeInvoiceStatusUseCase = remember(invoiceRepository) {
@@ -167,6 +176,13 @@ fun App(
     val clientsViewModel = remember { ClientsViewModel(clientRepository) }
     val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
     val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
+    val reconciliationViewModel = remember {
+        ReconciliationViewModel(
+            invoiceRepository = invoiceRepository,
+            bankTransactionRepository = bankTransactionRepository,
+            reconciliationRepository = reconciliationRepository,
+        )
+    }
 
     // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
     // encore vide au tout premier lancement. On relance explicitement la lecture s'il a semé —
@@ -270,6 +286,7 @@ fun App(
                                         clientsViewModel = clientsViewModel,
                                         clientRepository = clientRepository,
                                         directoryViewModel = directoryViewModel,
+                                        reconciliationViewModel = reconciliationViewModel,
                                         taxSettingsViewModel = taxSettingsViewModel,
                                         taxSettings = taxSettings,
                                     )
@@ -311,6 +328,7 @@ fun App(
                                     clientsViewModel = clientsViewModel,
                                     clientRepository = clientRepository,
                                     directoryViewModel = directoryViewModel,
+                                    reconciliationViewModel = reconciliationViewModel,
                                     taxSettingsViewModel = taxSettingsViewModel,
                                     taxSettings = taxSettings,
                                 )
@@ -359,6 +377,7 @@ private fun ShellContent(
     clientsViewModel: ClientsViewModel,
     clientRepository: SqlDelightClientRepository,
     directoryViewModel: DirectoryViewModel,
+    reconciliationViewModel: ReconciliationViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
     taxSettings: TaxSettings,
 ) {
@@ -431,6 +450,7 @@ private fun ShellContent(
 
             Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
             Destination.DIRECTORY -> DirectoryScreen(viewModel = directoryViewModel)
+            Destination.RECONCILIATION -> ReconciliationScreen(viewModel = reconciliationViewModel)
             Destination.SETTINGS -> TaxSettingsScreen(viewModel = taxSettingsViewModel)
         }
     }

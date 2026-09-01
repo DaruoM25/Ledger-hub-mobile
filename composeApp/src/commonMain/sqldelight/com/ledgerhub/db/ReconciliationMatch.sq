@@ -1,0 +1,42 @@
+-- Lettrage : lien entre une écriture bancaire et la facture qu'elle solde (US-18).
+--
+-- Source de vérité unique de l'état « rapprochée », d'où l'absence de tout drapeau équivalent sur
+-- BankTransaction ou Invoice.
+--
+-- La clé primaire porte sur transactionId, et un index UNIQUE sur invoiceNumber : une écriture
+-- solde une facture et une seule, une facture est soldée par une écriture et une seule. La règle
+-- est déjà vérifiée par ReconcilePaymentUseCase, mais un invariant de cette nature se tient dans
+-- le schéma — un chemin d'écriture oublié ne doit pas pouvoir le contourner.
+--
+-- deltaCents fige l'écart CONSTATÉ AU LETTRAGE. Recalculé à l'affichage, il suivrait une facture
+-- qui évolue, alors que c'est bien l'écart de ce jour-là qui devra être justifié en contrôle.
+--
+-- ON DELETE CASCADE sur la facture, comme AuditLog : la suppression d'un brouillon ne doit pas
+-- laisser de lettrage orphelin. Aucune cascade côté transaction : une écriture bancaire ne se
+-- supprime pas.
+CREATE TABLE ReconciliationMatch (
+    transactionId TEXT NOT NULL PRIMARY KEY,
+    invoiceNumber TEXT NOT NULL,
+    matchedAt TEXT NOT NULL,
+    deltaCents INTEGER NOT NULL,
+    FOREIGN KEY (transactionId) REFERENCES BankTransaction(id),
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX ReconciliationMatch_invoice ON ReconciliationMatch(invoiceNumber);
+
+insert:
+INSERT INTO ReconciliationMatch(transactionId, invoiceNumber, matchedAt, deltaCents)
+VALUES (?, ?, ?, ?);
+
+selectAll:
+SELECT * FROM ReconciliationMatch
+ORDER BY matchedAt ASC, transactionId ASC;
+
+selectByTransaction:
+SELECT * FROM ReconciliationMatch
+WHERE transactionId = ?;
+
+deleteByInvoiceNumber:
+DELETE FROM ReconciliationMatch
+WHERE invoiceNumber = ?;
