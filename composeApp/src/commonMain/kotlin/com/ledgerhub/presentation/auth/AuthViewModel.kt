@@ -1,0 +1,188 @@
+package com.ledgerhub.presentation.auth
+
+import com.ledgerhub.data.auth.KtorAuthRepository
+import com.ledgerhub.data.sirene.MockSireneLookupService
+import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.sirene.SireneLookupResult
+import com.ledgerhub.domain.sirene.SireneLookupService
+import com.ledgerhub.domain.sirene.SiretInput
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * ViewModel de l'écran d'authentification — connexion au backend local via [AuthRepository], et
+ * inscription intelligente par SIRET via [SireneLookupService] (US-21).
+ *
+ * La vérification SIRENE est déclenchée **ici**, à la frappe, dès que la saisie porte 14 chiffres :
+ * l'utilisateur n'a aucun bouton à chercher, ce qui est tout l'intérêt d'une inscription par SIRET.
+ * La règle vit dans le domaine ([SiretInput]) et la décision dans le ViewModel, donc l'une comme
+ * l'autre s'éprouvent sans composition.
+ *
+ * @param dispatcher injecté pour des tests sans dépendance au thread réel (cf. `DirectoryViewModel`).
+ */
+class AuthViewModel(
+    private val authRepository: AuthRepository = KtorAuthRepository(),
+    private val sireneLookupService: SireneLookupService = MockSireneLookupService(),
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+) {
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    /**
+     * Vérification en cours. Conservée pour être **annulée** à la frappe suivante : sans cela, une
+     * saisie corrigée rapidement laisserait la réponse périmée écraser l'état, et le badge
+     * afficherait l'entreprise du SIRET précédent.
+     */
+    private var lookupJob: Job? = null
+
+    private val _uiState = MutableStateFlow(AuthUiState())
+    val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    fun processIntent(intent: AuthIntent) {
+        when (intent) {
+            is AuthIntent.ModeChanged -> _uiState.update {
+                it.copy(isRegistering = intent.isRegistering, errorMessage = null)
+            }
+
+            is AuthIntent.EmailChanged -> _uiState.update {
+                it.copy(email = intent.value, errorMessage = null)
+            }
+
+            is AuthIntent.PasswordChanged -> _uiState.update {
+                it.copy(password = intent.value, errorMessage = null)
+            }
+
+            is AuthIntent.SiretChanged -> onSiretChanged(intent.value)
+
+            is AuthIntent.CompanyNameChanged -> _uiState.update {
+                // La saisie manuelle reprend la main : le nom cesse d'être « auto-complété », donc
+                // il survivra à une correction du SIRET.
+                it.copy(companyName = intent.value, companyNameAutoFilled = false)
+            }
+
+            AuthIntent.Submit -> submit()
+        }
+    }
+
+    private fun onSiretChanged(value: String) {
+        val current = _uiState.value
+        val digits = SiretInput.sanitize(value)
+        val previousDigits = SiretInput.sanitize(current.siret)
+        val isComplete = digits.length == SiretInput.LENGTH
+
+        // Même identifiant qu'à la frappe précédente, vérification déjà lancée ou aboutie : on ne
+        // relance rien. Sans ce garde-fou, une frappe au-delà du 14e chiffre — que le filtre de
+        // saisie absorbe sans changer la valeur — rejouerait l'interrogation à chaque touche.
+        if (isComplete && digits == previousDigits && (current.isVerifying || current.isSireneVerified)) {
+            _uiState.update { it.copy(siret = value) }
+            return
+        }
+
+        lookupJob?.cancel()
+        _uiState.update { state ->
+            state.copy(
+                siret = value,
+                sireneStatus = if (isComplete) {
+                    SireneVerificationStatus.VERIFYING
+                } else {
+                    SireneVerificationStatus.IDLE
+                },
+                // Seule une raison sociale venue du répertoire est retirée : voir
+                // [AuthUiState.companyNameAutoFilled].
+                companyName = if (!isComplete && state.companyNameAutoFilled) "" else state.companyName,
+                companyNameAutoFilled = state.companyNameAutoFilled && isComplete,
+                errorMessage = null,
+            )
+        }
+        if (!isComplete) return
+
+        lookupJob = scope.launch {
+            // `runCatching` seul ne convient pas : il capture **aussi** la CancellationException
+            // d'une vérification annulée par la frappe suivante, et l'écran annoncerait alors un
+            // répertoire injoignable là où l'utilisateur a simplement corrigé son SIRET.
+            // L'annulation doit remonter pour que la coroutine s'éteigne sans rien publier.
+            val result = try {
+                Result.success(sireneLookupService.lookup(digits))
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                Result.failure(error)
+            }
+            _uiState.update { state ->
+                result.fold(
+                    onSuccess = { lookup ->
+                        when (lookup) {
+                            is SireneLookupResult.Verified -> state.copy(
+                                sireneStatus = SireneVerificationStatus.VERIFIED,
+                                companyName = lookup.company.companyName,
+                                companyNameAutoFilled = true,
+                            )
+
+                            SireneLookupResult.NotFound -> state.copy(
+                                sireneStatus = SireneVerificationStatus.NOT_FOUND,
+                            )
+                        }
+                    },
+                    // Le répertoire injoignable n'est pas un SIRET inconnu : l'utilisateur doit
+                    // pouvoir réessayer sans croire son numéro faux.
+                    onFailure = { state.copy(sireneStatus = SireneVerificationStatus.UNAVAILABLE) },
+                )
+            }
+        }
+    }
+
+    private fun submit() {
+        val state = _uiState.value
+        if (state.isRegistering) {
+            register(state)
+        } else {
+            login(state)
+        }
+    }
+
+    /**
+     * Inscription : aucun backend ne la reçoit à ce stade — l'écran l'annonce lui-même
+     * (« authentification fictive »). Le succès est donc local, et l'US-21 s'arrête à ce que
+     * l'entreprise ait été identifiée.
+     */
+    private fun register(state: AuthUiState) {
+        if (!state.isRegisterEnabled) return
+        _uiState.update { it.copy(registrationSucceeded = true, errorMessage = null) }
+    }
+
+    private fun login(state: AuthUiState) {
+        if (!state.isSubmitEnabled) return
+
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        scope.launch {
+            val result = authRepository.login(state.email, state.password)
+            _uiState.update { current ->
+                result.fold(
+                    onSuccess = { current.copy(isLoading = false, loginSucceeded = true) },
+                    onFailure = { throwable ->
+                        current.copy(
+                            isLoading = false,
+                            errorMessage = throwable.message ?: "Erreur inconnue lors de la connexion",
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * À appeler depuis le cycle de vie de la plateforme.
+     * Android : depuis onDestroy() ou rememberViewModel().
+     * iOS     : depuis le deinit de la UIViewController.
+     */
+    fun onCleared() = scope.cancel()
+}

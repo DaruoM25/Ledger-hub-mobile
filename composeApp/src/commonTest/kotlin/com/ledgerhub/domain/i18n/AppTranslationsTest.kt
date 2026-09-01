@@ -273,4 +273,52 @@ class AppTranslationsTest {
             AppTranslations.get(StringKey.INTEGRATIONS_TITLE, AppLanguage.EN),
         )
     }
+
+    /**
+     * Écran d'authentification (US-21). Le libellé du badge de vérification est **imposé par le
+     * cahier des charges, coche comprise** : il est figé caractère pour caractère, au même titre
+     * que les statuts PPF de l'US-13. Une reformulation de confort casse ce test.
+     */
+    @Test
+    fun sireneRegistration_usesTheSpecifiedWording() {
+        assertEquals(
+            "✓ Entreprise vérifiée via l'API SIRENE",
+            AppTranslations.get(StringKey.AUTH_SIRENE_VERIFIED_BADGE, AppLanguage.FR),
+        )
+        assertEquals(
+            "✓ Company verified via the SIRENE API",
+            AppTranslations.get(StringKey.AUTH_SIRENE_VERIFIED_BADGE, AppLanguage.EN),
+        )
+
+        assertEquals("Inscription", AppTranslations.get(StringKey.AUTH_TAB_REGISTER, AppLanguage.FR))
+        assertEquals("Sign up", AppTranslations.get(StringKey.AUTH_TAB_REGISTER, AppLanguage.EN))
+        assertEquals(
+            "SIRET de l'entreprise",
+            AppTranslations.get(StringKey.AUTH_SIRET_LABEL, AppLanguage.FR),
+        )
+        assertEquals(
+            "Company SIRET",
+            AppTranslations.get(StringKey.AUTH_SIRET_LABEL, AppLanguage.EN),
+        )
+        assertEquals(
+            "Raison sociale",
+            AppTranslations.get(StringKey.AUTH_COMPANY_NAME_LABEL, AppLanguage.FR),
+        )
+        assertEquals(
+            "Company name",
+            AppTranslations.get(StringKey.AUTH_COMPANY_NAME_LABEL, AppLanguage.EN),
+        )
+    }
+
+    /**
+     * L'écran de connexion était en français en dur jusqu'à l'US-21 (exclusion documentée en tête
+     * de `StringKey`). Ces sentinelles constatent qu'il ne l'est plus.
+     */
+    @Test
+    fun theLoginScreen_isNowBilingual() {
+        assertEquals("Connexion à LedgerHub", AppTranslations.get(StringKey.AUTH_LOGIN_TITLE, AppLanguage.FR))
+        assertEquals("Sign in to LedgerHub", AppTranslations.get(StringKey.AUTH_LOGIN_TITLE, AppLanguage.EN))
+        assertEquals("Mot de passe", AppTranslations.get(StringKey.AUTH_PASSWORD_LABEL, AppLanguage.FR))
+        assertEquals("Password", AppTranslations.get(StringKey.AUTH_PASSWORD_LABEL, AppLanguage.EN))
+    }
 }
