@@ -42,6 +42,7 @@ fun InvoiceStatusFilter.labelKey(): StringKey = when (this) {
     InvoiceStatusFilter.REJECTED -> StringKey.FILTER_REJECTED
     InvoiceStatusFilter.REFUSED -> StringKey.FILTER_REFUSED
     InvoiceStatusFilter.CANCELLED -> StringKey.FILTER_CANCELLED
+    InvoiceStatusFilter.OVERDUE -> StringKey.FILTER_OVERDUE
 }
 
 /**

@@ -173,6 +173,50 @@ class AppTranslationsTest {
         )
     }
 
+    /**
+     * Libellés de la palette de commandes (US-19). Le placeholder et les trois actions rapides sont
+     * imposés par le cahier des charges : ils sont figés ici, une reformulation en cours de route
+     * casserait la parité avec le Web.
+     */
+    @Test
+    fun commandPaletteLabels_useTheAgreedWording() {
+        assertEquals(
+            "Que voulez-vous faire ?",
+            AppTranslations.get(StringKey.COMMAND_PALETTE_PLACEHOLDER, AppLanguage.FR),
+        )
+        assertEquals(
+            "What would you like to do?",
+            AppTranslations.get(StringKey.COMMAND_PALETTE_PLACEHOLDER, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Créer une facture pour un nouveau client",
+            AppTranslations.get(StringKey.COMMAND_ACTION_CREATE_INVOICE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Create an invoice for a new client",
+            AppTranslations.get(StringKey.COMMAND_ACTION_CREATE_INVOICE, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Relancer les factures en retard",
+            AppTranslations.get(StringKey.COMMAND_ACTION_REMIND_OVERDUE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Remind overdue invoices",
+            AppTranslations.get(StringKey.COMMAND_ACTION_REMIND_OVERDUE, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Générer l'export comptable",
+            AppTranslations.get(StringKey.COMMAND_ACTION_EXPORT_ACCOUNTING, AppLanguage.FR),
+        )
+        assertEquals(
+            "Generate the accounting export",
+            AppTranslations.get(StringKey.COMMAND_ACTION_EXPORT_ACCOUNTING, AppLanguage.EN),
+        )
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())

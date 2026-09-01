@@ -127,6 +127,7 @@ object AppTranslations {
         StringKey.FILTER_REFUSED to "Refusées",
         StringKey.FILTER_PAID to "Payées",
         StringKey.FILTER_CANCELLED to "Annulées",
+        StringKey.FILTER_OVERDUE to "En retard",
 
         StringKey.STATUS_DRAFT to "Brouillon",
         StringKey.STATUS_VALIDATED to "Validée",
@@ -245,6 +246,14 @@ object AppTranslations {
         StringKey.RECONCILIATION_INVOICES_EMPTY to "Aucune facture en attente de paiement.",
         StringKey.RECONCILIATION_SELECTION_HINT to
             "Sélectionnez une transaction et une facture pour les associer.",
+
+        StringKey.COMMAND_PALETTE_TITLE to "Commandes rapides",
+        StringKey.COMMAND_PALETTE_TRIGGER_LABEL to "Recherche",
+        StringKey.COMMAND_PALETTE_PLACEHOLDER to "Que voulez-vous faire ?",
+        StringKey.COMMAND_PALETTE_EMPTY to "Aucune commande ne correspond.",
+        StringKey.COMMAND_ACTION_CREATE_INVOICE to "Créer une facture pour un nouveau client",
+        StringKey.COMMAND_ACTION_REMIND_OVERDUE to "Relancer les factures en retard",
+        StringKey.COMMAND_ACTION_EXPORT_ACCOUNTING to "Générer l'export comptable",
 
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
@@ -370,6 +379,7 @@ object AppTranslations {
         StringKey.FILTER_REFUSED to "Refused",
         StringKey.FILTER_PAID to "Paid",
         StringKey.FILTER_CANCELLED to "Cancelled",
+        StringKey.FILTER_OVERDUE to "Overdue",
 
         StringKey.STATUS_DRAFT to "Draft",
         StringKey.STATUS_VALIDATED to "Validated",
@@ -488,6 +498,14 @@ object AppTranslations {
         StringKey.RECONCILIATION_INVOICES_EMPTY to "No invoices awaiting payment.",
         StringKey.RECONCILIATION_SELECTION_HINT to
             "Select a transaction and an invoice to link them.",
+
+        StringKey.COMMAND_PALETTE_TITLE to "Quick commands",
+        StringKey.COMMAND_PALETTE_TRIGGER_LABEL to "Search",
+        StringKey.COMMAND_PALETTE_PLACEHOLDER to "What would you like to do?",
+        StringKey.COMMAND_PALETTE_EMPTY to "No matching command.",
+        StringKey.COMMAND_ACTION_CREATE_INVOICE to "Create an invoice for a new client",
+        StringKey.COMMAND_ACTION_REMIND_OVERDUE to "Remind overdue invoices",
+        StringKey.COMMAND_ACTION_EXPORT_ACCOUNTING to "Generate the accounting export",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",

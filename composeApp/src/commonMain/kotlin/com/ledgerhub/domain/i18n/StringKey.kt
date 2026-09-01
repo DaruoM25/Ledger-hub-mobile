@@ -132,6 +132,7 @@ enum class StringKey {
     FILTER_REFUSED,
     FILTER_PAID,
     FILTER_CANCELLED,
+    FILTER_OVERDUE,
 
     // ── Statuts de facture ──────────────────────────────────────────────────
     STATUS_DRAFT,
@@ -251,6 +252,15 @@ enum class StringKey {
     RECONCILIATION_TRANSACTIONS_EMPTY,
     RECONCILIATION_INVOICES_EMPTY,
     RECONCILIATION_SELECTION_HINT,
+
+    // ── Palette de commandes (US-19) ────────────────────────────────────────
+    COMMAND_PALETTE_TITLE,
+    COMMAND_PALETTE_TRIGGER_LABEL,
+    COMMAND_PALETTE_PLACEHOLDER,
+    COMMAND_PALETTE_EMPTY,
+    COMMAND_ACTION_CREATE_INVOICE,
+    COMMAND_ACTION_REMIND_OVERDUE,
+    COMMAND_ACTION_EXPORT_ACCOUNTING,
 
     // ── Erreurs de validation (résolues depuis ValidationErrorKey) ──────────
     VALIDATION_INVOICE_NUMBER_REQUIRED,
