@@ -145,7 +145,23 @@ sqldelight {
             // échouer le build si un .sq évolue sans le .sqm correspondant. Le problème ne peut
             // donc plus passer inaperçu — il devient une erreur de compilation.
             schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
-            verifyMigrations.set(true)
+
+            // ── Pourquoi la verification n'est plus faite ici (US-17) ──────────────────────
+            // `verifyMigrations` s'execute dans un worker Gradle : un processus lance par le
+            // demon avec un environnement epure, sans TMP/TEMP ni -Djava.io.tmpdir. Sous
+            // Windows, java.io.tmpdir y retombe sur C:\WINDOWS, ou sqlite-jdbc essaie
+            // d'extraire sa bibliotheque native — echec par AccessDeniedException sur tout
+            // poste non administrateur. Ce worker est hors de portee du build :
+            // SqlDelightWorkerTask appelle processIsolation { } sans jamais configurer les
+            // forkOptions, donc ni System.setProperty, ni systemProperty sur les taches, ni
+            // TMP/JAVA_TOOL_OPTIONS exportes par le wrapper ne l'atteignent.
+            //
+            // La garantie n'est pas abandonnee : elle est reprise a l'identique par
+            // `SchemaMigrationVerificationTest` (androidUnitTest), dans une JVM dont le build
+            // maitrise org.sqlite.tmpdir. Chaque instantane databases/N.db y est migre puis
+            // compare au schema courant — un .sq qui evolue sans son .sqm fait toujours
+            // echouer la construction, via `testDebugUnitTest` au lieu de cette tache.
+            verifyMigrations.set(false)
         }
     }
 }
@@ -194,16 +210,9 @@ android {
     }
 }
 
-/**
- * Les JVM de test sont **forkées** : elles n'héritent ni des `System.setProperty` du build, ni du
- * `doFirst` plus bas, qui ne valent que pour la JVM Gradle. Sans cette ligne, l'extraction de la
- * bibliothèque native de sqlite-jdbc retombe sur le Temp partagé du poste — la collision de DLL
- * diagnostiquée en US-16.
- */
-tasks.withType<Test>().configureEach {
-    val sqliteTmp = rootDir.resolve("build/tmp/sqlite").apply { mkdirs() }
-    systemProperty("org.sqlite.tmpdir", sqliteTmp.invariantSeparatorsPath)
-}
+// Les JVM de test sont forkées et n'héritent d'aucun `System.setProperty` du build : `org.sqlite.tmpdir`
+// et `java.io.tmpdir` leur sont repassés explicitement par le bloc `allprojects` du build racine,
+// qui couvre de la même façon tout autre JVM forkée du build (US-16, durci US-17).
 
 // HelloScreenTest (commonTest) reste valide pour iosTest ; côté Android local, son équivalent
 // Robolectric (HelloScreenRobolectricTest, androidUnitTest) le remplace — voir commentaire ci-dessus.

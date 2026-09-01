@@ -202,9 +202,29 @@ if "$cygwin" || "$msys" ; then
 fi
 
 
+# ##########################################################################
+#  Temporaires du build isoles dans le projet (US-16, corrige US-17)
+#
+#  sqlite-jdbc extrait sa bibliotheque native au premier acces, dans org.sqlite.tmpdir a defaut
+#  java.io.tmpdir. Ces proprietes doivent valoir pour TOUTES les JVM du build, pas seulement
+#  pour le lanceur : la tache SQLDelight verifyCommonMainLedgerHubDatabaseMigration s'execute
+#  dans un worker Gradle, un processus distinct qui ne voit ni les -D passes ici au lanceur, ni
+#  les System.setProperty du script de build.
+#
+#  TMPDIR et JAVA_TOOL_OPTIONS, eux, sont herites par toute JVM enfant : lanceur, demon,
+#  workers, JVM de test. Le chemin derive de APP_HOME reste portable et disparait avec `clean`.
+#  Nos -D sont ajoutes a la fin d'un JAVA_TOOL_OPTIONS existant : a proprietes egales la
+#  derniere gagne, sans perdre les options du poste.
+# ##########################################################################
+LEDGERHUB_JVM_TMP="$APP_HOME/build/tmp/jvm"
+LEDGERHUB_SQLITE_TMP="$APP_HOME/build/tmp/sqlite"
+mkdir -p "$LEDGERHUB_JVM_TMP" "$LEDGERHUB_SQLITE_TMP"
+TMPDIR="$LEDGERHUB_JVM_TMP"
+JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS \"-Djava.io.tmpdir=$LEDGERHUB_JVM_TMP\" \"-Dorg.sqlite.tmpdir=$LEDGERHUB_SQLITE_TMP\""
+export TMPDIR JAVA_TOOL_OPTIONS
+
 # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
-SQLITE_TMP_DIR="${LOCALAPPDATA:-${TMPDIR:-/tmp}}"
-DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m" "-Djava.io.tmpdir='"$SQLITE_TMP_DIR"'" "-Dorg.sqlite.tmpdir='"$SQLITE_TMP_DIR"'"'
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
 
 # Collect all arguments for the java command:
 #   * DEFAULT_JVM_OPTS, JAVA_OPTS, JAVA_OPTS, and optsEnvironmentVar are not allowed to contain shell fragments,

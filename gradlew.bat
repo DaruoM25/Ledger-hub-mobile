@@ -37,8 +37,29 @@ for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
-set SQLITE_TMP_DIR=%LOCALAPPDATA%\Temp
-set SQLITE_JAVA_OPTS="-Djava.io.tmpdir=%SQLITE_TMP_DIR%" "-Dorg.sqlite.tmpdir=%SQLITE_TMP_DIR%"
+@rem ##########################################################################
+@rem  Temporaires du build isoles dans le projet (US-16, corrige US-17)
+@rem
+@rem  sqlite-jdbc extrait sa DLL native au premier acces, dans org.sqlite.tmpdir a defaut
+@rem  java.io.tmpdir. Ces deux proprietes doivent valoir pour TOUTES les JVM du build, pas
+@rem  seulement pour le lanceur : la tache SQLDelight verifyCommonMainLedgerHubDatabaseMigration
+@rem  s'execute dans un worker Gradle, un processus distinct qui ne voit ni les -D passes ici au
+@rem  lanceur, ni les System.setProperty du script de build. Sans TMP/TEMP, ce worker retombait
+@rem  sur C:\WINDOWS -- non inscriptible hors administrateur, d'ou
+@rem  AccessDeniedException: C:\WINDOWS\sqlite-...-sqlitejdbc.dll.lck.
+@rem
+@rem  TMP/TEMP et JAVA_TOOL_OPTIONS, eux, sont herites par toute JVM enfant : lanceur, demon,
+@rem  workers, JVM de test. Le chemin est derive de %APP_HOME%, donc portable d'un poste a
+@rem  l'autre et supprime par `clean`. Nos -D sont AJOUTES a la fin d'un JAVA_TOOL_OPTIONS
+@rem  existant : a proprietes egales la derniere gagne, sans perdre les options du poste.
+@rem ##########################################################################
+set LEDGERHUB_JVM_TMP=%APP_HOME%\build\tmp\jvm
+set LEDGERHUB_SQLITE_TMP=%APP_HOME%\build\tmp\sqlite
+if not exist "%LEDGERHUB_JVM_TMP%" mkdir "%LEDGERHUB_JVM_TMP%" 2>NUL
+if not exist "%LEDGERHUB_SQLITE_TMP%" mkdir "%LEDGERHUB_SQLITE_TMP%" 2>NUL
+set TMP=%LEDGERHUB_JVM_TMP%
+set TEMP=%LEDGERHUB_JVM_TMP%
+set JAVA_TOOL_OPTIONS=%JAVA_TOOL_OPTIONS% "-Djava.io.tmpdir=%LEDGERHUB_JVM_TMP%" "-Dorg.sqlite.tmpdir=%LEDGERHUB_SQLITE_TMP%"
 
 @rem Find java.exe
 if defined JAVA_HOME goto findJavaFromJavaHome
@@ -76,7 +97,7 @@ set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 
 
 @rem Execute Gradle
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% %SQLITE_JAVA_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
 
 :end
 @rem End local scope for the variables with windows NT shell

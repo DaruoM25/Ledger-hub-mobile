@@ -4,6 +4,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -11,12 +12,14 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.domain.audit.AuditEntry
+import com.ledgerhub.domain.audit.AuditMilestoneId
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.invoices.components.AuditTrailTags
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
@@ -204,8 +207,14 @@ class InvoiceLifecycleUiTest {
             .assertIsDisplayed()
     }
 
+    /**
+     * US-17 a remplacé la liste plate des transitions par la timeline des quatre jalons : les
+     * anciens tags `auditEntry(id)` et les libellés « A  →  B » n'existent plus. Ce test suit le
+     * même contrat — l'écran de détail rend bien la Piste d'Audit Fiable reçue — à travers
+     * l'affichage qui la porte désormais.
+     */
     @Test
-    fun theAuditTrail_rendersEachTransitionWithItsDateAndReason() = runComposeUiTest {
+    fun theAuditTrail_rendersTheReportedStatusItsDateAndItsReason() = runComposeUiTest {
         val trail = listOf(
             AuditEntry("a1", "FAC-2026-0137", InvoiceStatus.DRAFT, InvoiceStatus.DEPOSITED, null, "2026-08-29T10:00:00Z"),
             AuditEntry(
@@ -218,23 +227,34 @@ class InvoiceLifecycleUiTest {
         onNodeWithTag(InvoiceDetailScreenTags.AUDIT_TRAIL, useUnmergedTree = true)
             .performScrollTo()
             .assertIsDisplayed()
-        onNodeWithTag(InvoiceDetailScreenTags.auditEntry("a1"), useUnmergedTree = true).assertIsDisplayed()
-        onNodeWithTag(InvoiceDetailScreenTags.auditEntry("a2"), useUnmergedTree = true).assertIsDisplayed()
-        onNodeWithText("Brouillon  →  Déposée").assertIsDisplayed()
-        onNodeWithText("Déposée  →  Rejetée par la plateforme").assertIsDisplayed()
-        onNodeWithText("2026-08-29T10:01:00Z").assertIsDisplayed()
-        onNodeWithText("SIRET destinataire invalide").assertIsDisplayed()
+
+        // Le dépôt est daté par sa propre entrée, la décision par la dernière.
+        onNodeWithTag(AuditTrailTags.stepTag(AuditMilestoneId.PPF)).performScrollTo()
+            .assertTextContains("10:00:00 UTC", substring = true)
+        // Décision et motif sont lus sur le jalon lui-même : le libellé du statut figure aussi
+        // dans l'en-tête de l'écran, un `onNodeWithText` global y trouverait deux nœuds.
+        onNodeWithTag(AuditTrailTags.stepTag(AuditMilestoneId.STATUS)).performScrollTo().apply {
+            assertTextContains("10:01:00 UTC", substring = true)
+            assertTextContains("Rejetée par la plateforme", substring = true)
+            // Le motif du rejet est ce qui dit à l'utilisateur quoi corriger avant de redéposer.
+            assertTextContains("SIRET destinataire invalide", substring = true)
+        }
     }
 
+    /**
+     * Première entrée de la PAF : elle n'a pas de statut précédent (`fromStatus = null`). Le tiret
+     * qui la rendait autrefois a disparu avec la liste plate ; c'est maintenant elle qui date le
+     * jalon de création, et c'est ce report qu'il faut protéger.
+     */
     @Test
-    fun aFirstEntryWithoutPreviousStatus_rendersADash() = runComposeUiTest {
+    fun aFirstEntryWithoutPreviousStatus_datesTheCreationMilestone() = runComposeUiTest {
         val trail = listOf(
             AuditEntry("a0", "FAC-2026-0137", null, InvoiceStatus.DRAFT, null, "2026-08-29T09:00:00Z"),
         )
         setContent { InvoiceDetailView(uiState = state(InvoiceStatus.DRAFT, auditTrail = trail)) }
 
-        onNodeWithTag(InvoiceDetailScreenTags.auditEntry("a0"), useUnmergedTree = true).performScrollTo()
-        onNodeWithText("—  →  Brouillon").assertIsDisplayed()
+        onNodeWithTag(AuditTrailTags.stepTag(AuditMilestoneId.CREATED)).performScrollTo()
+            .assertTextContains("09:00:00 UTC", substring = true)
     }
 
     @Test
