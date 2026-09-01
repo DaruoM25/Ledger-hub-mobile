@@ -28,6 +28,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +74,10 @@ import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.ChangeInvoiceStatusUseCase
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.domain.command.CommandAction
+import com.ledgerhub.domain.command.CommandPaletteShortcut
 import com.ledgerhub.domain.export.DocumentExporter
+import com.ledgerhub.domain.export.LedgerCsvExport
 import com.ledgerhub.domain.export.NoOpDocumentExporter
 import com.ledgerhub.domain.facturx.FacturXGenerator
 import com.ledgerhub.domain.facturx.toFacturXDocument
@@ -79,12 +90,17 @@ import com.ledgerhub.presentation.invoiceform.InvoiceFormViewModel
 import com.ledgerhub.presentation.invoices.InvoiceDetailScreen
 import com.ledgerhub.presentation.invoices.InvoiceDetailViewModel
 import com.ledgerhub.presentation.invoices.InvoiceListIntent
+import com.ledgerhub.presentation.invoices.InvoiceStatusFilter
 import com.ledgerhub.presentation.invoices.InvoiceListScreen
 import com.ledgerhub.presentation.invoices.InvoiceListViewModel
 import com.ledgerhub.presentation.clients.ClientsScreen
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreen
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
 import com.ledgerhub.presentation.clients.ClientsViewModel
+import com.ledgerhub.presentation.command.CommandPalette
+import com.ledgerhub.presentation.command.CommandPaletteIntent
+import com.ledgerhub.presentation.command.CommandPaletteTrigger
+import com.ledgerhub.presentation.command.CommandPaletteViewModel
 import com.ledgerhub.presentation.directory.DirectoryScreen
 import com.ledgerhub.presentation.directory.DirectoryViewModel
 import com.ledgerhub.presentation.reconciliation.ReconciliationScreen
@@ -224,6 +240,29 @@ fun App(
         }
         Unit
     }
+    // ── Palette de commandes (US-19) ─────────────────────────────────────────
+    // Le ViewModel ne connait aucune destination : il publie l'action choisie, le shell decide
+    // ou elle mene. C'est ce qui permet de tester la palette sans navigation ni composition.
+    val commandPaletteViewModel = remember { CommandPaletteViewModel() }
+    val commandPaletteState by commandPaletteViewModel.uiState.collectAsState()
+
+    val onOpenCommandPalette = {
+        commandPaletteViewModel.processIntent(CommandPaletteIntent.Open, language)
+    }
+
+    val onExportAccounting = {
+        exportScope.launch {
+            invoiceRepository.fetchInvoices().getOrNull()?.let { invoices ->
+                documentExporter.export(
+                    fileName = LedgerCsvExport.FILE_NAME,
+                    mimeType = LedgerCsvExport.MIME_TYPE,
+                    content = LedgerCsvExport.generate(invoices.sortedBy { it.issueDate }),
+                )
+            }
+        }
+        Unit
+    }
+
     val onExportCreditNoteXml = { creditNoteNumber: String ->
         exportScope.launch {
             creditNoteRepository.fetchCreditNotes().getOrNull()
@@ -245,9 +284,58 @@ fun App(
         dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
     }
 
+    // L'action choisie est prise en charge ici, puis acquittee : sans accuse, elle resterait dans
+    // l'etat et se rejouerait a la moindre recomposition.
+    LaunchedEffect(commandPaletteState.executedAction) {
+        when (commandPaletteState.executedAction) {
+            null -> Unit
+            CommandAction.CREATE_INVOICE -> {
+                onCreateInvoice()
+                commandPaletteViewModel.processIntent(CommandPaletteIntent.ActionConsumed, language)
+            }
+
+            CommandAction.REMIND_OVERDUE -> {
+                // La liste des factures, deja filtree sur les creances echues : l'utilisateur
+                // arrive sur ce qu'il a demande, pas sur une liste ou tout reste a trouver.
+                overlay = Overlay.None
+                destination = Destination.INVOICES
+                invoiceListViewModel.processIntent(
+                    InvoiceListIntent.FilterSelected(InvoiceStatusFilter.OVERDUE),
+                )
+                commandPaletteViewModel.processIntent(CommandPaletteIntent.ActionConsumed, language)
+            }
+
+            CommandAction.EXPORT_ACCOUNTING -> {
+                onExportAccounting()
+                commandPaletteViewModel.processIntent(CommandPaletteIntent.ActionConsumed, language)
+            }
+        }
+    }
+
+    // Le raccourci exige un noeud focalise : sans focus, aucun evenement clavier n'atteint jamais
+    // l'arbre. La regle de reconnaissance elle-meme vit dans le domaine (CommandPaletteShortcut),
+    // seul moyen de la couvrir par un test — ni Robolectric ni l'emulateur n'ont de clavier.
+    val shortcutFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { shortcutFocusRequester.requestFocus() } }
+
     LedgerHubTheme {
         CompositionLocalProvider(LocalAppLanguage provides language) {
-            Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+            Surface(
+                color = MaterialTheme.colorScheme.background,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRequester(shortcutFocusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        val triggered = CommandPaletteShortcut.isTriggeredBy(
+                            keyLabel = event.key.toString(),
+                            isCtrlPressed = event.isCtrlPressed,
+                            isMetaPressed = event.isMetaPressed,
+                        )
+                        if (triggered) onOpenCommandPalette()
+                        triggered
+                    },
+            ) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val expanded = maxWidth >= ExpandedWidthThreshold
 
@@ -259,6 +347,7 @@ fun App(
                                 onSelect = { destination = it; overlay = Overlay.None },
                                 onCreateInvoice = onCreateInvoice,
                                 onSelectLanguage = { language = it },
+                                onOpenCommandPalette = onOpenCommandPalette,
                             )
                             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                                 Card(
@@ -297,7 +386,11 @@ fun App(
                         Scaffold(
                             containerColor = MaterialTheme.colorScheme.background,
                             topBar = {
-                                LedgerHeader(language = language, onSelectLanguage = { language = it })
+                                LedgerHeader(
+                                    language = language,
+                                    onSelectLanguage = { language = it },
+                                    onOpenCommandPalette = onOpenCommandPalette,
+                                )
                             },
                             bottomBar = {
                                 if (overlay is Overlay.None) {
@@ -336,6 +429,13 @@ fun App(
                         }
                     }
                 }
+
+                // Rendue a la racine : la palette surplombe les deux agencements et tout ecran
+                // superpose, comme l'exige une commande globale.
+                CommandPalette(
+                    uiState = commandPaletteState,
+                    onIntent = { commandPaletteViewModel.processIntent(it, language) },
+                )
             }
         }
     }
@@ -343,7 +443,11 @@ fun App(
 
 /** En-tête mobile : nom de l'app + sélecteur de langue (le « Header » demandé par l'US-02, côté mobile). */
 @Composable
-private fun LedgerHeader(language: AppLanguage, onSelectLanguage: (AppLanguage) -> Unit) {
+private fun LedgerHeader(
+    language: AppLanguage,
+    onSelectLanguage: (AppLanguage) -> Unit,
+    onOpenCommandPalette: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -353,7 +457,13 @@ private fun LedgerHeader(language: AppLanguage, onSelectLanguage: (AppLanguage) 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(tr(StringKey.APP_NAME), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        LangToggle(current = language, onSelect = onSelectLanguage)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CommandPaletteTrigger(onClick = onOpenCommandPalette)
+            LangToggle(current = language, onSelect = onSelectLanguage)
+        }
     }
 }
 
@@ -504,6 +614,7 @@ private fun LedgerSidebar(
     onSelect: (Destination) -> Unit,
     onCreateInvoice: () -> Unit,
     onSelectLanguage: (AppLanguage) -> Unit,
+    onOpenCommandPalette: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -525,6 +636,12 @@ private fun LedgerSidebar(
             )
             LangToggle(current = language, onSelect = onSelectLanguage)
         }
+        // Le declencheur existe dans les DEUX shells : cantonne a l'en-tete compact, il
+        // disparaitrait sur tablette, ou la palette est justement la plus utile (clavier branche).
+        CommandPaletteTrigger(
+            onClick = onOpenCommandPalette,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
         Destination.entries.forEach { entry ->
             val isSelected = entry == selected
             Surface(

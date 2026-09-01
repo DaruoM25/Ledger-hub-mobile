@@ -3,6 +3,8 @@ package com.ledgerhub.presentation.invoices
 import com.ledgerhub.data.repository.MockLedgerRepository
 import com.ledgerhub.domain.creditnote.CreditNoteRepository
 import com.ledgerhub.domain.repository.LedgerRepository
+import com.ledgerhub.domain.time.Clock
+import com.ledgerhub.domain.time.SystemClock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +24,9 @@ sealed interface InvoiceListIntent {
 }
 
 /** Message présenté à l'utilisateur pour toute erreur de chargement (réseau, 5xx, timeout…). */
+/** Longueur de la partie calendaire d'un instant ISO 8601 : `AAAA-MM-JJ`. */
+private const val ISO_DATE_LENGTH = 10
+
 private const val NETWORK_ERROR_MESSAGE =
     "Impossible de joindre le serveur Ledger local. Vérifiez que le backend de développement " +
         "est démarré, puis réessayez."
@@ -38,6 +43,8 @@ class InvoiceListViewModel(
     private val ledgerRepository: LedgerRepository = MockLedgerRepository(),
     /** Facultatif : sans lui, aucune mention croisée n'est affichée sur les cartes. */
     private val creditNoteRepository: CreditNoteRepository? = null,
+    /** Date du jour du filtre « En retard » (US-19) — injectée pour rester déterministe en test. */
+    private val clock: Clock = SystemClock,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -73,6 +80,9 @@ class InvoiceListViewModel(
                             invoices = invoices,
                             errorMessage = null,
                             creditNotesByInvoice = creditNotes,
+                            // Relue a chaque chargement : la liste peut rester ouverte a cheval
+                            // sur minuit, et une facture echue entre-temps doit alors basculer.
+                            today = clock.nowIso().take(ISO_DATE_LENGTH),
                         )
                     },
                     onFailure = {

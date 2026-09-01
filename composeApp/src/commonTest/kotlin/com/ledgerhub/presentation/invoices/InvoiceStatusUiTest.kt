@@ -88,9 +88,12 @@ class InvoiceStatusUiTest {
     @Test
     fun everyStatus_isReachableByExactlyOneFilter() {
         // Un statut qu'aucun filtre ne retient serait invisible dès qu'on quitte "Toutes".
+        // TOUTES et OVERDUE sont écartés : le premier retient tout, le second ne porte pas sur le
+        // statut mais sur l'échéance (US-19), et ne fausse donc pas ce décompte.
+        val statusFilters = InvoiceStatusFilter.entries -
+            setOf(InvoiceStatusFilter.TOUTES, InvoiceStatusFilter.OVERDUE)
         InvoiceStatus.entries.forEach { status ->
-            val matching = InvoiceStatusFilter.entries
-                .filter { it != InvoiceStatusFilter.TOUTES && it.matches(status) }
+            val matching = statusFilters.filter { it.matchesStatus(status) }
             assertEquals(1, matching.size, "Filtres retenant $status : $matching")
         }
     }

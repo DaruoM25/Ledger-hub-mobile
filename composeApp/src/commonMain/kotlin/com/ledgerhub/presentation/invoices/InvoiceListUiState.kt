@@ -1,10 +1,18 @@
 package com.ledgerhub.presentation.invoices
 
 import com.ledgerhub.domain.invoice.Invoice
+import com.ledgerhub.domain.invoice.InvoiceOverdue
 import com.ledgerhub.domain.invoice.InvoiceStatus
 
 /**
- * Filtre par statut fiscal proposé au-dessus de la liste des factures. [TOUTES] = aucun filtre.
+ * Filtre proposé au-dessus de la liste des factures. [TOUTES] = aucun filtre.
+ *
+ * [OVERDUE] est le seul qui ne porte pas sur le statut : il croise l'échéance et la date du jour
+ * (voir [InvoiceOverdue]). C'est la cible de l'action rapide « Relancer les factures en retard »
+ * de la palette de commandes (US-19).
+ *
+ * [label] n'est qu'un repère de lecture du code : l'écran résout le libellé affiché par
+ * `InvoiceStatusFilter.labelKey()`, donc en FR/EN.
  */
 enum class InvoiceStatusFilter(val label: String) {
     TOUTES("Toutes"),
@@ -12,11 +20,26 @@ enum class InvoiceStatusFilter(val label: String) {
     DEPOSITED("Déposées"),
     APPROVED("Approuvées"),
     PAID("Encaissées"),
+    OVERDUE("En retard"),
     REJECTED("Rejetées"),
     REFUSED("Refusées"),
     CANCELLED("Annulées");
 
-    fun matches(status: InvoiceStatus): Boolean = when (this) {
+    /**
+     * @param today date du jour en ISO `AAAA-MM-JJ`, nécessaire au seul filtre [OVERDUE]. Vide,
+     *   ce filtre ne retient rien — un retard ne s'invente pas sans horloge.
+     */
+    fun matches(invoice: Invoice, today: String = ""): Boolean = when (this) {
+        TOUTES -> true
+        OVERDUE -> InvoiceOverdue.isOverdue(invoice, today)
+        else -> matchesStatus(invoice.status)
+    }
+
+    /**
+     * Correspondance par statut seul. [OVERDUE] n'en est pas un : il croise une échéance et une
+     * date, et ne retient donc aucun statut à lui seul — d'où `false`, et non une exception.
+     */
+    fun matchesStatus(status: InvoiceStatus): Boolean = when (this) {
         TOUTES -> true
         DRAFT -> status == InvoiceStatus.DRAFT
         DEPOSITED -> status == InvoiceStatus.DEPOSITED
@@ -25,6 +48,7 @@ enum class InvoiceStatusFilter(val label: String) {
         REJECTED -> status == InvoiceStatus.REJECTED
         REFUSED -> status == InvoiceStatus.REFUSED
         CANCELLED -> status == InvoiceStatus.CANCELLED
+        OVERDUE -> false
     }
 }
 
@@ -43,6 +67,12 @@ data class InvoiceListUiState(
     val statusFilter: InvoiceStatusFilter = InvoiceStatusFilter.TOUTES,
     /** Numéro de l'avoir par facture annulée — alimente la mention croisée US-05. */
     val creditNotesByInvoice: Map<String, String> = emptyMap(),
+    /**
+     * Date du jour en ISO `AAAA-MM-JJ`, fournie par le ViewModel depuis
+     * [Clock][com.ledgerhub.domain.time.Clock]. Sert au seul filtre
+     * [InvoiceStatusFilter.OVERDUE] ; vide, celui-ci ne retient rien.
+     */
+    val today: String = "",
 ) {
     /**
      * Factures du filtre courant, triées par date d'émission décroissante (plus récentes
@@ -51,13 +81,13 @@ data class InvoiceListUiState(
      */
     val visibleInvoices: List<Invoice>
         get() = invoices
-            .filter { statusFilter.matches(it.status) }
+            .filter { statusFilter.matches(it, today) }
             .sortedByDescending { it.issueDate }
 
     /** Nombre de factures par filtre — alimente les compteurs des chips de filtre. */
     val counts: Map<InvoiceStatusFilter, Int>
         get() = InvoiceStatusFilter.entries.associateWith { filter ->
-            invoices.count { filter.matches(it.status) }
+            invoices.count { filter.matches(it, today) }
         }
 
     /** État d'affichage dérivé — l'UI fait un simple `when` dessus. */

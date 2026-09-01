@@ -2,6 +2,7 @@ package com.ledgerhub.domain.dashboard
 
 import com.ledgerhub.domain.creditnote.CreditNote
 import com.ledgerhub.domain.invoice.Invoice
+import com.ledgerhub.domain.invoice.InvoiceOverdue
 import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
 import com.ledgerhub.domain.quote.Quote
@@ -88,9 +89,10 @@ data class DashboardAnalytics(
  *   l'administration ([InvoiceStatus.APPROVED]), pas encore payées. Une facture Validée mais
  *   pas encore envoyée n'est pas encore "en attente de paiement" côté client ; à l'inverse,
  *   l'approbation PPF ne change rien à l'attente d'encaissement, elle la confirme.
- * - "En retard" est TOUJOURS 0 : le domaine [Invoice] n'a pas de date d'échéance en v1 (seule
- *   [Invoice.issueDate] existe) — impossible de déterminer un retard réel sans ce champ, et
- *   mieux vaut l'absence explicite d'un chiffre que d'en simuler un non mesurable.
+ * - "En retard" = créances échues et non soldées, au sens de [InvoiceOverdue] — la même règle que
+ *   le filtre « En retard » de la liste, pour que le KPI et la liste qui le justifie ne puissent
+ *   pas diverger. Le calcul est devenu possible avec [Invoice.dueDate], apparue en US-16 ; il
+ *   reste à 0 tant qu'aucune date du jour n'est fournie (voir [today]).
  * - Le CA mensuel du graphique reprend la même définition d'"encaissé", ventilée par mois
  *   d'émission de la facture d'origine (pas la date de l'avoir).
  */
@@ -124,7 +126,7 @@ fun computeDashboardAnalytics(
         .filter { it.status == InvoiceStatus.DEPOSITED || it.status == InvoiceStatus.APPROVED }
         .fold(Money.ZERO) { acc, invoice -> acc + invoice.totalTtc }
 
-    val overdueRevenue = Money.ZERO
+    val overdueRevenue = InvoiceOverdue.totalTtc(invoices, today)
 
     val monthlyRevenue = collectedEntries
         .groupBy { it.issueDate.take(YEAR_MONTH_LENGTH) }
