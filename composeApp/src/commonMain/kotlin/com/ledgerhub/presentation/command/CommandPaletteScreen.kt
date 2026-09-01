@@ -52,6 +52,12 @@ object CommandPaletteTags {
     const val INPUT = "command_palette_input"
     const val EMPTY = "command_palette_empty"
 
+    /**
+     * Voile assombri. Tag interne — hors cahier des charges : sans lui, aucun test ne peut viser
+     * l'exterieur de la modale, un clic sur la modale etant justement absorbe par elle.
+     */
+    const val SCRIM = "command_palette_scrim"
+
     fun action(action: CommandAction): String = when (action) {
         CommandAction.CREATE_INVOICE -> "command_palette_action_create_invoice"
         CommandAction.REMIND_OVERDUE -> "command_palette_action_remind_overdue"
@@ -153,7 +159,8 @@ fun CommandPalette(
                 // La fermeture au retour arriere reste assuree par `Dialog`.
                 .pointerInput(Unit) {
                     detectTapGestures { onIntent(CommandPaletteIntent.Close) }
-                },
+                }
+                .semantics { testTag = CommandPaletteTags.SCRIM },
             contentAlignment = Alignment.Center,
         ) {
             Surface(

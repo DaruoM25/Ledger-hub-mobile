@@ -51,7 +51,7 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalTestApi::class)
-class CommandPaletteInstrumentedTest {
+class CommandPaletteScreenInstrumentedTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
@@ -148,8 +148,10 @@ class CommandPaletteInstrumentedTest {
         openPalette()
 
         composeRule.onNodeWithTag(CommandPaletteTags.DIALOG).assertIsDisplayed()
-        // Un toucher en haut de l'ecran tombe sur le voile, la palette etant centree.
-        composeRule.onNodeWithTag(CommandPaletteTags.DIALOG).performTouchInput { click(topLeft) }
+        // Le toucher vise le VOILE, pas la modale : cliquer le coin de la modale tombe sur la
+        // modale elle-meme, qui absorbe le geste — c'est precisement ce qu'on attend d'elle.
+        // Le voile couvrant tout l'ecran, son coin superieur gauche est hors de la palette centree.
+        composeRule.onNodeWithTag(CommandPaletteTags.SCRIM).performTouchInput { click(topLeft) }
         composeRule.waitForIdle()
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
