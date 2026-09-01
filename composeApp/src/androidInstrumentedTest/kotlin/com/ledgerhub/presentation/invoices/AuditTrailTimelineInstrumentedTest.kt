@@ -8,8 +8,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
@@ -17,9 +23,11 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -147,9 +155,7 @@ class AuditTrailTimelineInstrumentedTest {
     @Test
     fun onACompactWidth_thePanelIsStackedUnderTheSheet_andRemainsReachable() {
         composeRule.setContent {
-            Box(modifier = Modifier.size(width = 400.dp, height = 800.dp)) {
-                InvoicePreviewDialogContent()
-            }
+            Viewport(width = 400.dp, height = 800.dp) { InvoicePreviewDialogContent() }
         }
         composeRule.waitForIdle()
 
@@ -165,9 +171,7 @@ class AuditTrailTimelineInstrumentedTest {
     @Test
     fun onAnExpandedWidth_thePanelSitsBesideTheSheet_withoutScrolling() {
         composeRule.setContent {
-            Box(modifier = Modifier.size(width = 1_000.dp, height = 800.dp)) {
-                InvoicePreviewDialogContent()
-            }
+            Viewport(width = 1_000.dp, height = 800.dp) { InvoicePreviewDialogContent() }
         }
         composeRule.waitForIdle()
 
@@ -179,7 +183,12 @@ class AuditTrailTimelineInstrumentedTest {
     /** L'aperçu s'ouvre et se ferme au doigt, panneau compris. */
     @Test
     fun tappingClose_dismissesThePreviewWithItsPanel() {
-        var dismissed = false
+        // `mutableStateOf`, et non un simple `var` : sans etat observable, `onDismiss` modifie une
+        // variable que la composition ne surveille pas. Rien ne recompose, le dialogue reste a
+        // l'ecran, et l'echec se lit a tort comme un probleme d'animation alors que le test ne
+        // reproduisait tout simplement pas le comportement de l'appelant reel, qui remonte la
+        // fermeture dans son etat.
+        var dismissed by mutableStateOf(false)
         composeRule.setContent {
             if (!dismissed) {
                 InvoicePreviewDialog(
@@ -193,8 +202,13 @@ class AuditTrailTimelineInstrumentedTest {
 
         composeRule.onNodeWithTag(AuditTrailTags.PANEL).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag(InvoicePreviewTags.CLOSE_BUTTON).performTouchInput { click() }
-        composeRule.waitForIdle()
 
+        // Un `Dialog` vit dans sa propre fenetre : sa fermeture passe par le gestionnaire de
+        // fenetres et peut survivre d'une image a la recomposition. On attend donc la disparition
+        // du noeud plutot que de la supposer acquise apres `waitForIdle`.
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(InvoicePreviewTags.DIALOG).fetchSemanticsNodes().isEmpty()
+        }
         composeRule.onNodeWithTag(InvoicePreviewTags.DIALOG).assertDoesNotExist()
     }
 
@@ -237,7 +251,33 @@ class AuditTrailTimelineInstrumentedTest {
      * Contenu de l'aperçu hors `Dialog` : un dialogue impose sa propre fenêtre plein écran, ce qui
      * empêcherait de contraindre la largeur pour éprouver les deux agencements.
      */
-    @androidx.compose.runtime.Composable
+    /**
+     * Fenetre de test d'une largeur donnee, **en dp reellement disponibles**.
+     *
+     * `Modifier.size` seul ne suffit pas : il ramene la taille demandee dans les contraintes
+     * recues, donc aux 393 dp de large du Pixel 5. Un `Box(Modifier.size(1000.dp, ...))` y mesurait
+     * 393 dp, `InvoicePreviewContent` basculait sur l'agencement empile, et le panneau se
+     * retrouvait sous la ligne de flottaison — d'ou l'echec sur un test cense prouver l'inverse.
+     * `requiredSize` ne reglerait rien : la colonne de droite sortirait alors de l'ecran physique
+     * et resterait invisible.
+     *
+     * La densite est donc reduite a 1 : la meme dalle de 1080 px expose 1080 dp, de quoi loger
+     * 1000 dp sans rien rogner. C'est exactement ce qu'est un grand ecran pour un seuil Material
+     * exprime en dp — davantage de dp disponibles — et cela rend le test independant de la
+     * definition de l'appareil, la seule contrainte etant une dalle d'au moins [width] pixels.
+     */
+    @Composable
+    private fun Viewport(
+        width: androidx.compose.ui.unit.Dp,
+        height: androidx.compose.ui.unit.Dp,
+        content: @Composable () -> Unit,
+    ) {
+        CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1f)) {
+            Box(modifier = Modifier.size(width = width, height = height)) { content() }
+        }
+    }
+
+    @Composable
     private fun InvoicePreviewDialogContent() {
         InvoicePreviewContent(invoice = approvedInvoice, auditTimeline = timeline())
     }
