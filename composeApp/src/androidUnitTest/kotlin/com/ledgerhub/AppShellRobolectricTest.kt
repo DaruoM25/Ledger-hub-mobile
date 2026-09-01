@@ -11,6 +11,7 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.ledgerhub.db.LedgerHubDatabase
 import com.ledgerhub.presentation.dashboard.DashboardTags
 import com.ledgerhub.presentation.directory.DirectoryTags
+import com.ledgerhub.presentation.integrations.IntegrationsHubTags
 import com.ledgerhub.presentation.invoiceform.InvoiceFormTags
 import com.ledgerhub.presentation.placeholder.PlaceholderTags
 import org.junit.runner.RunWith
@@ -83,5 +84,28 @@ class AppShellRobolectricTest {
         onNodeWithText("Créer une facture", substring = true).performClick()
 
         onNodeWithTag(InvoiceFormTags.SCREEN).assertIsDisplayed()
+    }
+
+    /**
+     * Point d'entrée du hub d'intégrations (US-20) : il vit dans le shell, pas dans un onglet.
+     * L'écran Robolectric par défaut est compact — c'est donc le déclencheur de l'en-tête qui est
+     * éprouvé ici, celui dont la place est la plus disputée.
+     */
+    @Test
+    fun headerTrigger_opensTheIntegrationsHub() = runComposeUiTest {
+        setContent { App(database = newDatabase()) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(IntegrationsHubTags.TRIGGER).assertIsDisplayed()
+        onNodeWithTag(IntegrationsHubTags.TRIGGER).performClick()
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(IntegrationsHubTags.CONTAINER).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(IntegrationsHubTags.CONTAINER).assertIsDisplayed()
+        onNodeWithTag("integration_card_stripe").assertIsDisplayed()
     }
 }
