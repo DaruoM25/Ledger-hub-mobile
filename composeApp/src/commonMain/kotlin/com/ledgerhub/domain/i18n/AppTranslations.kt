@@ -27,6 +27,7 @@ object AppTranslations {
         StringKey.NAV_CLIENTS to "Clients",
         StringKey.NAV_SETTINGS to "Paramètres",
         StringKey.NAV_DIRECTORY to "Annuaire DGFIP",
+        StringKey.NAV_RECONCILIATION to "Rapprochement",
 
         StringKey.DASHBOARD_SUBTITLE to "Pilotez votre activité et votre conformité 2026",
         StringKey.DASHBOARD_LOADING to "Chargement du tableau de bord…",
@@ -231,6 +232,20 @@ object AppTranslations {
         StringKey.AUDIT_STEP_PENDING to "En attente",
         StringKey.AUDIT_STEP_DONE to "Validé",
 
+        StringKey.RECONCILIATION_TITLE to "Rapprochement Bancaire",
+        StringKey.RECONCILIATION_TRANSACTIONS_COLUMN to "Transactions bancaires récentes",
+        StringKey.RECONCILIATION_INVOICES_COLUMN to "Factures en attente de paiement",
+        StringKey.RECONCILIATION_TAB_TRANSACTIONS to "Transactions",
+        StringKey.RECONCILIATION_TAB_INVOICES to "Factures",
+        StringKey.RECONCILIATION_ACTION_MATCH to "Associer (Lettrage)",
+        StringKey.RECONCILIATION_BADGE_RECONCILED to "Rapprochée",
+        StringKey.RECONCILIATION_BADGE_AMOUNT_MISMATCH to "Écart de montant",
+        StringKey.RECONCILIATION_DELTA_LABEL to "Écart",
+        StringKey.RECONCILIATION_TRANSACTIONS_EMPTY to "Aucune transaction bancaire à rapprocher.",
+        StringKey.RECONCILIATION_INVOICES_EMPTY to "Aucune facture en attente de paiement.",
+        StringKey.RECONCILIATION_SELECTION_HINT to
+            "Sélectionnez une transaction et une facture pour les associer.",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -257,6 +272,7 @@ object AppTranslations {
         StringKey.NAV_CLIENTS to "Clients",
         StringKey.NAV_SETTINGS to "Settings",
         StringKey.NAV_DIRECTORY to "DGFIP Directory",
+        StringKey.NAV_RECONCILIATION to "Reconciliation",
 
         StringKey.DASHBOARD_SUBTITLE to "Track your activity and 2026 compliance",
         StringKey.DASHBOARD_LOADING to "Loading dashboard…",
@@ -458,6 +474,20 @@ object AppTranslations {
         StringKey.AUDIT_SHA256_LABEL to "SHA-256 fingerprint",
         StringKey.AUDIT_STEP_PENDING to "Pending",
         StringKey.AUDIT_STEP_DONE to "Completed",
+
+        StringKey.RECONCILIATION_TITLE to "Bank Reconciliation",
+        StringKey.RECONCILIATION_TRANSACTIONS_COLUMN to "Recent Bank Transactions",
+        StringKey.RECONCILIATION_INVOICES_COLUMN to "Pending Invoices",
+        StringKey.RECONCILIATION_TAB_TRANSACTIONS to "Transactions",
+        StringKey.RECONCILIATION_TAB_INVOICES to "Invoices",
+        StringKey.RECONCILIATION_ACTION_MATCH to "Link (Reconciliation)",
+        StringKey.RECONCILIATION_BADGE_RECONCILED to "Reconciled",
+        StringKey.RECONCILIATION_BADGE_AMOUNT_MISMATCH to "Amount Mismatch",
+        StringKey.RECONCILIATION_DELTA_LABEL to "Delta",
+        StringKey.RECONCILIATION_TRANSACTIONS_EMPTY to "No bank transactions to reconcile.",
+        StringKey.RECONCILIATION_INVOICES_EMPTY to "No invoices awaiting payment.",
+        StringKey.RECONCILIATION_SELECTION_HINT to
+            "Select a transaction and an invoice to link them.",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",

@@ -116,6 +116,63 @@ class AppTranslationsTest {
         )
     }
 
+    /**
+     * Libellés du Rapprochement Bancaire (US-18). Formulation imposée par le cahier des charges,
+     * donc figée ici plutôt que laissée à une relecture : « Associer (Lettrage) » et « Écart de
+     * montant » sont le vocabulaire métier attendu par l'utilisateur comptable, et leur
+     * reformulation en cours de route casserait la parité avec le Web.
+     */
+    @Test
+    fun bankReconciliationLabels_useTheAgreedWording() {
+        assertEquals("Rapprochement Bancaire", AppTranslations.get(StringKey.RECONCILIATION_TITLE, AppLanguage.FR))
+        assertEquals("Bank Reconciliation", AppTranslations.get(StringKey.RECONCILIATION_TITLE, AppLanguage.EN))
+
+        assertEquals(
+            "Transactions bancaires récentes",
+            AppTranslations.get(StringKey.RECONCILIATION_TRANSACTIONS_COLUMN, AppLanguage.FR),
+        )
+        assertEquals(
+            "Recent Bank Transactions",
+            AppTranslations.get(StringKey.RECONCILIATION_TRANSACTIONS_COLUMN, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Factures en attente de paiement",
+            AppTranslations.get(StringKey.RECONCILIATION_INVOICES_COLUMN, AppLanguage.FR),
+        )
+        assertEquals(
+            "Pending Invoices",
+            AppTranslations.get(StringKey.RECONCILIATION_INVOICES_COLUMN, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Associer (Lettrage)",
+            AppTranslations.get(StringKey.RECONCILIATION_ACTION_MATCH, AppLanguage.FR),
+        )
+        assertEquals(
+            "Link (Reconciliation)",
+            AppTranslations.get(StringKey.RECONCILIATION_ACTION_MATCH, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Rapprochée",
+            AppTranslations.get(StringKey.RECONCILIATION_BADGE_RECONCILED, AppLanguage.FR),
+        )
+        assertEquals(
+            "Reconciled",
+            AppTranslations.get(StringKey.RECONCILIATION_BADGE_RECONCILED, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Écart de montant",
+            AppTranslations.get(StringKey.RECONCILIATION_BADGE_AMOUNT_MISMATCH, AppLanguage.FR),
+        )
+        assertEquals(
+            "Amount Mismatch",
+            AppTranslations.get(StringKey.RECONCILIATION_BADGE_AMOUNT_MISMATCH, AppLanguage.EN),
+        )
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())
