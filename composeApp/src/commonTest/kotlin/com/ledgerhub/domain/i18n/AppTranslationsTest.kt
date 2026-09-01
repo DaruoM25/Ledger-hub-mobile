@@ -222,4 +222,55 @@ class AppTranslationsTest {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())
         assertEquals(AppLanguage.FR, AppLanguage.EN.toggled())
     }
+
+    /**
+     * Hub d'intégrations (US-20). Les libellés des badges et les intitulés des quatre modules sont
+     * **imposés par le cahier des charges** : ils sont figés caractère pour caractère, au même
+     * titre que les statuts PPF de l'US-13. Une reformulation de confort casse ce test.
+     */
+    @Test
+    fun integrationsHub_usesTheSpecifiedWording() {
+        assertEquals(
+            "Bêta - Accès anticipé",
+            AppTranslations.get(StringKey.INTEGRATION_BADGE_BETA, AppLanguage.FR),
+        )
+        assertEquals(
+            "Beta - Early access",
+            AppTranslations.get(StringKey.INTEGRATION_BADGE_BETA, AppLanguage.EN),
+        )
+        assertEquals(
+            "Bientôt disponible",
+            AppTranslations.get(StringKey.INTEGRATION_BADGE_COMING_SOON, AppLanguage.FR),
+        )
+        assertEquals(
+            "Coming soon",
+            AppTranslations.get(StringKey.INTEGRATION_BADGE_COMING_SOON, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Paiement en ligne par CB (Stripe)",
+            AppTranslations.get(StringKey.INTEGRATION_STRIPE_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Notifications Slack",
+            AppTranslations.get(StringKey.INTEGRATION_SLACK_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Export FEC Expert-Comptable",
+            AppTranslations.get(StringKey.INTEGRATION_FEC_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Synchronisation Bancaire API",
+            AppTranslations.get(StringKey.INTEGRATION_BANK_SYNC_TITLE, AppLanguage.FR),
+        )
+
+        assertEquals(
+            "Hub d'intégrations",
+            AppTranslations.get(StringKey.INTEGRATIONS_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Integrations Hub",
+            AppTranslations.get(StringKey.INTEGRATIONS_TITLE, AppLanguage.EN),
+        )
+    }
 }

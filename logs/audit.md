@@ -869,3 +869,104 @@ Installation **par-dessus** une base v2, sans désinstallation, après injection
 - **Périmètre validé** : US-08 e-Reporting DGFIP 2026, badge de conformité, transmission PPF, accusé `ACK-2026-`, snackbar d’acquittement, persistance SQLDelight, cycle de vie DRAFT → ACKNOWLEDGED, cohérence écran / ViewModel / repository.
 - **Statut final** : ✅ CONFORME / REPETABLE
 - **Composants testés** : `com.ledgerhub.LanguageUiTest`, `com.ledgerhub.presentation.ereporting.EReportingScreenInstrumentedTest`
+
+---
+
+## US-20 — Hub d'intégrations (vitrine de modules verrouillés)
+- **Date :** 2026-09-01
+- **Branche :** `feature/US-20-integrations-hub`
+- **Statut :** ✅ N1/N2/N3a verts (817/817 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+
+### Décision d'architecture
+Le hub est une **vitrine** : aucun connecteur n'est branché, et rien dans le code ne prétend le
+contraire. `IntegrationStatus` ne compte donc que deux valeurs (`BETA`, `COMING_SOON`) — pas de
+troisième statut « disponible » qu'aucun module ne porterait.
+
+Le catalogue est un **enum** (`IntegrationModule`) et non une liste de `data class` : le `when` qui
+associe un module à son tag de test devient exhaustif, donc un cinquième module ne peut pas être
+ajouté sans que le compilateur exige son tag. Le contrat QA cesse d'être une affaire de relecture.
+
+L'ordre d'affichage (bêta d'abord) vit dans `IntegrationCatalog.ordered()`, bâti **sur**
+`withStatus()` : c'est une décision produit, elle se teste au niveau 1 plutôt que de se perdre dans
+un `sortedBy` au milieu d'un composable.
+
+### Navigation
+Entrée par `Overlay.Integrations` et **non** par une septième `Destination` : la `NavigationBar`
+porte déjà six entrées, au-delà de la recommandation Material 3 (3 à 5), et une septième tronquerait
+les libellés sur un téléphone. Le déclencheur 🧩 est posé dans les **deux** shells — en-tête compact
+et sidebar — cantonné à l'un des deux, il disparaîtrait de l'autre.
+
+En-tête compact : glyphe **seul**. Le bandeau y porte déjà le nom de l'application, le déclencheur
+de la palette (US-19) et le sélecteur de langue ; un libellé de plus repousserait ce dernier hors de
+l'écran. La sidebar, elle, l'affiche en toutes lettres.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `domain/integrations/IntegrationStatus.kt` | Degré d'ouverture + clé de badge |
+| `domain/integrations/IntegrationModule.kt` | Catalogue déclaratif des 4 modules (id, clés i18n, glyphe, statut) |
+| `domain/integrations/IntegrationCatalog.kt` | Lecture pure : `all()`, `withStatus()`, `ordered()` |
+| `presentation/integrations/IntegrationsHubUiState.kt` | État immuable (catalogue ordonné + bandeau) |
+| `presentation/integrations/IntegrationsHubIntent.kt` | `ModuleSelected` / `NoticeDismissed` |
+| `presentation/integrations/IntegrationsHubViewModel.kt` | Convention maison : `MutableStateFlow`, sans coroutine |
+| `presentation/integrations/IntegrationsHubScreen.kt` | Grille adaptative, cartes désaturées, badges, `IntegrationsHubTags`, déclencheur du shell |
+
+### Fichiers modifiés
+| Fichier | Modification |
+|---|---|
+| `App.kt` | `Overlay.Integrations`, `onOpenIntegrations`, déclencheur dans `LedgerHeader` (compact) et `LedgerSidebar`, branche `ShellContent` |
+| `domain/i18n/StringKey.kt` | 15 clés US-20 |
+| `domain/i18n/AppTranslations.kt` | 15 entrées FR + 15 EN — parité maintenue |
+| `commonTest/.../AppTranslationsTest.kt` | Sentinelles des badges et des 4 intitulés imposés |
+| `androidUnitTest/.../AppShellRobolectricTest.kt` | Le déclencheur de l'en-tête ouvre le hub |
+
+### Arbitrages de conception
+- **L'atténuation passe par les couleurs, jamais par `Modifier.alpha` sur la carte.** Un `alpha`
+  global délaverait aussi le badge, que le cahier des charges veut très visible. Fond et titres sont
+  peints à 0,7 ; la pastille reste à pleine opacité, sur les teintes déjà au thème (indigo des devis,
+  ambre des statuts en attente) — le hub n'introduit pas une palette de plus.
+- **`CardMinWidth = 170.dp` n'est pas un réglage esthétique.** `LazyVerticalGrid` virtualise : une
+  carte hors du viewport n'existe pas dans l'arbre sémantique. À 170 dp, un Pixel 5 (393 dp) sort
+  deux colonnes, donc les quatre modules tiennent en 2 × 2 sans défilement — sans quoi la capture QA
+  officielle en manquerait la moitié. Même raison pour le qualifier `w720dp` du niveau 3a.
+- **Cartes en nœud sémantique fusionné**, badges visés en `useUnmergedTree = true` : un module
+  s'annonce d'un bloc au lecteur d'écran, mais ses badges restent atteignables par les tests
+  (précédent US-19 sur les nœuds fusionnés).
+- **Le toucher d'une carte verrouillée produit un bandeau**, il ne reste pas sans effet : une carte
+  muette se lit comme une interface cassée, pas comme un module verrouillé.
+
+### Tests
+- **N1 (commonTest)** — `IntegrationCatalogTest` (10 cas : composition, unicité des identifiants,
+  statuts, filtrage, partition complète du catalogue, ordre bêta-d'abord) ·
+  `IntegrationModuleI18nTest` (4 cas : traduction effective FR≠EN, longueur compatible avec une
+  carte) · `IntegrationsHubTagsTest` (3 cas : les 4 tags imposés figés littéralement) ·
+  `AppTranslationsTest` +1 cas de sentinelles.
+- **N2 (commonTest, exécuté par `testDebugUnitTest`)** — `IntegrationsHubViewModelTest`, 8 cas :
+  état initial ordonné, bandeau publié / remplacé / acquitté, acquittement à vide sans effet,
+  aucun module déverrouillable par une intention.
+- **N3a (Robolectric)** — `IntegrationsHubRobolectricTest`, 11 cas : conteneur et titres, **les 4
+  cartes sous leurs tags imposés**, **les 4 badges** et leurs libellés (2 × bêta, 2 × bientôt),
+  bandeau au toucher et à l'acquittement, écran intégralement traduit en anglais, déclencheur du
+  shell. Plus 1 cas dans `AppShellRobolectricTest` (ouverture depuis l'en-tête).
+- **N3b (instrumenté, rédigé et compilé)** — `IntegrationsHubInstrumentedTest`, 5 cas : les 4
+  modules visibles **sans défilement** sur l'appareil cible, badges présents, cible tactile ≥ 48 dp,
+  bandeau au toucher réel, et export de la capture officielle
+  `US20_mobile_integrations_hub_sdk_gphone64_x86_64.png`.
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 817 tests, 0 échec, 0 erreur, 0 ignoré (3 min 29 s) |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** (49 s) |
+
+### Points d'attention transmis
+- **La capture est écrite aux deux emplacements** (`getExternalFilesDir` **et** `/sdcard/Download`).
+  Les tests US-17 à US-19 n'écrivaient que dans le premier, alors que `scripts/run-qa.ps1` rapatrie
+  depuis le second — d'où un `adb pull` manuel à chaque story. `run-qa.ps1 -Suite Instrumented
+  -ScreenshotPrefix "US20"` suffit désormais.
+- **Aucun module n'est fonctionnel** : le hub n'ouvre aucune connexion, ne stocke aucun jeton et
+  n'appelle aucun service tiers. Rien à sécuriser tant qu'un connecteur réel n'est pas branché.
+- **La synchronisation bancaire annoncée ici est ce qui remplacera `MockBankTransactionRepository`**
+  (US-18), dont le relevé est encore simulé.
+- **Le journal d'audit n'a pas d'entrée pour les US-09 à US-19.** Cette entrée reprend le fil sans
+  combler ce trou, qui reste à traiter à part.

@@ -103,6 +103,9 @@ import com.ledgerhub.presentation.command.CommandPaletteTrigger
 import com.ledgerhub.presentation.command.CommandPaletteViewModel
 import com.ledgerhub.presentation.directory.DirectoryScreen
 import com.ledgerhub.presentation.directory.DirectoryViewModel
+import com.ledgerhub.presentation.integrations.IntegrationsHubScreen
+import com.ledgerhub.presentation.integrations.IntegrationsHubTrigger
+import com.ledgerhub.presentation.integrations.IntegrationsHubViewModel
 import com.ledgerhub.presentation.reconciliation.ReconciliationScreen
 import com.ledgerhub.presentation.reconciliation.ReconciliationViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsScreen
@@ -131,6 +134,10 @@ private enum class Destination(val titleKey: StringKey, val glyph: String) {
 private sealed interface Overlay {
     data object None : Overlay
     data object CreateInvoice : Overlay
+
+    /** Hub d'intégrations (US-20) — vitrine des connecteurs, tous verrouillés à ce stade. */
+    data object Integrations : Overlay
+
     data class InvoiceDetail(val number: String) : Overlay
 
     /** Émission d'un avoir annulant [invoice] — US-05. */
@@ -224,6 +231,7 @@ fun App(
     var language by remember { mutableStateOf(AppLanguage.FR) }
 
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
+    val onOpenIntegrations = { overlay = Overlay.Integrations }
     val onCreateCreditNote = { invoice: Invoice -> overlay = Overlay.CreditNote(invoice) }
 
     // Export Factur-X (US-06) : le XML est généré à la demande depuis les données déjà en
@@ -348,6 +356,7 @@ fun App(
                                 onCreateInvoice = onCreateInvoice,
                                 onSelectLanguage = { language = it },
                                 onOpenCommandPalette = onOpenCommandPalette,
+                                onOpenIntegrations = onOpenIntegrations,
                             )
                             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                                 Card(
@@ -390,6 +399,7 @@ fun App(
                                     language = language,
                                     onSelectLanguage = { language = it },
                                     onOpenCommandPalette = onOpenCommandPalette,
+                                    onOpenIntegrations = onOpenIntegrations,
                                 )
                             },
                             bottomBar = {
@@ -447,6 +457,7 @@ private fun LedgerHeader(
     language: AppLanguage,
     onSelectLanguage: (AppLanguage) -> Unit,
     onOpenCommandPalette: () -> Unit,
+    onOpenIntegrations: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -461,6 +472,10 @@ private fun LedgerHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Glyphe seul : l'en-tête d'un téléphone porte déjà le nom de l'application, la
+            // palette et le sélecteur de langue. Un libellé de plus repousserait ce dernier hors
+            // de l'écran (US-20) — la sidebar, elle, a la place de l'afficher en toutes lettres.
+            IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
             CommandPaletteTrigger(onClick = onOpenCommandPalette)
             LangToggle(current = language, onSelect = onSelectLanguage)
         }
@@ -492,6 +507,15 @@ private fun ShellContent(
     taxSettings: TaxSettings,
 ) {
     when (overlay) {
+        Overlay.Integrations -> {
+            // Le hub ne lit rien et n'écrit rien : son ViewModel peut naître et mourir avec
+            // l'overlay, contrairement aux ViewModels d'onglets hissés dans App().
+            val integrationsHubViewModel = remember { IntegrationsHubViewModel() }
+            OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
+                IntegrationsHubScreen(viewModel = integrationsHubViewModel)
+            }
+        }
+
         Overlay.CreateInvoice -> {
             val formViewModel = remember(taxSettings) {
                 InvoiceFormViewModel(
@@ -615,6 +639,7 @@ private fun LedgerSidebar(
     onCreateInvoice: () -> Unit,
     onSelectLanguage: (AppLanguage) -> Unit,
     onOpenCommandPalette: () -> Unit,
+    onOpenIntegrations: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -640,6 +665,12 @@ private fun LedgerSidebar(
         // disparaitrait sur tablette, ou la palette est justement la plus utile (clavier branche).
         CommandPaletteTrigger(
             onClick = onOpenCommandPalette,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+        // Même raison que pour la palette : cantonné à l'en-tête compact, le hub disparaîtrait
+        // du shell tablette.
+        IntegrationsHubTrigger(
+            onClick = onOpenIntegrations,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         )
         Destination.entries.forEach { entry ->
