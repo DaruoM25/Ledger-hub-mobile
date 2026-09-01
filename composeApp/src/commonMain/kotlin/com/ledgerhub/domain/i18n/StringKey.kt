@@ -5,10 +5,11 @@ package com.ledgerhub.domain.i18n
  * dictionnaire Web (Prompt 2). Chaque clé DOIT être traduite dans les deux langues (garanti par
  * `AppTranslationsTest`). Regroupées par zone fonctionnelle.
  *
- * Hors périmètre US-02 (restent en français) : l'écran `LoginScreen` (avant navigation), le corps
- * prosaïque du détail facture (émetteur/ventilation TVA/boutons d'action) et les modules
- * Devis/Avoir. L'aperçu WYSIWYG `InvoicePaperCanvas` en est sorti avec l'US-15 : devenu un mode de
- * saisie à part entière, il est traduit comme le formulaire classique.
+ * Hors périmètre US-02 (restent en français) : le corps prosaïque du détail facture
+ * (émetteur/ventilation TVA/boutons d'action) et les modules Devis/Avoir. L'aperçu WYSIWYG
+ * `InvoicePaperCanvas` en est sorti avec l'US-15 : devenu un mode de saisie à part entière, il est
+ * traduit comme le formulaire classique. L'écran d'authentification en est sorti avec l'US-21 :
+ * connexion **et** inscription sont désormais bilingues.
  */
 enum class StringKey {
     // ── Application / shell ──────────────────────────────────────────────────
@@ -278,6 +279,34 @@ enum class StringKey {
     INTEGRATION_SLACK_DESC,
     INTEGRATION_BANK_SYNC_TITLE,
     INTEGRATION_BANK_SYNC_DESC,
+
+    // ── Authentification : connexion (traduite avec l'US-21) ────────────────
+    AUTH_LOGIN_TITLE,
+    AUTH_LOGIN_SUBTITLE,
+    AUTH_EMAIL_LABEL,
+    AUTH_EMAIL_PLACEHOLDER,
+    AUTH_PASSWORD_LABEL,
+    AUTH_LOGIN_SUBMIT,
+    AUTH_NO_ACCOUNT_PROMPT,
+    AUTH_REGISTER_LINK,
+    AUTH_DISCLAIMER,
+
+    // ── Inscription intelligente par SIRET (US-21) ──────────────────────────
+    AUTH_TAB_LOGIN,
+    AUTH_TAB_REGISTER,
+    AUTH_REGISTER_TITLE,
+    AUTH_REGISTER_SUBTITLE,
+    AUTH_SIRET_LABEL,
+    AUTH_SIRET_PLACEHOLDER,
+    AUTH_SIRET_HELPER,
+    AUTH_SIRET_SEARCH_DESC,
+    AUTH_COMPANY_NAME_LABEL,
+    AUTH_COMPANY_NAME_PLACEHOLDER,
+    AUTH_SIRENE_VERIFYING,
+    AUTH_SIRENE_VERIFIED_BADGE,
+    AUTH_SIRENE_NOT_FOUND,
+    AUTH_SIRENE_UNAVAILABLE,
+    AUTH_REGISTER_SUBMIT,
 
     // ── Erreurs de validation (résolues depuis ValidationErrorKey) ──────────
     VALIDATION_INVOICE_NUMBER_REQUIRED,

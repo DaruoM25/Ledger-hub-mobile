@@ -970,3 +970,113 @@ l'écran. La sidebar, elle, l'affiche en toutes lettres.
   (US-18), dont le relevé est encore simulé.
 - **Le journal d'audit n'a pas d'entrée pour les US-09 à US-19.** Cette entrée reprend le fil sans
   combler ce trou, qui reste à traiter à part.
+
+---
+
+## US-21 — Inscription intelligente par SIRET (répertoire SIRENE simulé)
+- **Date :** 2026-09-01
+- **Branche :** `feature/US-21-siret-smart-registration`
+- **Statut :** ✅ N1/N2/N3a verts (858/858 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+
+### Décision d'architecture
+Le répertoire SIRENE est un **service de domaine découplé** (`SireneLookupService`), dont
+l'implémentation simulée vit dans `data/` (`MockSireneLookupService`). Le jour où un client Ktor la
+remplacera, ni le ViewModel ni l'écran n'auront à bouger — c'est la raison pour laquelle la
+simulation n'est pas écrite dans le ViewModel.
+
+`SireneCompany` reste distinct de `DirectoryEntry` (US-09) : les deux répertoires répondent à des
+questions différentes — « où adresser une facture » (routage PPF/PDP, TVA intracommunautaire) pour
+l'annuaire DGFIP, « qui est cette entreprise » pour SIRENE. Les confondre ferait dépendre
+l'inscription d'un modèle de facturation électronique qui n'y a rien à faire.
+
+`SireneLookupResult` ne compte que `Verified` et `NotFound`. L'indisponibilité du service **n'en est
+pas une valeur** : c'est une exception, captée par le ViewModel et rendue par un état `UNAVAILABLE`
+distinct — l'utilisateur dont le répertoire ne répond pas ne doit pas croire son numéro faux.
+
+### Renommage `Login*` → `Auth*`
+`LoginScreen/ViewModel/UiState/Intent/Tags` → `AuthScreen/AuthViewModel/AuthUiState/AuthIntent/AuthTags`
+(via `git mv`, historique préservé). Créer un `AuthScreen` à côté du `LoginScreen` existant aurait
+dupliqué email / mot de passe / soumission dans deux écrans concurrents dont l'un serait mort.
+**Les valeurs des tags `login_*` sont inchangées** : un tag est un contrat avec la QA, pas un nom de
+variable. `AuthTagsTest` le vérifie.
+
+### Règle de déclenchement
+La vérification part sur **14 chiffres normalisés**, et rien d'autre. La clé de Luhn
+(`LuhnChecksum`, US-09) n'est délibérément pas un critère : les SIRET du propre jeu de démonstration
+de l'application ne la respectent pas, et une porte d'entrée qui refuse les données de démonstration
+de l'app est un piège, pas un contrôle. C'est au répertoire de dire si l'entreprise existe.
+`SiretInputTest` fige cette décision pour qu'elle ne soit pas rétablie par mégarde.
+
+`SiretInput.sanitize` (domaine) accepte un SIRET **collé** avec espaces, points ou tirets ;
+`filterSiret` (présentation, US-04) reste le filtre de frappe borné à 14 chiffres. Les deux sont
+documentés l'un par rapport à l'autre.
+
+### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `domain/sirene/SireneCompany.kt` | Fiche d'entreprise (SIRET, raison sociale, forme juridique) |
+| `domain/sirene/SireneLookupResult.kt` | `Verified` / `NotFound` |
+| `domain/sirene/SireneLookupService.kt` | Contrat d'interrogation du répertoire |
+| `domain/sirene/SiretInput.kt` | Normalisation et seuil des 14 chiffres |
+| `data/sirene/MockSireneLookupService.kt` | Répertoire simulé, délai d'1 s injectable, SIRET de démonstration `90123456700013` |
+
+### Fichiers renommés et modifiés
+| Fichier | Modification |
+|---|---|
+| `presentation/auth/AuthScreen.kt` | Onglets Connexion/Inscription, bloc SIRET, `trailingIcon` dynamique, badge vert, carte défilante, écran entièrement bilingue |
+| `presentation/auth/AuthViewModel.kt` | Déclenchement du lookup à la frappe, annulation de la vérification précédente, états SIRENE, inscription |
+| `presentation/auth/AuthUiState.kt` | `SireneVerificationStatus`, `companyNameAutoFilled`, `isRegisterEnabled` |
+| `presentation/auth/AuthIntent.kt` | `ModeChanged`, `SiretChanged`, `CompanyNameChanged` |
+| `domain/i18n/StringKey.kt` | 24 clés (15 US-21 + 9 pour la connexion historique) ; l'exclusion « `LoginScreen` reste en français » est levée |
+| `domain/i18n/AppTranslations.kt` | 24 entrées FR + 24 EN — parité maintenue |
+
+### Matrice RCA — anomalies rencontrées et corrigées
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | `aCorrectedSiret_cancelsTheInFlightLookup` : état `UNAVAILABLE` là où `IDLE` était attendu | `runCatching` capture **aussi** la `CancellationException`. Une vérification annulée par la frappe suivante était donc publiée comme un échec du répertoire, et l'écran annonçait « SIRENE indisponible » à un utilisateur ayant simplement corrigé un chiffre. | `try/catch` explicite qui **relance** la `CancellationException` et ne capture que les autres. *(Le même motif existe dans `DirectoryViewModel`, où aucune annulation n'a lieu à ce jour : latent, hors périmètre.)* |
+| 2 | `theScreen_opensOnLogin_andSwitchesToRegistration` : `auth_siret_input` introuvable après clic sur l'onglet | Le soulignement de l'onglet actif demandait `fillMaxWidth()` dans une `Column` à largeur libre : le premier onglet prenait toute la ligne, le second était mesuré à **zéro** — invisible et intouchable. Le clic ne basculait donc rien. | `Modifier.width(IntrinsicSize.Max)` sur l'onglet, qui borne sa largeur au texte. |
+| 3 | `currentTime` non résolu (kotlinx-coroutines-test 1.9) | Propriété portée par le `TestCoroutineScheduler`, non par la `TestScope` dans cette version. | `testScheduler.currentTime`. |
+| 4 | `StandardTestDispatcher` refusé comme type | C'est une **fonction fabrique**, pas un type. | Paramètre typé `TestDispatcher`. |
+
+Les anomalies 1 et 2 sont deux vrais défauts fonctionnels — l'un dans le ViewModel, l'autre dans la
+mise en page — tous deux trouvés par les tests avant toute recette manuelle.
+
+### Tests
+- **N1 (commonTest)** — `SiretInputTest` (7 cas : normalisation, SIRET collé mis en forme, seuil
+  strict des 14 chiffres, Luhn non bloquante) · `MockSireneLookupServiceTest` (7 cas : fiches
+  nommées, entreprise par défaut, `NotFound` réservé, **durée d'1 s prouvée en temps virtuel**) ·
+  `AuthTagsTest` (3 cas : 4 tags imposés figés, tags historiques intacts, unicité) ·
+  `AppTranslationsTest` +2 cas de sentinelles.
+- **N2 (commonTest)** — `AuthViewModelTest`, 19 cas : les 6 cas de connexion hérités, plus le
+  déclenchement (aucun appel sous 14 chiffres, un seul appel à la ré-saisie identique,
+  normalisation avant appel), la réinitialisation (badge retiré, nom auto-complété effacé, **nom
+  saisi à la main préservé**), l'annulation d'une vérification en vol, `NotFound`, `UNAVAILABLE`,
+  et l'activation de l'inscription.
+- **N3a (Robolectric, `w411dp-h891dp`)** — `AuthScreenRobolectricTest`, 9 cas : bascule des onglets,
+  absence de loader et de badge sous 14 chiffres, **badge + raison sociale complétée** au 14e,
+  **indicateur observé pendant la vérification** (réponse retenue par un `CompletableDeferred`
+  plutôt qu'une course contre un `delay` réel), réinitialisation, SIRET inconnu, activation du
+  bouton, formulaire traduit en anglais.
+- **N3b (instrumenté, rédigé et compilé)** — `AuthScreenInstrumentedTest`, 6 cas avec le **vrai
+  délai d'une seconde** : formulaire affiché, vérification aboutie, cibles tactiles ≥ 48 dp,
+  réinitialisation, activation du bouton, et export de la capture officielle
+  `US21_mobile_auth_siret_lookup_sdk_gphone64_x86_64.png`.
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 858 tests, 0 échec, 0 erreur, 0 ignoré |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** (48 s) |
+
+### Points d'attention transmis
+- **L'écran d'authentification n'est toujours pas câblé dans `App.kt`** — il ne l'était pas avant
+  l'US-21 non plus, l'application démarre directement sur le tableau de bord. Le brancher en porte
+  d'entrée ferait échouer `AppShellRobolectricTest` et `LanguageUiTest`, qui attendent le tableau de
+  bord au démarrage : c'est une US à part entière (retour arrière, persistance de session).
+- **L'inscription n'atteint aucun backend** : `registrationSucceeded` est un succès local, ce que
+  l'écran annonce lui-même (« authentification fictive — aucun identifiant réel n'est stocké »).
+- **Aucune donnée n'est transmise à l'INSEE** : le répertoire est simulé de bout en bout, aucun
+  appel réseau n'est émis par cette US.
+- **Le message d'erreur de connexion reste en français en dur** dans le ViewModel (repli
+  `?: "Erreur inconnue lors de la connexion"`), comme dans `DirectoryViewModel`. Les messages portés
+  par les ViewModels forment une dette i18n distincte, non traitée ici.
