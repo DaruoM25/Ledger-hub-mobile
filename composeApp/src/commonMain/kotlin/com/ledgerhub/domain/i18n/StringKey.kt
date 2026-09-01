@@ -227,6 +227,16 @@ enum class StringKey {
     /** Repli quand les pénalités B2B ne s'appliquent pas — le pied de facture n'est jamais vide. */
     B2B_COURTESY_MENTION,
 
+    // ── Traçabilité & horodatage réglementaire (US-17) ─────────────────────
+    AUDIT_PANEL_TITLE,
+    AUDIT_STEP_CREATED,
+    AUDIT_STEP_SEALED,
+    AUDIT_STEP_PPF,
+    AUDIT_STEP_STATUS,
+    AUDIT_SHA256_LABEL,
+    AUDIT_STEP_PENDING,
+    AUDIT_STEP_DONE,
+
     // ── Erreurs de validation (résolues depuis ValidationErrorKey) ──────────
     VALIDATION_INVOICE_NUMBER_REQUIRED,
     VALIDATION_DATE_FORMAT_INVALID,

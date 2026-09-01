@@ -3,11 +3,13 @@ package com.ledgerhub.presentation.invoices.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ledgerhub.domain.i18n.StringKey
+import com.ledgerhub.domain.audit.AuditMilestone
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.Letterhead
@@ -40,6 +43,13 @@ import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.formatIsoDate
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.format
+
+/**
+ * Seuil Material 3 « expanded », identique a celui du shell de navigation (`App.kt`) : au-dela,
+ * feuille et panneau de tracabilite tiennent cote a cote. Un second seuil, propre a cet ecran,
+ * ferait basculer les deux mises en page a des largeurs differentes.
+ */
+private val ExpandedPreviewWidthThreshold = 840.dp
 
 /** Tags de test — contrat partagé entre l'aperçu A4 (commonMain) et les tests. */
 object InvoicePreviewTags {
@@ -102,6 +112,11 @@ fun InvoicePreviewDialog(
     onDismiss: () -> Unit,
     letterhead: Letterhead = Letterhead.Default,
     recipientAddressLines: List<String> = emptyList(),
+    /**
+     * Jalons de tracabilite reglementaire (US-17). Vide par defaut : un appelant qui n'a pas de
+     * Piste d'Audit Fiable a presenter obtient l'apercu tel qu'il etait avant l'US-17.
+     */
+    auditTimeline: List<AuditMilestone> = emptyList(),
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -128,10 +143,11 @@ fun InvoicePreviewDialog(
                         Text(tr(StringKey.PREVIEW_CLOSE), color = Color.White)
                     }
                 }
-                InvoicePreviewSheet(
+                InvoicePreviewContent(
                     invoice = invoice,
                     letterhead = letterhead,
                     recipientAddressLines = recipientAddressLines,
+                    auditTimeline = auditTimeline,
                 )
             }
         }
@@ -157,18 +173,84 @@ fun InvoicePreviewDialog(
  *   modélise pas d'adresse et une facture émise ne la gèle pas : l'appelant la fournit s'il en
  *   dispose, et le bloc client se limite au nom et au SIREN sinon.
  */
+/**
+ * Agencement de l'apercu selon la largeur disponible (US-17).
+ *
+ * Au-dela du seuil Material 3 « expanded » (840 dp : tablette, ou telephone en paysage), la
+ * feuille A4 et le panneau de tracabilite tiennent cote a cote, dans le rapport 2/3 - 1/3 du Web.
+ * En-deca, ils s'empilent : sur un telephone en portrait, deux colonnes rendraient la feuille
+ * illisible et le panneau plus etroit encore.
+ *
+ * Chaque colonne porte son propre defilement en mode large : la feuille est longue, le panneau
+ * court, les lier obligerait a faire defiler l'un pour lire l'autre.
+ */
+@Composable
+fun InvoicePreviewContent(
+    invoice: Invoice,
+    auditTimeline: List<AuditMilestone> = emptyList(),
+    letterhead: Letterhead = Letterhead.Default,
+    recipientAddressLines: List<String> = emptyList(),
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val expanded = maxWidth >= ExpandedPreviewWidthThreshold
+
+        if (expanded && auditTimeline.isNotEmpty()) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(2f).fillMaxHeight()) {
+                    InvoicePreviewSheet(
+                        invoice = invoice,
+                        letterhead = letterhead,
+                        recipientAddressLines = recipientAddressLines,
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
+                    AuditTrailTimeline(milestones = auditTimeline)
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            ) {
+                InvoicePreviewSheet(
+                    invoice = invoice,
+                    letterhead = letterhead,
+                    recipientAddressLines = recipientAddressLines,
+                    scrollable = false,
+                )
+                if (auditTimeline.isNotEmpty()) {
+                    Box(modifier = Modifier.padding(16.dp)) {
+                        AuditTrailTimeline(milestones = auditTimeline)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun InvoicePreviewSheet(
     invoice: Invoice,
     letterhead: Letterhead = Letterhead.Default,
     recipientAddressLines: List<String> = emptyList(),
     modifier: Modifier = Modifier,
+    /**
+     * La feuille porte son propre defilement par defaut. L'appelant le desactive quand elle est
+     * deja placee dans une colonne defilante (US-17, agencement empile) : imbriquer deux
+     * defilements verticaux leve une exception de mesure a hauteur infinie.
+     */
+    scrollable: Boolean = true,
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(SheetDesk)
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(vertical = 16.dp),
         contentAlignment = Alignment.TopCenter,
     ) {

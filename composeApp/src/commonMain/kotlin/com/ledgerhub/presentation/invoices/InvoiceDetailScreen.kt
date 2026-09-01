@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.audit.AuditEntry
+import com.ledgerhub.domain.audit.buildAuditTimeline
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceStatus
@@ -43,6 +44,7 @@ import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.formatIsoDate
 import com.ledgerhub.presentation.i18n.tr
+import com.ledgerhub.presentation.invoices.components.AuditTrailTimeline
 import com.ledgerhub.presentation.invoices.components.FacturXBadge
 import com.ledgerhub.presentation.invoices.components.InvoicePreviewDialog
 import com.ledgerhub.presentation.invoices.components.StatusTag
@@ -75,7 +77,6 @@ object InvoiceDetailScreenTags {
     const val TRANSITION_ERROR = "invoices_detail_transition_error"
 
     fun transitionButton(target: InvoiceStatus) = "invoices_detail_transition_" + target.name
-    fun auditEntry(id: String) = "invoices_detail_audit_entry_" + id
     const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
     const val LOCKED_BANNER = "invoices_detail_locked_banner"
     fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
@@ -153,6 +154,7 @@ internal fun InvoiceDetailView(
         InvoicePreviewDialog(
             invoice = invoiceToPreview,
             onDismiss = { previewedInvoice = null },
+            auditTimeline = buildAuditTimeline(invoiceToPreview, uiState.auditTrail),
         )
     }
 
@@ -320,7 +322,7 @@ private fun InvoiceBody(
     }
 
     LifecycleSection(uiState = uiState, onStartTransition = onStartTransition)
-    AuditTrailSection(entries = uiState.auditTrail)
+    AuditTrailSection(invoice = invoice, entries = uiState.auditTrail)
 }
 
 /**
@@ -378,52 +380,35 @@ private fun InvoiceStatus.actionKey(): StringKey = when (this) {
     InvoiceStatus.CANCELLED -> StringKey.STATUS_CANCELLED
 }
 
-/** Chronologie de la Piste d'Audit Fiable, de la plus ancienne transition a la plus recente. */
+/**
+ * Tracabilite reglementaire (US-17) - la Piste d'Audit Fiable presentee en timeline verticale.
+ *
+ * Remplace la liste plate des transitions : les memes entrees, lues a travers les quatre jalons
+ * qu'exige la reforme PPF 2026 (creation, scellement, transmission, retour de l'administration).
+ * Faire coexister les deux affichages donnerait deux recits du meme historique sur un seul ecran.
+ *
+ * Les tags historiques [InvoiceDetailScreenTags.AUDIT_TRAIL] et
+ * [InvoiceDetailScreenTags.AUDIT_TRAIL_EMPTY] sont conserves : ils designent toujours la meme
+ * chose (l'historique, son absence), et les suites anterieures continuent de les viser.
+ */
 @Composable
-private fun AuditTrailSection(entries: List<AuditEntry>) {
+private fun AuditTrailSection(invoice: Invoice, entries: List<AuditEntry>) {
     HorizontalDivider()
-    Text(
-        tr(StringKey.AUDIT_TRAIL_TITLE),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-    )
-    if (entries.isEmpty()) {
-        Text(
-            tr(StringKey.AUDIT_TRAIL_EMPTY),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.AUDIT_TRAIL_EMPTY },
-        )
-        return
-    }
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.AUDIT_TRAIL },
     ) {
-        entries.forEach { entry ->
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.auditEntry(entry.id) },
-            ) {
-                val from = entry.fromStatus?.displayLabel() ?: "—"
-                Text(
-                    from + "  →  " + entry.toStatus.displayLabel(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    entry.createdAt,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                entry.reason?.let { reason ->
-                    Text(
-                        reason,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+        AuditTrailTimeline(milestones = buildAuditTimeline(invoice, entries))
+        // Une facture heritee d'avant la PAF (US-07) n'a aucune transition tracee : la timeline
+        // reste juste - elle s'appuie alors sur la date d'emission - mais l'utilisateur doit
+        // savoir que l'historique detaille, lui, est vide.
+        if (entries.isEmpty()) {
+            Text(
+                tr(StringKey.AUDIT_TRAIL_EMPTY),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.AUDIT_TRAIL_EMPTY },
+            )
         }
     }
 }

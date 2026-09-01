@@ -222,6 +222,15 @@ object AppTranslations {
             "conformément à l'article L.441-10 du Code de commerce.",
         StringKey.B2B_COURTESY_MENTION to "Merci pour votre confiance.",
 
+        StringKey.AUDIT_PANEL_TITLE to "Traçabilité & Horodatage réglementaire",
+        StringKey.AUDIT_STEP_CREATED to "Document créé en mode brouillon",
+        StringKey.AUDIT_STEP_SEALED to "Scellé et chiffré sur le coffre-fort AWS (S3 + DynamoDB)",
+        StringKey.AUDIT_STEP_PPF to "Transmis au Portail Public de Facturation (PPF)",
+        StringKey.AUDIT_STEP_STATUS to "Statut répercuté par l'administration",
+        StringKey.AUDIT_SHA256_LABEL to "Empreinte SHA-256",
+        StringKey.AUDIT_STEP_PENDING to "En attente",
+        StringKey.AUDIT_STEP_DONE to "Validé",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -440,6 +449,15 @@ object AppTranslations {
             "will apply, along with a fixed recovery fee of €40 pursuant to Article L.441-10 of " +
             "the French Commercial Code.",
         StringKey.B2B_COURTESY_MENTION to "Thank you for your trust.",
+
+        StringKey.AUDIT_PANEL_TITLE to "Traceability & Regulatory Timestamping",
+        StringKey.AUDIT_STEP_CREATED to "Document created as a draft",
+        StringKey.AUDIT_STEP_SEALED to "Sealed and encrypted in the AWS vault (S3 + DynamoDB)",
+        StringKey.AUDIT_STEP_PPF to "Submitted to the Public Invoicing Portal (PPF)",
+        StringKey.AUDIT_STEP_STATUS to "Status reported by the administration",
+        StringKey.AUDIT_SHA256_LABEL to "SHA-256 fingerprint",
+        StringKey.AUDIT_STEP_PENDING to "Pending",
+        StringKey.AUDIT_STEP_DONE to "Completed",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",
