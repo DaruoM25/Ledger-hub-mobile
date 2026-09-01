@@ -57,7 +57,7 @@ import kotlin.test.assertTrue
  */
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalTestApi::class)
-class ReconciliationInstrumentedTest {
+class ReconciliationScreenInstrumentedTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()

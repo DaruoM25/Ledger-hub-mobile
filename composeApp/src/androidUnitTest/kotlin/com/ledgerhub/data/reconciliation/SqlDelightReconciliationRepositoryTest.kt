@@ -76,6 +76,10 @@ class SqlDelightReconciliationRepositoryTest {
         val draft = invoice(number)
         invoiceRepository.submitInvoice(draft).getOrThrow()
         invoiceRepository.changeStatus(number, InvoiceStatus.DRAFT, InvoiceStatus.DEPOSITED, null).getOrThrow()
+        // L'horloge avance : `AuditLog.selectByInvoiceNumber` trie par createdAt puis par id, et
+        // deux transitions horodatees a la meme seconde se departageraient sur un UUID aleatoire —
+        // l'ordre de l'historique varierait alors d'une execution a l'autre.
+        clock.advanceBy(60)
         return draft.copy(status = InvoiceStatus.DEPOSITED)
     }
 
@@ -141,11 +145,12 @@ class SqlDelightReconciliationRepositoryTest {
         assertEquals(InvoiceStatus.PAID, reloaded.status)
 
         // 3. La Piste d'Audit Fiable porte la transition, avec le motif qui la rattache au relevé.
+        //    L'entree est designee par son statut d'arrivee, pas par sa position : une assertion
+        //    sur `last()` dependrait de l'ordre de tri et masquerait ce qu'elle verifie vraiment.
         val trail = SqlDelightAuditRepository(database).entriesFor("FAC-2026-0301").getOrThrow()
-        val paidEntry = trail.last()
+        val paidEntry = trail.single { it.toStatus == InvoiceStatus.PAID }
         assertEquals(InvoiceStatus.DEPOSITED, paidEntry.fromStatus)
-        assertEquals(InvoiceStatus.PAID, paidEntry.toStatus)
-        assertEquals("2026-09-01T10:15:00Z", paidEntry.createdAt)
+        assertEquals("2026-09-01T10:16:00Z", paidEntry.createdAt)
         assertNotNull(paidEntry.reason)
         assertTrue(
             paidEntry.reason!!.contains("TX-2026-0091"),

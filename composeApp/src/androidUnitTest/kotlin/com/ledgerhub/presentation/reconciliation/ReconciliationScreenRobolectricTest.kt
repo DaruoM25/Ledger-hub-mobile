@@ -1,14 +1,9 @@
 package com.ledgerhub.presentation.reconciliation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
@@ -17,9 +12,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runComposeUiTest
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.AppTranslations
 import com.ledgerhub.domain.i18n.StringKey
@@ -34,6 +26,7 @@ import com.ledgerhub.domain.reconciliation.ReconciliationMatch
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -46,8 +39,15 @@ import kotlin.test.assertEquals
  *
  * Assertions en [assertIsDisplayed] uniquement, jamais `assertExists` : un nœud présent dans
  * l'arbre mais invisible ne prouve rien à l'utilisateur.
+ *
+ * La taille de l'écran simulé se déclare en **qualifiers Robolectric**, jamais en enveloppant la
+ * composition dans un `Modifier.size` : celui-ci ramène la taille demandée dans les contraintes
+ * reçues, donc aux 320 dp de l'appareil par défaut de Robolectric. L'écran serait alors mesuré en
+ * compact et la colonne des factures n'existerait pas — à l'inverse de ce que ces tests éprouvent.
+ * La classe simule une tablette par défaut ; le test compact redéclare son propre format.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w1280dp-h900dp")
 @OptIn(ExperimentalTestApi::class)
 class ReconciliationScreenRobolectricTest {
 
@@ -91,7 +91,7 @@ class ReconciliationScreenRobolectricTest {
 
     @Test
     fun theScreen_showsItsTitleAndBothLists_onAnExpandedWidth() = runComposeUiTest {
-        setContent { Viewport(1_000.dp, 800.dp) { ReconciliationContent(state(), onIntent = {}) } }
+        setContent { ReconciliationContent(state(), onIntent = {}) }
 
         onNodeWithTag(ReconciliationTags.SCREEN).assertIsDisplayed()
         onNodeWithText(tr(StringKey.RECONCILIATION_TITLE)).assertIsDisplayed()
@@ -103,8 +103,9 @@ class ReconciliationScreenRobolectricTest {
 
     /** Sous le seuil, les deux faces deviennent des onglets — deux colonnes y seraient illisibles. */
     @Test
+    @Config(qualifiers = "w400dp-h800dp")
     fun onACompactWidth_theTwoSidesBecomeTabs() = runComposeUiTest {
-        setContent { Viewport(400.dp, 800.dp) { ReconciliationContent(state(), onIntent = {}) } }
+        setContent { ReconciliationContent(state(), onIntent = {}) }
 
         onNodeWithTag(ReconciliationTags.TAB_TRANSACTIONS).assertIsDisplayed()
         onNodeWithTag(ReconciliationTags.TAB_INVOICES).assertIsDisplayed()
@@ -113,7 +114,7 @@ class ReconciliationScreenRobolectricTest {
 
     @Test
     fun theCards_carryTheirIdentifiersAsTags() = runComposeUiTest {
-        setContent { Viewport(1_000.dp, 800.dp) { ReconciliationContent(state(), onIntent = {}) } }
+        setContent { ReconciliationContent(state(), onIntent = {}) }
 
         onNodeWithTag(ReconciliationTags.transactionCard("TX-2026-0091")).performScrollTo().assertIsDisplayed()
         onNodeWithTag(ReconciliationTags.invoiceCard("FAC-2026-0301")).performScrollTo().assertIsDisplayed()
@@ -132,38 +133,36 @@ class ReconciliationScreenRobolectricTest {
         var matchRequested = false
 
         setContent {
-            Viewport(1_000.dp, 800.dp) {
-                ReconciliationContent(
-                    uiState = uiState,
-                    onIntent = { intent ->
-                        uiState = when (intent) {
-                            is ReconciliationIntent.SelectTransaction ->
-                                uiState.copy(selectedTransactionId = intent.transactionId)
+            ReconciliationContent(
+                uiState = uiState,
+                onIntent = { intent ->
+                    uiState = when (intent) {
+                        is ReconciliationIntent.SelectTransaction ->
+                            uiState.copy(selectedTransactionId = intent.transactionId)
 
-                            is ReconciliationIntent.SelectInvoice ->
-                                uiState.copy(selectedInvoiceNumber = intent.invoiceNumber)
+                        is ReconciliationIntent.SelectInvoice ->
+                            uiState.copy(selectedInvoiceNumber = intent.invoiceNumber)
 
-                            ReconciliationIntent.PerformMatch -> {
-                                matchRequested = true
-                                uiState.copy(
-                                    matches = listOf(
-                                        ReconciliationMatch(
-                                            transactionId = "TX-2026-0091",
-                                            invoiceNumber = "FAC-2026-0301",
-                                            matchedAtIso = "2026-09-01T10:15:00Z",
-                                            deltaCents = 0L,
-                                        ),
+                        ReconciliationIntent.PerformMatch -> {
+                            matchRequested = true
+                            uiState.copy(
+                                matches = listOf(
+                                    ReconciliationMatch(
+                                        transactionId = "TX-2026-0091",
+                                        invoiceNumber = "FAC-2026-0301",
+                                        matchedAtIso = "2026-09-01T10:15:00Z",
+                                        deltaCents = 0L,
                                     ),
-                                    selectedTransactionId = null,
-                                    selectedInvoiceNumber = null,
-                                )
-                            }
-
-                            else -> uiState
+                                ),
+                                selectedTransactionId = null,
+                                selectedInvoiceNumber = null,
+                            )
                         }
-                    },
-                )
-            }
+
+                        else -> uiState
+                    }
+                },
+            )
         }
 
         // Rien n'est sélectionné : le bouton n'existe pas encore.
@@ -193,11 +192,7 @@ class ReconciliationScreenRobolectricTest {
     @Test
     fun anAlreadyMatchedTransaction_showsTheReconciledBadge() = runComposeUiTest {
         val matched = ReconciliationMatch("TX-2026-0091", "FAC-2026-0301", "2026-09-01T10:15:00Z", 0L)
-        setContent {
-            Viewport(1_000.dp, 800.dp) {
-                ReconciliationContent(state(matches = listOf(matched)), onIntent = {})
-            }
-        }
+        setContent { ReconciliationContent(state(matches = listOf(matched)), onIntent = {}) }
 
         onNodeWithTag(ReconciliationTags.transactionCard("TX-2026-0091"))
             .performScrollTo()
@@ -208,15 +203,13 @@ class ReconciliationScreenRobolectricTest {
     @Test
     fun aMismatchedPair_showsTheAmountMismatchBadge() = runComposeUiTest {
         setContent {
-            Viewport(1_000.dp, 800.dp) {
-                ReconciliationContent(
-                    uiState = state(transactions = listOf(transaction(cents = 23_850))).copy(
-                        selectedTransactionId = "TX-2026-0091",
-                        selectedInvoiceNumber = "FAC-2026-0301",
-                    ),
-                    onIntent = {},
-                )
-            }
+            ReconciliationContent(
+                uiState = state(transactions = listOf(transaction(cents = 23_850))).copy(
+                    selectedTransactionId = "TX-2026-0091",
+                    selectedInvoiceNumber = "FAC-2026-0301",
+                ),
+                onIntent = {},
+            )
         }
 
         onNodeWithTag(ReconciliationTags.invoiceCard("FAC-2026-0301"))
@@ -230,28 +223,12 @@ class ReconciliationScreenRobolectricTest {
     fun inEnglish_theScreenIsFullyTranslated() = runComposeUiTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides AppLanguage.EN) {
-                Viewport(1_000.dp, 800.dp) { ReconciliationContent(state(), onIntent = {}) }
+                ReconciliationContent(state(), onIntent = {})
             }
         }
 
         onNodeWithText(tr(StringKey.RECONCILIATION_TITLE, AppLanguage.EN)).assertIsDisplayed()
         onNodeWithText(tr(StringKey.RECONCILIATION_TRANSACTIONS_COLUMN, AppLanguage.EN)).assertIsDisplayed()
         onNodeWithText(tr(StringKey.RECONCILIATION_INVOICES_COLUMN, AppLanguage.EN)).assertIsDisplayed()
-    }
-}
-
-/**
- * Fenêtre de test d'une largeur donnée, **en dp réellement disponibles**.
- *
- * `Modifier.size` seul ramène la taille demandée dans les contraintes reçues, donc à la largeur de
- * l'appareil simulé : un `Box(Modifier.size(1000.dp, ...))` y mesurerait ~400 dp et l'écran
- * basculerait sur l'agencement en onglets, à l'inverse de ce que le test prétend éprouver. La
- * densité est donc ramenée à 1, de sorte que la dalle expose assez de dp — même helper qu'en
- * US-17 (`AuditTrailTimelineInstrumentedTest`).
- */
-@Composable
-private fun Viewport(width: Dp, height: Dp, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1f)) {
-        Box(modifier = Modifier.size(width = width, height = height)) { content() }
     }
 }
