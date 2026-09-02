@@ -1540,3 +1540,136 @@ l'US-22.
 - **La feuille n'a pas de ratio A4 strict** : elle occupe la largeur disponible, conformément aux
   « proportions adaptées au mobile » du cahier des charges. Un vrai ratio 1:1,414 imposerait un
   défilement horizontal ou un texte illisible sur un téléphone.
+
+---
+
+## US-24 — Panneau d'audit et conformité Factur-X 2026
+- **Date :** 2026-09-02
+- **Branche :** `feature/US-24-compliance-panel-facturx-2026`
+- **Statut :** ✅ N1/N2/N3a verts (1005/1005 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+
+### Décision d'architecture : le moteur orchestre, il ne réimplémente rien
+`ComplianceAuditor` ne contient aucune règle fiscale propre. La longueur du SIRET vient de
+`FiscalValidation`, sa clé de contrôle de `LuhnChecksum` (dérogation La Poste comprise), le format
+du numéro de TVA de `FiscalValidation` et sa clé modulo 97 de `FrenchVatNumber`, les totaux des
+fonctions de `InvoiceTotals`. Une seconde implémentation de l'une de ces règles finirait par
+diverger de la première — et un audit qui contredit le formulaire qu'il audite ne vaut rien.
+
+L'audit porte sur un `ComplianceSubject` et non sur une `Invoice` : `Invoice` exige au moins une
+ligne valide, donc une facture en cours de saisie n'en est pas une — et c'est exactement à ce
+moment-là qu'un audit sert. Le moteur reste ainsi éprouvable en `commonTest` sans composer
+d'interface, comme `AccountingArchiveBuilder` en US-22.
+
+### Les trois arbitrages de gravité, et pourquoi
+| Contrôle | `FAILED` (rouge) | `WARNING` (ambre) |
+|---|---|---|
+| SIRET | absent ou ≠ 14 chiffres | 14 chiffres, **clé de Luhn fausse** |
+| TVA | mal formé, clé incohérente, ou SIREN d'une autre société | **absent** (franchise en base) |
+| Mentions légales | — | `applyB2bPenalties` décoché |
+| Structure Factur-X | aucune ligne, totaux divergents des lignes | `generateFacturX` décoché |
+
+**Luhn en avertissement** n'est pas une indulgence : moins de 14 chiffres n'identifie *aucun*
+établissement, tandis qu'une clé fausse désigne un identifiant plausible mais douteux. Le jeu de
+démonstration de l'application en fournit d'ailleurs la preuve — ses SIRET ne satisfont pas Luhn
+(constaté en US-21), et les bloquer afficherait un bandeau rouge sur les propres factures d'exemple
+du produit.
+
+**TVA absente en avertissement** : une entreprise en franchise en base n'en a légitimement pas, ce
+que `FiscalValidation.validateVatNumber` traite déjà comme optionnel.
+
+La cohérence du numéro de TVA est vérifiée **deux fois**, et ce n'est pas redondant :
+`FrenchVatNumber.isValid` contrôle que la clé correspond au SIREN *porté par le numéro*, puis une
+comparaison vérifie que ce SIREN est bien celui de l'émetteur. Un numéro parfaitement formé mais
+appartenant à une autre société passerait le premier contrôle — un cas de test le prouve.
+
+### 🧾 Invariant assumé — la devise
+Le cahier des charges demande de contrôler la devise. **Le domaine n'en porte aucune** : `Money`
+compte des centimes, le formatage est en euros, et le générateur Factur-X n'expose pas de code
+devise variable. Le contrôle porte donc sur une constante documentée
+(`ComplianceAuditor.CURRENCY = "EUR"`) plutôt que sur une donnée inexistante — le prétendre serait
+une vérification de façade. Rendre la devise configurable toucherait `Invoice`, `FacturXDocument`,
+le schéma SQLDelight et sa migration : c'est une US à part entière.
+
+### Machine à états — le rapport ne survit pas à la frappe
+Le rapport n'est produit qu'au geste de l'utilisateur (`ComplianceScanRequested`), et il est
+**invalidé dès la modification suivante**. C'est la propriété centrale de l'US : un rapport périmé
+présenté comme actuel ferait émettre une facture sur la foi d'un contrôle qui ne porte plus sur
+elle. L'invalidation vit dans `revalidate()`, le passage obligé de toute modification — un chemin
+parallèle finirait par en oublier un. Le scan, lui, est intercepté **avant** `revalidate` : y
+passer effacerait le rapport dans le geste même qui le demande.
+
+Le numéro de TVA de l'émetteur est **injecté** au ViewModel plutôt que recopié dans l'état : il
+appartient aux paramètres fiscaux du cabinet, pas à la facture.
+
+### Placement
+Panneau rendu dans `InvoiceFormContent`, après les mentions légales B2B et avant les actions : un
+contrôle de conformité conclut la saisie, il ne l'ouvre pas. **Absent du mode canvas** à dessein —
+la feuille A4 est un document, et y poser un panneau de contrôle casserait l'illusion papier que
+l'US-15 puis l'US-23 ont construite.
+
+La checklist est taguée **sans fusionner** pour que chaque ligne reste atteignable sous son tag
+imposé ; chaque ligne, elle, est fusionnée — elle n'a aucun enfant interactif, et un contrôle est
+une unité, pas un glyphe suivi de deux textes.
+
+### Internationalisation
+25 clés nouvelles dans les trois emplacements (enum, FR, EN). L'invariant
+`FR.keys == EN.keys == StringKey.entries` reste garanti par `AppTranslationsTest`. Les motifs de
+non-conformité sont portés par des `StringKey` et non par du texte libre : un message d'audit non
+traduisible serait un trou dans la parité que le test ne pourrait pas voir. La mention des 40 €
+réutilise la formulation déjà figée par `b2bLegalMentions_useTheStatutoryWording`.
+
+### Tests
+- **N1 (commonTest)** — `ComplianceAuditorTest`, 22 cas : un constat par contrôle dans l'ordre du
+  domaine, facture conforme, **gravité globale = la pire**, SIRET trop court / absent / non
+  numérique / à clé fausse, **dérogation La Poste**, TVA absente / mal formée / à clé fausse /
+  **appartenant à une autre société** / normalisée avant jugement, mentions B2B, facture sans
+  ligne, totaux divergents, Factur-X désactivé, invariant devise, **formulaire vierge** et
+  déterminisme. · `CompliancePanelTagsTest`, 5 cas : les 8 tags figés, unicité, préfixe de
+  domaine. · `AppTranslationsTest` +1 cas de sentinelles.
+- **N2 (commonTest)** — `InvoiceFormComplianceTest`, 11 cas : aucun rapport à l'ouverture, la
+  saisie n'en produit pas, le scan couvre les quatre contrôles, facture conforme, **formulaire
+  vierge et ses écarts bloquants**, invalidation par frappe / par édition de ligne / par les deux
+  bascules, re-scan après correction, idempotence, et **le scan ne touche ni la saisie, ni les
+  erreurs, ni les totaux**.
+- **N3a (Robolectric, `w411dp-h891dp`)** — `CompliancePanelRobolectricTest`, 10 cas : panneau dans
+  le formulaire, ni checklist ni bandeau avant scan, **les 8 nœuds imposés** après scan, chaque
+  ligne énonçant son contrôle et son motif, bandeau **rouge** sur formulaire vierge, bandeau
+  **ambre** sur écart admissible, **aucun bandeau** sur facture conforme, TVA absente en
+  avertissement, disparition de la checklist après édition, traduction anglaise.
+- **N3b (instrumenté, rédigé et compilé)** — `CompliancePanelInstrumentedTest`, 6 cas sur une
+  facture volontairement imparfaite (clé de Luhn client fausse, mentions B2B décochées) :
+  joignabilité du panneau et du bouton, cible tactile ≥ 48 dp, **scan au doigt** produisant la
+  checklist, bandeau ambre énonçant les deux écarts, invalidation sur appareil, et export de la
+  capture officielle `US24_mobile_compliance_panel_sdk_gphone64_x86_64.png` **cadrée sur
+  `compliance_panel`**.
+
+`performScrollTo()` systématique aux deux niveaux 3 : le panneau vit après les lignes, le
+récapitulatif et les mentions légales — la leçon des trois passes QA de l'US-22 appliquée d'emblée.
+
+### Deux attentes de test corrigées en cours de route
+La première exécution de N3a a signalé deux échecs, tous deux imputables aux **attentes du test** et
+non au code :
+- sur un formulaire vierge, c'est le SIRET **client** qui manque, celui de l'émetteur venant des
+  paramètres fiscaux et étant déjà valide. L'assertion nommait le mauvais écart ;
+- l'assertion anglaise sur le bouton de scan ne défilait pas avant d'affirmer.
+
+Corrigées, pas contournées.
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 1005 tests, 0 échec, 0 erreur, 0 ignoré |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** |
+
+### Points d'attention transmis
+- **La capture officielle n'est pas encore produite** : le test N3b est rédigé et compilé, son
+  exécution demande un émulateur Pixel 5 API 35
+  (`./scripts/run-qa.ps1 -Suite Instrumented -ScreenshotPrefix "US24" -AvdName "Pixel_5_API_35"`).
+- **L'audit n'empêche rien** : il informe. Un rapport bloquant ne verrouille pas le bouton
+  d'émission — le formulaire garde sa propre validation, et lier les deux relève d'un arbitrage
+  produit qui n'était pas au cahier des charges.
+- **Le SIREN du client est déduit** des 9 premiers chiffres de son SIRET, faute de champ dédié dans
+  le formulaire. Exact par construction, mais à revoir le jour où le client portera son propre
+  SIREN.
+- **Le contrôle de TVA porte sur l'émetteur seul.** Le numéro de TVA du client n'est pas saisi dans
+  le formulaire ; l'auditer supposerait de l'ajouter, ce qui déborde le périmètre.

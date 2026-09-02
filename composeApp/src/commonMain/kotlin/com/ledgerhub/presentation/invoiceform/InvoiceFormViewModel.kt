@@ -2,6 +2,8 @@ package com.ledgerhub.presentation.invoiceform
 
 import com.ledgerhub.data.invoice.MockInvoiceRepository
 import com.ledgerhub.domain.client.ClientRepository
+import com.ledgerhub.domain.compliance.ComplianceAuditor
+import com.ledgerhub.domain.compliance.ComplianceSubject
 import com.ledgerhub.domain.client.DuplicateClientException
 import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.FiscalValidation
@@ -14,6 +16,7 @@ import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.domain.invoice.parseAmountToCents
+import com.ledgerhub.domain.settings.TaxSettings
 import com.ledgerhub.domain.invoice.totalHtOf
 import com.ledgerhub.domain.invoice.totalTtcOf
 import com.ledgerhub.domain.invoice.totalVatOf
@@ -30,6 +33,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** Un SIRET est un SIREN de 9 chiffres suivi d'un NIC de 5 — voir `LuhnChecksum`. */
+private const val SIREN_LENGTH = 9
 
 private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
 private val EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
@@ -50,6 +56,14 @@ class InvoiceFormViewModel(
     issuer: Party = CabinetIdentity.party,
     /** Taux pré-sélectionné sur toute nouvelle ligne — configurable aux paramètres fiscaux. */
     private val defaultVatRate: VatRate = VatRate.TAUX_NORMAL,
+    /**
+     * Numéro de TVA intracommunautaire de l'émetteur, audité par le panneau de conformité (US-24).
+     *
+     * Injecté plutôt que lu dans l'état : il appartient aux paramètres fiscaux du cabinet
+     * ([TaxSettings]), pas à la facture. L'y recopier en ferait une donnée à tenir synchronisée
+     * pour rien.
+     */
+    private val issuerVatNumber: String = TaxSettings.Default.vatNumber,
     /**
      * Annuaire des fiches clients alimentant le sélecteur (US-11). `null` = pas d'annuaire
      * branché : le champ raison sociale se comporte alors comme un champ libre, sans suggestion
@@ -113,6 +127,10 @@ class InvoiceFormViewModel(
 
             is InvoiceFormIntent.OnSaveQuickClient ->
                 saveQuickClient(intent.name, intent.siret, intent.email)
+
+            // Hors du chemin de `revalidate`, qui invalide justement le rapport : y passer
+            // effacerait le rapport dans le geste même qui le demande.
+            InvoiceFormIntent.ComplianceScanRequested -> runComplianceScan()
 
             else -> _uiState.update { current -> revalidate(applyChange(current, intent)) }
         }
@@ -313,6 +331,7 @@ class InvoiceFormViewModel(
             // ils n'atteignent jamais cette branche.
             InvoiceFormIntent.SaveDraft,
             InvoiceFormIntent.ValidateAndIssue,
+            InvoiceFormIntent.ComplianceScanRequested,
             is InvoiceFormIntent.ClientNameChanged,
             is InvoiceFormIntent.OnClientQueryChanged,
             is InvoiceFormIntent.OnClientSelected,
@@ -322,6 +341,42 @@ class InvoiceFormViewModel(
             is InvoiceFormIntent.OnSaveQuickClient,
             -> current
         }
+
+    // ── Audit de conformité (US-24) ──────────────────────────────────────────
+
+    /**
+     * Produit le rapport d'audit à partir de l'état courant.
+     *
+     * Le sujet ne retient que les **lignes valides** : une ligne encore incomplète sous le doigt
+     * de l'utilisateur n'est pas un manquement réglementaire, c'est une saisie en cours. Les
+     * totaux, eux, sont ceux que l'écran affiche — c'est leur cohérence avec les lignes que
+     * l'auditeur vérifie, et la vérifier sur des valeurs recalculées pour l'occasion ne
+     * prouverait rien.
+     */
+    private fun runComplianceScan() {
+        _uiState.update { current ->
+            current.copy(
+                complianceReport = ComplianceAuditor.audit(
+                    ComplianceSubject(
+                        issuer = current.issuer,
+                        issuerVatNumber = issuerVatNumber,
+                        client = Party(
+                            name = current.clientName,
+                            siren = current.clientSiret.take(SIREN_LENGTH),
+                            siret = current.clientSiret,
+                            email = current.clientEmail,
+                        ),
+                        lines = current.lines.mapNotNull { it.toDomainOrNull() },
+                        totalHt = current.totalHt,
+                        totalVat = current.totalVat,
+                        totalTtc = current.totalTtc,
+                        applyB2bPenalties = current.applyB2bPenalties,
+                        generateFacturX = current.generateFacturX,
+                    ),
+                ),
+            )
+        }
+    }
 
     /** Marque [field] comme saisi — ses erreurs deviennent affichables (voir [InvoiceFormUiState.visibleErrors]). */
     private fun InvoiceFormUiState.touch(field: InvoiceFormField): InvoiceFormUiState =
@@ -362,6 +417,10 @@ class InvoiceFormViewModel(
             totalHt = totalHtOf(validDomainLines),
             totalVat = totalVatOf(validDomainLines),
             totalTtc = totalTtcOf(validDomainLines),
+            // La facture a changé : le rapport d'audit ne porte plus sur elle (US-24). Invalidé
+            // ici parce que c'est le passage obligé de toute modification — un chemin parallèle
+            // finirait par en oublier un.
+            complianceReport = null,
         )
     }
 
