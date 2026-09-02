@@ -1429,3 +1429,114 @@ une compression qui aboutit.
 
 **Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 939 tests, 0 échec ;
 `compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.
+
+---
+
+## US-23 — Mode canvas A4 (consolidation du canvas US-15)
+- **Date :** 2026-09-02
+- **Branche :** `feature/US-23-invoice-form-canvas-mode`
+- **Statut :** ✅ N1/N2/N3a verts (956/956 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+
+### Constat d'ouverture : la fonctionnalité existait déjà
+L'audit préalable a établi que `InvoicePaperCanvas.kt` (US-15, 422 lignes) livrait déjà la quasi-
+totalité du cahier des charges US-23 : bascule de mode, feuille A4 blanche à ombre portée sur
+bureau gris, émetteur à gauche, encart client à droite, tableau à saisie directe sans bordures
+invasives, totaux HT/TVA/TTC en direct, i18n bilingue, et quatre suites de tests (5 + 4 + 8 + 5 cas)
+avec capture officielle.
+
+**Le seul écart réel était le contrat de tags.** Écrire un second canvas aurait produit deux
+représentations concurrentes du même `InvoiceFormUiState` — précisément ce que l'US-15 avait pris
+soin d'éviter. L'US-23 a donc été traitée comme une **consolidation**, arbitrage validé avant
+écriture.
+
+### Arbitrage A — les tags
+Un nœud Compose ne porte qu'un seul `testTag` : les deux jeux ne pouvaient pas coexister sur les
+mêmes nœuds. Les huit valeurs canoniques vivent désormais dans `InvoiceCanvasTags` ;
+`InvoicePaperCanvasTags` **délègue** pour les quatre tags concernés (`CANVAS`, `TOTAL_HT`,
+`TOTAL_VAT`, `TOTAL_TTC`).
+
+Le re-pointage était **compile-safe** : vérification faite avant écriture qu'aucun littéral
+`"invoice_paper…"` n'existait hors du fichier source — les sept fichiers qui s'en servent passent
+tous par les constantes. Les suites US-15 et US-16 n'ont pas été touchées d'une ligne, et passent.
+
+Les tags sans équivalent US-23 — émetteur, champs client, cellules de ligne, ventilation TVA —
+gardent leurs valeurs d'origine : rien ne justifiait d'y toucher.
+
+### Arbitrage B — le mode reste un état de vue
+Le cahier des charges demandait un « ViewModel MVI gérant la bascule ». Le mode est resté un
+`rememberSaveable` de l'écran, comme l'US-15 l'avait décidé et documenté : basculer change la
+représentation, pas la facture. Le hisser dans `InvoiceFormUiState` aurait mêlé une préférence
+d'affichage aux données du document et cassé l'invariant que verrouille `InvoiceFormModeTest`,
+sans rien apporter — `rememberSaveable` survit déjà à la rotation.
+
+### Ce qui a réellement été ajouté
+Trois nœuds ne portaient **aucun** tag, et une distinction manquait :
+
+| Tag imposé | Avant | Après |
+|---|---|---|
+| `invoice_canvas_container` | `invoice_paper_canvas` sur le bureau | re-pointé |
+| `invoice_canvas_page` | **la feuille blanche n'avait aucun tag** | ➕ nouveau |
+| `invoice_canvas_client_card` | **l'encart client n'avait aucun tag** | ➕ nouveau |
+| `invoice_canvas_items_table` | **le tableau n'avait aucun tag** | ➕ nouveau |
+| `invoice_canvas_total_ht` / `_tva` / `_ttc` | `invoice_paper_total_*` | re-pointés |
+| `invoice_mode_canvas_btn` | `invoice_form_mode_segment_BLANK_PAGE` | re-pointé, `when` exhaustif |
+
+La séparation **bureau / feuille** est l'apport structurant : c'est le conteneur qui défile, et
+c'est la feuille seule que cadre la capture QA — le décor gris qui l'entoure n'est pas le document.
+
+**`mergeDescendants = false` explicite** sur l'encart client et le tableau, bien que ce soit le
+défaut : l'inverse serait ici un défaut de conception. Fusionner absorberait les champs éditables,
+qui cesseraient d'être atteignables un par un — au lecteur d'écran comme aux tests. Deux cas de
+niveau 3a le vérifient plutôt que de le supposer.
+
+### Internationalisation
+**Aucune clé nouvelle.** Le canvas est déjà entièrement bilingue (`FORM_MODE_*`, `PREVIEW_*`,
+`PAPER_*`), sentinelles comprises. Le mot « canvas » du cahier des charges désigne le mode dont le
+libellé FR figé est « Mode Page Blanche » : le renommer aurait cassé une sentinelle US-15 et la
+parité avec le Web, pour un gain nul. L'invariant `FR.keys == EN.keys == StringKey.entries` reste
+donc intact sans intervention.
+
+### Tests
+- **N1 (commonTest)** — `InvoiceCanvasTagsTest`, 9 cas : les 8 tags imposés figés caractère pour
+  caractère, liste sans doublon, bureau et feuille tagués à part, **cohérence des alias** hérités
+  de l'US-15, valeurs d'origine préservées pour les tags hors périmètre, tag du segment canvas,
+  segment formulaire inchangé, unicité des segments, aucune collision avec `InvoiceFormTags`.
+- **N2 (commonTest)** — aucun cas nouveau : le mode restant un état de vue, la machine à états du
+  ViewModel est inchangée. `InvoiceFormViewModelTest` et `InvoicePaperCanvasReactivityTest`
+  couvrent déjà l'édition de ligne et la propagation des totaux.
+- **N3a (Robolectric, `w411dp-h891dp`)** — `InvoiceCanvasModeRobolectricTest`, 8 cas : le bouton
+  imposé ouvre le canvas et se donne pour sélectionné, **les 8 tags présents dans un même rendu**,
+  la feuille est géométriquement contenue dans le bureau, l'encart client et le tableau gardent
+  leurs enfants adressables, la frappe sur le document met à jour les trois totaux sous leurs tags
+  imposés, l'encart client s'édite en place, et le contrat de tags ne dépend pas de la langue.
+- **N3b (instrumenté, rédigé et compilé)** — `InvoiceCanvasModeInstrumentedTest`, 6 cas sur une
+  facture de démonstration à trois lignes dont une au taux réduit : ouverture du mode,
+  **joignabilité des huit nœuds**, édition de l'encart client sous le doigt, cibles tactiles
+  ≥ 48 dp sur les neuf cellules du tableau, totaux réels (709,70 € HT / 133,28 € TVA / 842,98 €
+  TTC), et export de la capture officielle
+  `US23_mobile_invoice_canvas_mode_sdk_gphone64_x86_64.png` **cadrée sur `invoice_canvas_page`**.
+
+`performScrollTo()` systématique avant toute interaction ou assertion sur un nœud bas, aux deux
+niveaux 3 : la feuille est plus haute qu'un écran de téléphone dès trois lignes, et exiger qu'elle
+tienne d'un coup serait une promesse que la police système suffit à briser — leçon retenue de
+l'US-22.
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 956 tests, 0 échec, 0 erreur, 0 ignoré |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** |
+
+### Points d'attention transmis
+- **La capture officielle n'est pas encore produite** : le test N3b est rédigé et compilé, son
+  exécution demande un émulateur Pixel 5 API 35
+  (`./scripts/run-qa.ps1 -Suite Instrumented -ScreenshotPrefix "US23" -AvdName "Pixel_5_API_35"`).
+- **Les valeurs runtime de quatre tags US-15 ont changé** (`invoice_paper_canvas` et les trois
+  totaux). Aucun code ne les référençait littéralement, mais un outil QA externe qui les
+  piloterait par chaîne devra être mis à jour.
+- **Deux captures documentent le même écran** : `US15_…` (feuille entière avec le bureau) et
+  `US23_…` (le document seul). Le cadrage les distingue ; si la QA préfère n'en garder qu'une,
+  c'est un arbitrage à trancher.
+- **La feuille n'a pas de ratio A4 strict** : elle occupe la largeur disponible, conformément aux
+  « proportions adaptées au mobile » du cahier des charges. Un vrai ratio 1:1,414 imposerait un
+  défilement horizontal ou un texte illisible sur un téléphone.
