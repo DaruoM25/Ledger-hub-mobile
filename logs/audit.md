@@ -1325,3 +1325,57 @@ l'écran pendant qu'elle tourne, pas à quel pixel elle s'est arrêtée. Son dé
 **Ce qui reste non vérifié :** aucun émulateur sur ce poste. Le bornage au visible et le garde-fou
 JVM rendent le débordement structurellement impossible, mais la confirmation sur appareil réel
 revient à la prochaine passe QA.
+
+### 🔧 Troisième correctif — le défilement était éteint, donc rien n'était joignable
+
+**Constat QA (3ᵉ passe) :** bouton bleu toujours tronqué, seuls quelques pixels du haut visibles.
+
+#### Le mécanisme, enfin complet
+Trois faits qui ne s'expliquaient qu'ensemble :
+
+1. **La feuille n'a jamais été trop haute.** La capture de la 2ᵉ passe mesure 1081 × 1475 px, soit
+   393 × 536 dp sur un écran de 851 dp. Les deux resserrages de gabarit traitaient un symptôme qui
+   n'existait pas.
+2. **La fenêtre d'un `Dialog` ne reçoit pas les insets de l'activité.** `safeDrawingPadding()` y
+   mesure donc zéro — le correctif précédent était inopérant, et le `DialogProperties` de commonMain
+   n'expose pas le réglage Android qui ferait entrer ces insets.
+3. **Un `verticalScroll` dont le contenu tient a un `maxValue` de zéro** : Compose y éteint le
+   défilement. Tant que la feuille pouvait s'étirer sur toute la hauteur de la fenêtre, son contenu
+   tenait toujours, donc rien ne défilait — et `performScrollTo()`, ajouté au premier correctif,
+   était un appel sans effet. Le bouton, ancré au bas d'une fenêtre débordant derrière la barre
+   système, était hors d'atteinte du doigt comme du test.
+
+C'est le point 3 qui explique pourquoi trois passes QA ont échoué de la même façon : chaque
+correctif traitait la hauteur, alors que le défaut portait sur la **joignabilité**.
+
+#### Correctif
+- **Plafond de hauteur** (`SheetMaxHeight = 560.dp`) : la feuille est plus courte que son contenu,
+  donc le conteneur redevient défilable. C'est ce plafond, et lui seul, qui rend le bouton
+  atteignable. 560 dp est par ailleurs une bonne proportion pour une feuille ancrée en bas — deux
+  tiers d'un Pixel 5, l'écran restant visible au-dessus.
+- **Retrait bas explicite** (`SheetBottomInset = 48.dp`), inclus dans le contenu défilant : le
+  bouton remonte au-dessus de la barre système une fois la feuille défilée, au lieu de s'arrêter à
+  son bord. Dimensionné pour la navigation à trois boutons, la plus gourmande.
+- `safeDrawingPadding()` retiré : inopérant dans un dialogue, il donnait l'illusion d'une garantie.
+
+#### Le garde-fou JVM éprouve désormais le bon geste
+`ExportModalGeometryRobolectricTest` ne mesure plus seulement une hauteur : il **fait défiler
+jusqu'au bouton et exige qu'il s'affiche**, au gabarit d'un Pixel 5, dans les deux langues, sur
+l'état `READY` comme au repos, cartes de format comprises. C'est exactement le geste qui échouait
+sur l'appareil — il échoue maintenant sur la JVM, avant qu'un émulateur ne soit allumé. Le plafond
+lui-même est vérifié à part : sans lui, le défilement s'éteint et toute la joignabilité s'effondre.
+
+#### Conséquence assumée sur le niveau 3a
+La feuille défile désormais par construction : cinq tests de `ExportModalRobolectricTest` qui
+affirmaient un nœud bas « affiché » sans défiler ont été ajustés pour l'atteindre comme le fait
+l'utilisateur. Les assertions ne perdent rien à ce détour — elles gagnent de porter sur le même
+geste que le sien.
+
+#### Niveau 3b
+La condition d'attente de la barre de progression tolère les deux issues (compression en vol ou
+déjà terminée). Ce n'est pas un assouplissement de ce qui est éprouvé — l'assertion qui suit exige
+toujours la barre — mais la garantie de ne pas immobiliser la suite dix secondes quand c'est autre
+chose qui a cédé : un test qui échoue doit le faire vite et pour la bonne raison.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 939 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.

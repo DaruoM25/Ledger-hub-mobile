@@ -252,15 +252,23 @@ class ExportModalInstrumentedTest {
         // en `GENERATING` remplace un bouton de 48 dp par une barre de 8 dp, donc toute la feuille
         // se réagence sous elle. Attendre une visibilité stricte reviendrait à courir après une
         // géométrie en train de changer.
+        // La condition tolère **les deux** issues : compression en vol, ou déjà terminée. Ce
+        // n'est pas un assouplissement de ce qui est éprouvé — l'assertion qui suit exige toujours
+        // la barre — mais une garantie de ne pas immobiliser la suite dix secondes lorsque c'est
+        // autre chose qui a cédé. Un test qui échoue doit le faire vite et pour la bonne raison.
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag(ExportModalTags.PROGRESS_BAR)
-                .fetchSemanticsNodes().isNotEmpty()
+                .fetchSemanticsNodes().isNotEmpty() ||
+                composeRule.onAllNodesWithTag(ExportModalTags.DOWNLOAD_BTN)
+                    .fetchSemanticsNodes().isNotEmpty()
         }
 
         // `assertExists` et non `assertIsDisplayed` : la barre ne vit que deux secondes, et la
         // faire défiler vers le champ de vision pendant ce temps reviendrait à courir après elle.
         // Ce que ce test doit prouver, c'est que la compression **existe** à l'écran pendant
-        // qu'elle tourne — pas à quel pixel elle s'est arrêtée.
+        // qu'elle tourne — pas à quel pixel elle s'est arrêtée. L'assertion reste stricte : deux
+        // secondes de compression ne peuvent pas être écoulées avant le premier sondage, et si
+        // elles le sont, c'est que le clic n'a jamais atteint le bouton.
         composeRule.onNodeWithTag(ExportModalTags.PROGRESS_BAR).assertExists()
         composeRule.onNodeWithText(tr(StringKey.EXPORT_GENERATING_LABEL)).assertExists()
 

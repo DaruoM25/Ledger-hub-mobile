@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.domain.export.AccountingArchive
@@ -163,7 +164,7 @@ class ExportModalRobolectricTest {
         onNodeWithTag("export_format_fec").assertIsDisplayed()
         onNodeWithTag("export_format_facturx").assertIsDisplayed()
         onNodeWithTag("export_format_excel").assertIsDisplayed()
-        onNodeWithTag("export_generate_btn").assertIsDisplayed()
+        onNodeWithTag("export_generate_btn").performScrollTo().assertIsDisplayed()
 
         // Les deux derniers appartiennent à des étapes ultérieures : au repos, ils n'existent pas.
         onNodeWithTag("export_progress_bar").assertDoesNotExist()
@@ -266,7 +267,10 @@ class ExportModalRobolectricTest {
             )
         }
 
-        onNodeWithTag(ExportModalTags.PROGRESS_BAR).assertIsDisplayed()
+        // La feuille est plafonnée et défile désormais (voir `SheetMaxHeight`) : ce qui vit en
+        // bas s'atteint comme sur l'appareil, en faisant défiler. Les assertions ne perdent rien à
+        // ce détour — elles gagnent de porter sur le même geste que celui de l'utilisateur.
+        onNodeWithTag(ExportModalTags.PROGRESS_BAR).performScrollTo().assertIsDisplayed()
         onNodeWithText(tr(StringKey.EXPORT_GENERATING_LABEL)).assertIsDisplayed()
         onNodeWithText("45 %").assertIsDisplayed()
         onNodeWithTag(ExportModalTags.GENERATE_BTN).assertDoesNotExist()
@@ -277,10 +281,10 @@ class ExportModalRobolectricTest {
     fun onceReady_theConfirmationAndDownloadButtonAppear() = runComposeUiTest {
         setContent { StaticModal(readyState()) }
 
-        onNodeWithTag(ExportModalTags.SUCCESS).assertIsDisplayed()
+        onNodeWithTag(ExportModalTags.SUCCESS).performScrollTo().assertIsDisplayed()
         onNodeWithText(tr(StringKey.EXPORT_SUCCESS_TITLE)).assertIsDisplayed()
         onNodeWithText("3 " + tr(StringKey.EXPORT_DOCUMENT_COUNT_LABEL)).assertIsDisplayed()
-        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).assertIsDisplayed()
+        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performScrollTo().assertIsDisplayed()
         onNodeWithText(tr(StringKey.EXPORT_DOWNLOAD_ACTION)).assertIsDisplayed()
         onNodeWithTag(ExportModalTags.PROGRESS_BAR).assertDoesNotExist()
         onNodeWithTag(ExportModalTags.GENERATE_BTN).assertDoesNotExist()
@@ -296,7 +300,7 @@ class ExportModalRobolectricTest {
             )
         }
 
-        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performClick()
+        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performScrollTo().performClick()
         waitForIdle()
 
         assertEquals(1, downloads)
@@ -314,12 +318,12 @@ class ExportModalRobolectricTest {
         val viewModel = newViewModel(exporter)
         setContent { Modal(viewModel) }
 
-        onNodeWithTag(ExportModalTags.GENERATE_BTN).performClick()
+        onNodeWithTag(ExportModalTags.GENERATE_BTN).performScrollTo().performClick()
         waitUntil(timeoutMillis = 10_000) {
             onAllNodesWithTag(ExportModalTags.DOWNLOAD_BTN).fetchSemanticsNodes().isNotEmpty()
         }
 
-        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performClick()
+        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performScrollTo().performClick()
         waitUntil(timeoutMillis = 10_000) { exporter.callCount == 1 }
 
         val archive = assertNotNull(viewModel.uiState.value.archive)
@@ -336,7 +340,7 @@ class ExportModalRobolectricTest {
 
         onNodeWithTag(ExportModalTags.DATE_FROM).performTextReplacement("2026")
         waitForIdle()
-        onNodeWithTag(ExportModalTags.GENERATE_BTN).performClick()
+        onNodeWithTag(ExportModalTags.GENERATE_BTN).performScrollTo().performClick()
         waitForIdle()
 
         assertEquals(ExportStage.IDLE, viewModel.uiState.value.stage)
@@ -361,6 +365,7 @@ class ExportModalRobolectricTest {
     fun inEnglish_theDownloadButtonKeepsItsZipWording() = runComposeUiTest {
         setContent { StaticModal(state = readyState(), language = AppLanguage.EN) }
 
+        onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performScrollTo()
         onNodeWithText("Download the archive (.zip)").assertIsDisplayed()
     }
 

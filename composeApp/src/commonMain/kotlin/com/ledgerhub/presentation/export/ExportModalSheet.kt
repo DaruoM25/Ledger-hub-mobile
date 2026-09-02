@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -128,6 +127,34 @@ private val FormatCardMinHeight = 56.dp
 private val SheetHorizontalPadding = 20.dp
 private val SheetVerticalPadding = 10.dp
 private val SheetSectionSpacing = 10.dp
+
+/**
+ * Plafond de hauteur de la feuille.
+ *
+ * **Ce plafond est ce qui rend le défilement possible.** Un `verticalScroll` dont le contenu tient
+ * dans son conteneur a un `maxValue` de zéro : Compose y désactive le défilement, et
+ * `performScrollTo()` — comme le doigt de l'utilisateur — n'y peut plus rien. Tant que la feuille
+ * pouvait s'étirer sur toute la hauteur de la fenêtre, son contenu tenait toujours, le défilement
+ * restait donc mort, et le bouton du bas restait coincé sous la barre système.
+ *
+ * En la plafonnant sous la hauteur de son contenu, le conteneur redevient défilable et tout
+ * redevient joignable. 560 dp est aussi une bonne proportion pour une feuille ancrée en bas : les
+ * deux tiers d'un Pixel 5, l'écran restant visible au-dessus.
+ */
+private val SheetMaxHeight = 560.dp
+
+/**
+ * Retrait bas du contenu défilant, au-delà de la marge intérieure.
+ *
+ * La fenêtre d'un `Dialog` ne reçoit pas les insets de l'activité : `safeDrawingPadding()` y
+ * mesure zéro, et le `DialogProperties` de commonMain n'expose pas le réglage Android qui les y
+ * ferait entrer. Le retrait est donc **explicite**, dimensionné pour la navigation à trois boutons
+ * (48 dp), la plus gourmande — la barre de gestes en demande deux fois moins.
+ *
+ * Sans lui, le bouton d'action affleure le bord inférieur et se retrouve sous la barre système une
+ * fois la feuille défilée jusqu'en bas.
+ */
+private val SheetBottomInset = 48.dp
 
 /** Espacement interne d'une section — son libellé et son contenu. */
 private val SectionInnerSpacing = 6.dp
@@ -261,15 +288,13 @@ internal fun ExportModalContent(
                 contentColor = LedgerHubColors.PrimaryText,
                 tonalElevation = 8.dp,
                 modifier = Modifier
-                    // Bornée à la zone **réellement visible**. Le dialogue s'étend derrière les
-                    // barres système : sans ce retrait, la feuille est mesurée sur toute la hauteur
-                    // de la fenêtre, déborde sous la barre de gestes, et son bouton du bas se
-                    // retrouve rogné — sans que le défilement puisse quoi que ce soit, puisque le
-                    // conteneur défilant est alors aussi haut que son contenu. C'est ce qui a fait
-                    // échouer trois tests instrumentés sur Pixel 5.
-                    .safeDrawingPadding()
                     .fillMaxWidth()
                     .widthIn(max = SheetMaxWidth)
+                    // Plafonnée : c'est ce qui rend le contenu défilable, donc joignable.
+                    // Voir [SheetMaxHeight] — sans ce plafond, le défilement est inerte et le
+                    // bouton du bas reste sous la barre système, ce qui a fait échouer trois tests
+                    // instrumentés sur Pixel 5.
+                    .heightIn(max = SheetMaxHeight)
                     .background(LedgerHubColors.Surface, SheetShape)
                     .border(1.dp, LedgerHubColors.Border, SheetShape)
                     // Absorbe le tap : sans cela, toucher la feuille la fermerait, le voile
@@ -279,15 +304,19 @@ internal fun ExportModalContent(
             ) {
                 Column(
                     modifier = Modifier
-                        // Le défilement est la garantie de dernier recours : la feuille est
-                        // dimensionnée pour tenir sur un Pixel 5 (voir [FormatCardMinHeight] et
-                        // `ExportModalGeometryRobolectricTest`), mais une police système agrandie
-                        // ou un écran plus court la feront défiler plutôt que déborder — ce qui
-                        // n'est possible que parce que la feuille est bornée au visible ci-dessus.
+                        // Le défilement n'est pas un filet de sécurité : c'est le mécanisme
+                        // par lequel tout le contenu reste joignable, et il n'existe que parce que
+                        // la feuille est plafonnée sous la hauteur de son contenu (voir
+                        // [SheetMaxHeight]). Éprouvé par `ExportModalGeometryRobolectricTest`.
                         .verticalScroll(rememberScrollState())
                         .padding(
-                            horizontal = SheetHorizontalPadding,
-                            vertical = SheetVerticalPadding,
+                            start = SheetHorizontalPadding,
+                            end = SheetHorizontalPadding,
+                            top = SheetVerticalPadding,
+                            // Le retrait bas fait partie du contenu **défilant** : le bouton
+                            // d'action remonte donc au-dessus de la barre système une fois la
+                            // feuille défilée, au lieu de s'arrêter à son bord.
+                            bottom = SheetVerticalPadding + SheetBottomInset,
                         ),
                     verticalArrangement = Arrangement.spacedBy(SheetSectionSpacing),
                 ) {
