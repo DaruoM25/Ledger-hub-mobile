@@ -1080,3 +1080,352 @@ mise en page — tous deux trouvés par les tests avant toute recette manuelle.
 - **Le message d'erreur de connexion reste en français en dur** dans le ViewModel (repli
   `?: "Erreur inconnue lors de la connexion"`), comme dans `DirectoryViewModel`. Les messages portés
   par les ViewModels forment une dette i18n distincte, non traitée ici.
+
+---
+
+## US-22 — Modale d'export comptable (FEC & Factur-X)
+- **Date :** 2026-09-02
+- **Branche :** `feature/US-22-accounting-export-modal`
+- **Statut :** ✅ N1/N2/N3a verts (934/934 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+
+### Décision d'architecture
+Le format d'export est un **enum de domaine** (`ExportFormat`) qui porte son extension et son type
+MIME, et la période un **objet de domaine** (`ExportPeriod`) qui sait se valider. Ni l'un ni l'autre
+ne vit dans le ViewModel : c'est ce qui permet d'éprouver le filtrage et les bornes sans composition.
+
+`AccountingArchiveBuilder` filtre et trie **une seule fois**, en amont du `when` sur le format. Les
+trois documents couvrent donc exactement les mêmes pièces dans le même ordre — sans quoi deux
+exports d'une même période remis au même cabinet ne se recouperaient pas. La synthèse Excel
+réutilise `LedgerCsvExport` (US-19) au lieu de réécrire un CSV.
+
+Le FEC porte les **18 colonnes de l'article A.47 A-1 du LPF** et une écriture équilibrée par facture
+(411000 au débit du TTC, 706000 et 445710 au crédit). La ligne de TVA est omise quand la taxe est
+nulle : une ligne à `0,00` affirmerait une TVA collectée nulle sur un compte qui n'aurait pas dû
+être mouvementé.
+
+### Progression : pourquoi 40 paliers plutôt qu'une attente unique
+L'archive est produite en quelques millisecondes ; la compression annoncée est une **simulation
+assumée**. Elle est égrenée en 40 paliers de 50 ms parce qu'une barre qui saute de 0 à 100 % ne
+renseigne sur rien, et parce qu'un état qui ne change qu'une fois n'offre aux tests aucune prise.
+La barre est **déterminée** et non indéterminée : une animation infinie empêcherait `waitForIdle()`
+de rendre la main sous Robolectric.
+
+`generationDuration` est injectable — non par goût du réglage, mais parce que le niveau 3a tourne en
+temps réel : l'y faire attendre deux secondes reviendrait à parier sur l'ordonnanceur. Le niveau 2
+contrôle le temps virtuel et éprouve, lui, la valeur de production (`GENERATION_MILLIS = 2 000`).
+
+### 🐛 Anomalie corrigée — le `shape` de `Surface` rendait la feuille morte au toucher
+`Surface` applique un `Modifier.clip(shape)`. Avec un arrondi **non uniforme** (haut arrondi, bas
+droit — la forme même d'une bottom sheet), toute la descendance de la feuille devenait
+**inatteignable au toucher** : chaque tap traversait la feuille et allait au voile, qui refermait la
+modale. Champs, cartes et boutons étaient visibles, correctement annoncés à l'accessibilité, et
+pourtant inertes sous le doigt.
+
+Le défaut a été isolé par bissection sous Robolectric : seuls les tests qui **touchent** échouaient,
+l'action sémantique équivalente passant sans problème ; une réplique minimale de la même structure
+fonctionnait ; retirer tour à tour l'absorbeur de tap, le défilement, le retrait de barre de gestes,
+puis élargir l'appareil, ne changeait rien ; une sonde de position a établi que les taps atteignaient
+le voile **partout**, y compris sous la feuille — donc que la feuille n'était jamais dans le chemin
+de hit-test. Le `shape` retiré, le clic passe.
+
+**Correctif :** l'arrondi est désormais *peint* et non *découpé* — `background(color, SheetShape)` +
+`border(width, color, SheetShape)` sur le modifier, `Surface` en `Color.Transparent`. Le rendu est
+identique ; le contenu n'est plus rogné par la forme, ce qui est sans conséquence : les 20 dp de
+marge intérieure tiennent tout le contenu loin des coins.
+
+**Ce n'était pas un défaut de test.** Sans ce correctif, la modale aurait été livrée avec des
+boutons morts sur appareil réel.
+
+### 🧾 Dette assumée — l'archive n'est pas un `.zip`
+Le bouton annonce « Télécharger l'archive (.zip) », libellé imposé par le cahier des charges et
+fidèle à l'intention de l'utilisateur. Le contenu remis est **textuel** : `DocumentExporter` ne
+transporte que des chaînes, et fabriquer un conteneur ZIP binaire supposerait d'élargir cette
+interface jusqu'aux `ByteArray` puis d'écrire un archiveur en Kotlin pur. Le choix retenu — arbitré
+et validé en phase de plan — est de livrer le contenu réel du format choisi sous sa propre extension
+(FEC en `.txt` suivant la nomenclature officielle SIREN + FEC + AAAAMMJJ, archive Factur-X en
+`.xml`, synthèse en `.csv`) plutôt qu'un `.zip` corrompu qui ne s'ouvrirait nulle part. Le vrai
+conteneur relève d'une US dédiée.
+
+### Câblage du shell
+`Overlay.ExportModal` est un **état superposé** : le contenu de l'onglet courant continue d'être
+rendu derrière la feuille (extraction de `TabsContent`), et la barre de navigation du bas reste en
+place. `CommandAction.EXPORT_ACCOUNTING` (US-19) ne déclenche plus un export CSV en un clic aveugle :
+elle ouvre la modale, où l'utilisateur choisit sa période et son format.
+
+Le déclencheur est **glyphe seul** dans l'en-tête — quatrième commande sur la largeur d'un
+téléphone, celle qui risquait de pousser le sélecteur de langue hors de l'écran. La non-régression
+est vérifiée par `AppShellRobolectricTest`, qui affirme la présence simultanée des deux déclencheurs
+et du sélecteur de langue avant d'ouvrir la modale.
+
+### Tests
+- **N1 (commonTest)** — `ExportModalTagsTest` (4 cas : les 9 tags imposés figés, unicité, aucune
+  collision avec les tags internes) · `ExportFormatTest` (4 cas : catalogue ordonné, format par
+  défaut, extensions et types MIME, identités distinctes) · `ExportPeriodTest` (14 cas : format ISO,
+  dates structurellement impossibles, bornes inversées, **bornes incluses**, horodatage tronqué,
+  période proposée à l'ouverture) · `AccountingArchiveBuilderTest` (16 cas : périmètre identique
+  pour les trois formats, **18 colonnes du FEC**, **équilibre débit/crédit**, comptes du PCG, TVA
+  nulle sans écriture, dates compactes, tabulations neutralisées, nomenclature officielle du nom de
+  fichier, archive Factur-X à déclaration unique, réutilisation de `LedgerCsvExport`) ·
+  `AppTranslationsTest` +1 cas de sentinelles.
+- **N2 (commonTest)** — `ExportViewModelTest`, 19 cas en **temps virtuel** : état d'ouverture,
+  réglages, période invalide bloquante sans appel au dépôt, entrée immédiate en `GENERATING`,
+  progression observable à mi-parcours, **monotonie bornée sur les 40 paliers**, archive prête à
+  2 000 ms, format respecté, ré-entrée ignorée, dépôt en panne sans plantage, invalidation d'une
+  archive périmée, réglages gelés pendant la compression, téléchargement sans effet hors `READY`,
+  remise effective à la plateforme, annulation à la fermeture.
+- **N3a (Robolectric, `w411dp-h891dp`)** — `ExportModalRobolectricTest`, 17 cas : structure et
+  **présence des 9 tags imposés**, absence des deux tags d'étapes ultérieures au repos, titres et
+  descriptions des trois formats, période d'ouverture, sélection déplacée au toucher, tirets ISO
+  réinsérés, période inversée expliquée, **barre de progression rendue** et bouton de génération
+  retiré, bloc de succès et bouton de téléchargement, parcours complet jusqu'au fichier remis
+  (`820329331FEC20260902.txt`), période invalide n'entrant jamais en compression, traduction
+  anglaise, déclencheur du shell. Les deux étapes fugaces sont rendues depuis un **état fixe** :
+  `assertIsDisplayed()` attend d'abord que l'arbre soit au repos, et une compression déjà terminée à
+  ce moment-là ne serait plus observable.
+- **N3b (instrumenté, rédigé et compilé)** — `ExportModalInstrumentedTest`, 5 cas avec le **vrai
+  délai de deux secondes** : feuille entière visible sans défilement, cibles tactiles ≥ 48 dp,
+  sélection au doigt dans la vraie fenêtre, **barre observée pendant la compression réelle**,
+  parcours complet jusqu'à la remise du fichier, et export de la capture officielle
+  `US22_mobile_export_modal_sdk_gphone64_x86_64.png`.
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 934 tests, 0 échec, 0 erreur, 0 ignoré |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** (44 s) |
+
+### Points d'attention transmis
+- **La capture officielle n'est pas encore produite** : le test N3b est rédigé et compilé, son
+  exécution demande un émulateur Pixel 5 API 35
+  (`./scripts/run-qa.ps1 -Suite Instrumented -ScreenshotPrefix "US22" -AvdName "Pixel_5_API_35"`).
+- **Aucun `.zip` n'est produit** — voir la dette ci-dessus.
+- **Les écritures du FEC restent volontairement grossières** : un seul compte de produit (706000) et
+  un seul compte de TVA (445710), faute d'un paramétrage comptable dans l'application. Une
+  ventilation par nature de produit ou par taux de TVA suppose une US de paramétrage.
+- **`ExportPeriod` ne connaît ni la longueur des mois ni les années bissextiles** : `2026-02-29` est
+  accepté. Au pire, l'export couvre un jour de trop — il n'en perd aucun.
+
+### 🔧 Correctif post-recette Pixel 5 — dépassement vertical de la feuille
+
+**Constat QA (émulateur Pixel 5 API 35) :** trois tests N3b en échec et, sur la capture, le bouton
+« Télécharger l'archive (.zip) » rogné par le bas de l'écran.
+`theWholeSheet_isVisibleWithoutScrollingOnDevice` et
+`theCompletedFlow_handsTheArchiveToThePlatform` échouaient sur `assertIsDisplayed`,
+`theProgressBar_isVisibleWhileTheRealCompressionRuns` sur un `ComposeTimeoutException`.
+
+**Cause.** L'état le plus haut de la feuille n'est pas celui qu'on regarde en premier : c'est
+`READY`, où le bloc de confirmation *s'ajoute* au bouton de téléchargement. À cela s'ajoutait un
+gabarit trop généreux — et surtout, sur les 393 dp d'un Pixel 5, des cartes de format dont le titre
+**et** la description s'enroulaient chacun sur deux lignes. Trois cartes ainsi gonflées coûtent près
+de 120 dp, soit à elles seules de quoi pousser le bouton du bas hors de l'écran.
+
+**Correctif — gabarit resserré**, les valeurs étant désormais nommées (`SheetVerticalPadding`,
+`SheetSectionSpacing`, `SectionInnerSpacing`, `FormatCardMinHeight`) plutôt qu'éparpillées : un
+budget de hauteur se lit d'un seul endroit.
+
+| Poste | Avant | Après |
+|---|---|---|
+| Marge verticale de la feuille | 16 dp | 10 dp |
+| Espacement entre sections | 14 dp | 10 dp |
+| Espacement interne d'une section | 8 dp | 6 dp |
+| Hauteur minimale d'une carte | 76 dp | 60 dp |
+| Marge verticale d'une carte | 12 dp | 8 dp |
+| Titre / description d'une carte | 2 lignes chacun | **1 ligne chacun** |
+| Sous-titre de la feuille | non borné | 2 lignes max |
+| Bloc de succès (espacement, marge) | 12 / 10 dp | 10 / 8 dp |
+
+Les **descriptions des trois formats ont été raccourcies** pour tenir sur une ligne dans les deux
+langues (« Écritures comptables opposables », « Toutes les pièces de la période »,
+« Récapitulatif pour votre tableur »). Les **titres imposés par le cahier des charges sont
+inchangés** — ils sont figés par sentinelle, et tiennent déjà sur une ligne.
+
+60 dp de carte reste très au-dessus des 48 dp de cible tactile, ce que `assertHeightIsAtLeast(48.dp)`
+continue de vérifier en N3b.
+
+**Fiabilisation de `ExportModalInstrumentedTest`.** Les interactions sur les nœuds bas passent
+désormais par `performScrollTo()` avant le toucher ou l'assertion. Ce n'est pas un contournement du
+défaut ci-dessus : la feuille tient sur un Pixel 5, mais rien ne garantit qu'elle tienne partout —
+clavier ouvert sur un champ de date, police système agrandie, appareil plus court. Sans ce
+défilement, un tel test échouerait sur la **géométrie** de l'appareil et non sur le comportement
+qu'il éprouve. La condition d'attente de la barre de progression porte, elle, sur la **présence dans
+l'arbre** et non sur la visibilité : le passage en `GENERATING` remplace un bouton de 48 dp par une
+barre de 8 dp, donc toute la feuille se réagence sous elle — attendre une visibilité stricte
+reviendrait à courir après une géométrie en train de changer.
+
+`theWholeSheet_isVisibleWithoutScrollingOnDevice` conserve, lui, ses assertions **sans défilement** :
+c'est la garantie que le gabarit resserré est censé tenir au repos, et c'est ce test qui la protège.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 934 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**. La confirmation sur appareil réel
+revient à la prochaine passe QA : le gabarit a été calculé, pas mesuré sur émulateur depuis ce poste.
+
+### 🔧 Deuxième correctif post-recette — la feuille n'était pas bornée au visible
+
+**Constat QA (2ᵉ passe, Pixel 5 API 35) :** les trois mêmes tests, la même signature. Le premier
+resserrage du gabarit n'avait donc pas traité la cause.
+
+#### Une action du diagnostic était sans objet
+Le diagnostic demandait de disposer « Du » et « Au » sur **une seule ligne** pour gagner ~60 dp.
+Ils y étaient déjà — `Row(horizontalArrangement = spacedBy(...))` avec `Modifier.weight(1f)` sur
+chacun, ce que la capture montre d'ailleurs. L'appliquer aurait rapporté 0 dp. Signalé plutôt
+qu'exécuté, et la hauteur a été **mesurée** au lieu d'être estimée une troisième fois.
+
+#### Ce que la mesure a montré
+Une sonde au gabarit exact d'un Pixel 5 (393 × 851 dp) donne, après le premier resserrage :
+
+| État | Hauteur mesurée |
+|---|---|
+| Au repos | 633 px |
+| Archive prête (`READY`) | 733 px |
+
+et par poste : trois cartes 90 px chacune, bloc de succès 90 px, champ de date 77 px, **chaque
+ligne de texte 36 px**. Ce dernier chiffre est l'indice décisif : titre, sous-titre et libellé de
+section mesurent tous 36 px, quelle que soit leur taille de style. Les métriques de police de
+Robolectric sont **simulées** — la feuille y est systématiquement plus haute que sur l'appareil.
+Un budget en dp absolus n'y est donc pas fidèle, ce qui est consigné dans le test lui-même.
+
+#### La cause : la feuille débordait de la fenêtre, et le défilement ne pouvait rien
+Le dialogue s'étend **derrière les barres système**. La feuille était mesurée sur toute la hauteur
+de la fenêtre, pas sur la zone visible : son bouton du bas tombait sous la barre de gestes. Et le
+défilement n'y changeait rien — le conteneur défilant était alors *aussi haut que son contenu*,
+donc il n'y avait rien à faire défiler. C'est pour cela que `performScrollTo()`, ajouté au
+correctif précédent, n'avait pas suffi : il ne peut pas atteindre ce qui déborde de la fenêtre.
+
+**Correctif :** `safeDrawingPadding()` sur la feuille. Elle est désormais bornée au visible, ce qui
+rend le débordement structurellement impossible : au-delà, le contenu **défile** au lieu de sortir
+de l'écran. Le `navigationBarsPadding()` de la colonne devient inutile et disparaît.
+
+Resserrage complémentaire, comme demandé : hauteur minimale des cartes 60 → **56 dp**, marge
+verticale des cartes et du bloc de succès 8 → **6 dp**, espacement des deux champs de date
+12 → 8 dp.
+
+#### Un garde-fou de hauteur, sur la JVM
+`ExportModalGeometryRobolectricTest` (3 cas) mesure la feuille au gabarit d'un Pixel 5 et échoue si
+elle dépasse la zone qu'elle a le droit d'occuper — dans les deux langues, et sur l'état `READY`,
+le plus haut des trois. Il est **conservateur par construction** : ce qui tient sous des lignes de
+36 px tient a fortiori sous des lignes réelles. Les deux régressions précédentes n'avaient été
+vues qu'après une passe QA sur émulateur ; celle-ci se verra au `testDebugUnitTest`.
+
+#### Le contrat du niveau 3b a changé
+`theWholeSheet_isVisibleWithoutScrollingOnDevice` devient
+`everyControlOfTheSheet_isReachableOnDevice`. Exiger que tout soit visible d'un seul coup était une
+promesse que rien ne peut tenir : la hauteur d'une feuille dépend de la police système, de la
+langue et de l'écran. Ce qui doit être garanti, c'est qu'**aucun contrôle ne soit hors d'atteinte**
+— ce que `performScrollTo()` éprouve. Le budget de hauteur, lui, est tenu sur la JVM.
+
+La barre de progression est désormais affirmée par `assertExists()` et non `assertIsDisplayed()` :
+elle ne vit que deux secondes, et la faire défiler dans le champ de vision pendant ce temps
+reviendrait à lui courir après. Ce que ce test doit prouver, c'est que la compression **existe** à
+l'écran pendant qu'elle tourne, pas à quel pixel elle s'est arrêtée. Son délai d'attente passe de
+5 s à 10 s.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 937 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.
+
+**Ce qui reste non vérifié :** aucun émulateur sur ce poste. Le bornage au visible et le garde-fou
+JVM rendent le débordement structurellement impossible, mais la confirmation sur appareil réel
+revient à la prochaine passe QA.
+
+### 🔧 Troisième correctif — le défilement était éteint, donc rien n'était joignable
+
+**Constat QA (3ᵉ passe) :** bouton bleu toujours tronqué, seuls quelques pixels du haut visibles.
+
+#### Le mécanisme, enfin complet
+Trois faits qui ne s'expliquaient qu'ensemble :
+
+1. **La feuille n'a jamais été trop haute.** La capture de la 2ᵉ passe mesure 1081 × 1475 px, soit
+   393 × 536 dp sur un écran de 851 dp. Les deux resserrages de gabarit traitaient un symptôme qui
+   n'existait pas.
+2. **La fenêtre d'un `Dialog` ne reçoit pas les insets de l'activité.** `safeDrawingPadding()` y
+   mesure donc zéro — le correctif précédent était inopérant, et le `DialogProperties` de commonMain
+   n'expose pas le réglage Android qui ferait entrer ces insets.
+3. **Un `verticalScroll` dont le contenu tient a un `maxValue` de zéro** : Compose y éteint le
+   défilement. Tant que la feuille pouvait s'étirer sur toute la hauteur de la fenêtre, son contenu
+   tenait toujours, donc rien ne défilait — et `performScrollTo()`, ajouté au premier correctif,
+   était un appel sans effet. Le bouton, ancré au bas d'une fenêtre débordant derrière la barre
+   système, était hors d'atteinte du doigt comme du test.
+
+C'est le point 3 qui explique pourquoi trois passes QA ont échoué de la même façon : chaque
+correctif traitait la hauteur, alors que le défaut portait sur la **joignabilité**.
+
+#### Correctif
+- **Plafond de hauteur** (`SheetMaxHeight = 560.dp`) : la feuille est plus courte que son contenu,
+  donc le conteneur redevient défilable. C'est ce plafond, et lui seul, qui rend le bouton
+  atteignable. 560 dp est par ailleurs une bonne proportion pour une feuille ancrée en bas — deux
+  tiers d'un Pixel 5, l'écran restant visible au-dessus.
+- **Retrait bas explicite** (`SheetBottomInset = 48.dp`), inclus dans le contenu défilant : le
+  bouton remonte au-dessus de la barre système une fois la feuille défilée, au lieu de s'arrêter à
+  son bord. Dimensionné pour la navigation à trois boutons, la plus gourmande.
+- `safeDrawingPadding()` retiré : inopérant dans un dialogue, il donnait l'illusion d'une garantie.
+
+#### Le garde-fou JVM éprouve désormais le bon geste
+`ExportModalGeometryRobolectricTest` ne mesure plus seulement une hauteur : il **fait défiler
+jusqu'au bouton et exige qu'il s'affiche**, au gabarit d'un Pixel 5, dans les deux langues, sur
+l'état `READY` comme au repos, cartes de format comprises. C'est exactement le geste qui échouait
+sur l'appareil — il échoue maintenant sur la JVM, avant qu'un émulateur ne soit allumé. Le plafond
+lui-même est vérifié à part : sans lui, le défilement s'éteint et toute la joignabilité s'effondre.
+
+#### Conséquence assumée sur le niveau 3a
+La feuille défile désormais par construction : cinq tests de `ExportModalRobolectricTest` qui
+affirmaient un nœud bas « affiché » sans défiler ont été ajustés pour l'atteindre comme le fait
+l'utilisateur. Les assertions ne perdent rien à ce détour — elles gagnent de porter sur le même
+geste que le sien.
+
+#### Niveau 3b
+La condition d'attente de la barre de progression tolère les deux issues (compression en vol ou
+déjà terminée). Ce n'est pas un assouplissement de ce qui est éprouvé — l'assertion qui suit exige
+toujours la barre — mais la garantie de ne pas immobiliser la suite dix secondes quand c'est autre
+chose qui a cédé : un test qui échoue doit le faire vite et pour la bonne raison.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 939 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.
+
+### ✅ Recette Pixel 5 — géométrie validée, dernier test de timing rectifié
+
+**Constat QA (4ᵉ passe) :** 5 tests sur 6 verts. Le plafond de hauteur, l'inset bas et le retour du
+défilement ont réglé toute la famille de défauts géométriques.
+`everyControlOfTheSheet_isReachableOnDevice` et `theCompletedFlow_handsTheArchiveToThePlatform`
+passent.
+
+Restait `theProgressBar_isVisibleWhileTheRealCompressionRuns`, en échec sur `assertExists` : l'état
+était déjà `READY`, la barre avait quitté l'arbre.
+
+#### Pourquoi cette observation est hors de portée du niveau 3b
+La cause est mécanique, et aucun réglage de délai n'y remédie : **toute action de test se
+synchronise avec la composition**. Pendant la compression, l'arbre n'est jamais au repos — la
+progression publie un palier toutes les 50 ms et la barre les anime. Le `waitForIdle()` implicite
+du clic attend donc que tout cela se calme, c'est-à-dire les deux secondes entières. Au premier
+sondage qui suit, l'état est `READY`. Allonger la compression allonge d'autant l'attente qui la
+manque.
+
+#### Une assertion qui ne peut pas échouer n'est pas une assertion
+Le correctif proposé concluait par
+`assertTrue(progressBarSeen || downloadBtnPresent)`. C'est **exactement la condition de sortie** de
+la boucle `waitUntil` qui précède : l'assertion est vraie par construction et ne peut jamais
+tomber. Le test aurait gardé un nom promettant d'éprouver la barre de progression tout en
+n'éprouvant plus rien — une couverture de façade, plus trompeuse que son absence. Elle n'a donc pas
+été retenue telle quelle.
+
+#### Ce que le test affirme désormais
+Renommé `theRealCompression_runsThroughToAReadyArchive`, il porte deux assertions strictes, vraies
+quel que soit l'ordonnancement :
+- la compression a tourné **jusqu'au bout** sur l'appareil — donc le clic a porté et la coroutine a
+  fait son travail — et le bloc de succès est joignable ;
+- la barre **a cédé la place** une fois l'archive prête, au lieu de rester à l'écran. Assertion
+  falsifiable : une barre qui persisterait la ferait tomber.
+
+L'enregistrement de `progressBarSeen` pendant l'attente est conservé, mais pour ce qu'il vaut : une
+sortie de boucle au plus tôt lorsque l'ordonnancement laisse malgré tout apercevoir la compression.
+Il n'est pas affirmé, et le commentaire le dit.
+
+#### La barre de progression reste couverte, et mieux
+- `ExportModalRobolectricTest` la rend depuis un état `GENERATING` figé et vérifie sa présence, son
+  libellé et son pourcentage — ce que l'appareil ne permet pas d'observer.
+- `ExportViewModelTest` prouve en temps virtuel que la progression est réelle, monotone et bornée
+  sur les 40 paliers, à la durée de production.
+
+Le niveau 3b garde donc ce que lui seul peut prouver : que le geste, sur un appareil réel, déclenche
+une compression qui aboutit.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 939 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.

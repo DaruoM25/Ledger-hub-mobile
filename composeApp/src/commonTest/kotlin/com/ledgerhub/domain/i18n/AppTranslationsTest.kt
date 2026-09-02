@@ -217,6 +217,59 @@ class AppTranslationsTest {
         )
     }
 
+    /**
+     * Modale d'export comptable (US-22). Le titre, les trois intitulés de format et les deux
+     * boutons sont **imposés par le cahier des charges** : ils sont figés caractère pour caractère,
+     * mention « (.zip) » comprise. Une reformulation de confort casse ce test.
+     */
+    @Test
+    fun accountingExportModal_usesTheSpecifiedWording() {
+        assertEquals(
+            "Export Comptable (FEC & Factur-X)",
+            AppTranslations.get(StringKey.EXPORT_MODAL_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Accounting Export (FEC & Factur-X)",
+            AppTranslations.get(StringKey.EXPORT_MODAL_TITLE, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Format FEC Officiel",
+            AppTranslations.get(StringKey.EXPORT_FORMAT_FEC_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Archive Factur-X complète",
+            AppTranslations.get(StringKey.EXPORT_FORMAT_FACTURX_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Synthèse Excel",
+            AppTranslations.get(StringKey.EXPORT_FORMAT_EXCEL_TITLE, AppLanguage.FR),
+        )
+
+        assertEquals(
+            "Générer l'archive",
+            AppTranslations.get(StringKey.EXPORT_GENERATE_ACTION, AppLanguage.FR),
+        )
+        assertEquals(
+            "Generate the archive",
+            AppTranslations.get(StringKey.EXPORT_GENERATE_ACTION, AppLanguage.EN),
+        )
+        assertEquals(
+            "Télécharger l'archive (.zip)",
+            AppTranslations.get(StringKey.EXPORT_DOWNLOAD_ACTION, AppLanguage.FR),
+        )
+        assertEquals(
+            "Download the archive (.zip)",
+            AppTranslations.get(StringKey.EXPORT_DOWNLOAD_ACTION, AppLanguage.EN),
+        )
+
+        // Les deux bornes sont libellées « Du » / « Au », comme l'exige le cahier des charges.
+        assertEquals("Du", AppTranslations.get(StringKey.EXPORT_DATE_FROM_LABEL, AppLanguage.FR))
+        assertEquals("Au", AppTranslations.get(StringKey.EXPORT_DATE_TO_LABEL, AppLanguage.FR))
+        assertEquals("From", AppTranslations.get(StringKey.EXPORT_DATE_FROM_LABEL, AppLanguage.EN))
+        assertEquals("To", AppTranslations.get(StringKey.EXPORT_DATE_TO_LABEL, AppLanguage.EN))
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())
