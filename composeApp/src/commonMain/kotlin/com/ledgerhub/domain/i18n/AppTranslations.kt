@@ -309,14 +309,11 @@ object AppTranslations {
         StringKey.EXPORT_PERIOD_INVALID to "La date de fin doit suivre la date de début",
         StringKey.EXPORT_FORMAT_SECTION to "Format de sortie",
         StringKey.EXPORT_FORMAT_FEC_TITLE to "Format FEC Officiel",
-        StringKey.EXPORT_FORMAT_FEC_DESC to
-            "Fichier des écritures comptables opposable à l'administration",
+        StringKey.EXPORT_FORMAT_FEC_DESC to "Écritures comptables opposables",
         StringKey.EXPORT_FORMAT_FACTURX_TITLE to "Archive Factur-X complète",
-        StringKey.EXPORT_FORMAT_FACTURX_DESC to
-            "Toutes les pièces électroniques de la période, prêtes pour le cabinet",
+        StringKey.EXPORT_FORMAT_FACTURX_DESC to "Toutes les pièces de la période",
         StringKey.EXPORT_FORMAT_EXCEL_TITLE to "Synthèse Excel",
-        StringKey.EXPORT_FORMAT_EXCEL_DESC to
-            "Tableau récapitulatif des factures, à ouvrir dans un tableur",
+        StringKey.EXPORT_FORMAT_EXCEL_DESC to "Récapitulatif pour votre tableur",
         StringKey.EXPORT_GENERATE_ACTION to "Générer l'archive",
         StringKey.EXPORT_GENERATING_LABEL to "Compression des pièces en cours…",
         StringKey.EXPORT_SUCCESS_TITLE to "Archive prête",
@@ -628,14 +625,11 @@ object AppTranslations {
         StringKey.EXPORT_PERIOD_INVALID to "The end date must follow the start date",
         StringKey.EXPORT_FORMAT_SECTION to "Output format",
         StringKey.EXPORT_FORMAT_FEC_TITLE to "Official FEC Format",
-        StringKey.EXPORT_FORMAT_FEC_DESC to
-            "Accounting entries file enforceable by the tax administration",
+        StringKey.EXPORT_FORMAT_FEC_DESC to "Enforceable accounting entries",
         StringKey.EXPORT_FORMAT_FACTURX_TITLE to "Full Factur-X Archive",
-        StringKey.EXPORT_FORMAT_FACTURX_DESC to
-            "Every electronic document of the period, ready for your firm",
+        StringKey.EXPORT_FORMAT_FACTURX_DESC to "Every document of the period",
         StringKey.EXPORT_FORMAT_EXCEL_TITLE to "Excel Summary",
-        StringKey.EXPORT_FORMAT_EXCEL_DESC to
-            "Summary table of your invoices, to open in a spreadsheet",
+        StringKey.EXPORT_FORMAT_EXCEL_DESC to "Summary table for a spreadsheet",
         StringKey.EXPORT_GENERATE_ACTION to "Generate the archive",
         StringKey.EXPORT_GENERATING_LABEL to "Compressing documents…",
         StringKey.EXPORT_SUCCESS_TITLE to "Archive ready",

@@ -1204,3 +1204,57 @@ et du sélecteur de langue avant d'ouvrir la modale.
   ventilation par nature de produit ou par taux de TVA suppose une US de paramétrage.
 - **`ExportPeriod` ne connaît ni la longueur des mois ni les années bissextiles** : `2026-02-29` est
   accepté. Au pire, l'export couvre un jour de trop — il n'en perd aucun.
+
+### 🔧 Correctif post-recette Pixel 5 — dépassement vertical de la feuille
+
+**Constat QA (émulateur Pixel 5 API 35) :** trois tests N3b en échec et, sur la capture, le bouton
+« Télécharger l'archive (.zip) » rogné par le bas de l'écran.
+`theWholeSheet_isVisibleWithoutScrollingOnDevice` et
+`theCompletedFlow_handsTheArchiveToThePlatform` échouaient sur `assertIsDisplayed`,
+`theProgressBar_isVisibleWhileTheRealCompressionRuns` sur un `ComposeTimeoutException`.
+
+**Cause.** L'état le plus haut de la feuille n'est pas celui qu'on regarde en premier : c'est
+`READY`, où le bloc de confirmation *s'ajoute* au bouton de téléchargement. À cela s'ajoutait un
+gabarit trop généreux — et surtout, sur les 393 dp d'un Pixel 5, des cartes de format dont le titre
+**et** la description s'enroulaient chacun sur deux lignes. Trois cartes ainsi gonflées coûtent près
+de 120 dp, soit à elles seules de quoi pousser le bouton du bas hors de l'écran.
+
+**Correctif — gabarit resserré**, les valeurs étant désormais nommées (`SheetVerticalPadding`,
+`SheetSectionSpacing`, `SectionInnerSpacing`, `FormatCardMinHeight`) plutôt qu'éparpillées : un
+budget de hauteur se lit d'un seul endroit.
+
+| Poste | Avant | Après |
+|---|---|---|
+| Marge verticale de la feuille | 16 dp | 10 dp |
+| Espacement entre sections | 14 dp | 10 dp |
+| Espacement interne d'une section | 8 dp | 6 dp |
+| Hauteur minimale d'une carte | 76 dp | 60 dp |
+| Marge verticale d'une carte | 12 dp | 8 dp |
+| Titre / description d'une carte | 2 lignes chacun | **1 ligne chacun** |
+| Sous-titre de la feuille | non borné | 2 lignes max |
+| Bloc de succès (espacement, marge) | 12 / 10 dp | 10 / 8 dp |
+
+Les **descriptions des trois formats ont été raccourcies** pour tenir sur une ligne dans les deux
+langues (« Écritures comptables opposables », « Toutes les pièces de la période »,
+« Récapitulatif pour votre tableur »). Les **titres imposés par le cahier des charges sont
+inchangés** — ils sont figés par sentinelle, et tiennent déjà sur une ligne.
+
+60 dp de carte reste très au-dessus des 48 dp de cible tactile, ce que `assertHeightIsAtLeast(48.dp)`
+continue de vérifier en N3b.
+
+**Fiabilisation de `ExportModalInstrumentedTest`.** Les interactions sur les nœuds bas passent
+désormais par `performScrollTo()` avant le toucher ou l'assertion. Ce n'est pas un contournement du
+défaut ci-dessus : la feuille tient sur un Pixel 5, mais rien ne garantit qu'elle tienne partout —
+clavier ouvert sur un champ de date, police système agrandie, appareil plus court. Sans ce
+défilement, un tel test échouerait sur la **géométrie** de l'appareil et non sur le comportement
+qu'il éprouve. La condition d'attente de la barre de progression porte, elle, sur la **présence dans
+l'arbre** et non sur la visibilité : le passage en `GENERATING` remplace un bouton de 48 dp par une
+barre de 8 dp, donc toute la feuille se réagence sous elle — attendre une visibilité stricte
+reviendrait à courir après une géométrie en train de changer.
+
+`theWholeSheet_isVisibleWithoutScrollingOnDevice` conserve, lui, ses assertions **sans défilement** :
+c'est la garantie que le gabarit resserré est censé tenir au repos, et c'est ce test qui la protège.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 934 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**. La confirmation sur appareil réel
+revient à la prochaine passe QA : le gabarit a été calculé, pas mesuré sur émulateur depuis ce poste.

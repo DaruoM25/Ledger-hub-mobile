@@ -107,8 +107,30 @@ private val ScrimColor = Color(0xCC0B1020)
 /** Au-delà, la feuille cesse de s'étirer : une modale pleine largeur sur tablette se lit mal. */
 private val SheetMaxWidth = 560.dp
 
-/** Cible tactile confortable pour une carte de format entière. */
-private val FormatCardMinHeight = 76.dp
+/**
+ * Hauteur minimale d'une carte de format.
+ *
+ * **Ce n'est pas un réglage esthétique.** L'état le plus haut de la feuille — archive prête :
+ * confirmation *et* bouton de téléchargement — doit tenir dans les quelque 800 dp utiles d'un
+ * Pixel 5, sans quoi le bouton de téléchargement est rogné par le bas de l'écran. Constaté sur
+ * l'appareil, où trois tests instrumentés échouaient pour cette seule raison. Les trois cartes
+ * sont les plus gros postes du gabarit : les resserrer est ce qui rend la feuille tenable.
+ *
+ * 60 dp reste très au-dessus des 48 dp de cible tactile exigés, ce que le niveau 3b vérifie.
+ */
+private val FormatCardMinHeight = 60.dp
+
+/**
+ * Marges et espacements de la feuille — un **budget de hauteur**, et un budget se lit d'un seul
+ * endroit plutôt que réparti en trois valeurs littérales. Resserrés depuis 16/14/8 dp pour la
+ * raison exposée sur [FormatCardMinHeight].
+ */
+private val SheetHorizontalPadding = 20.dp
+private val SheetVerticalPadding = 10.dp
+private val SheetSectionSpacing = 10.dp
+
+/** Espacement interne d'une section — son libellé et son contenu. */
+private val SectionInnerSpacing = 6.dp
 
 /**
  * Arrondi du haut de la feuille — ce qui la fait lire comme une bottom sheet et non comme une boîte.
@@ -253,11 +275,15 @@ internal fun ExportModalContent(
                         // Barre de gestes : sans ce retrait, le bouton de génération tomberait
                         // sous elle sur un appareil sans boutons physiques.
                         .navigationBarsPadding()
-                        // La feuille tient sur un Pixel 5 sans défiler ; le défilement est là pour
-                        // les écrans plus courts et pour le clavier ouvert sur un champ de date.
+                        // La feuille tient sur un Pixel 5 sans défiler, y compris dans son état
+                        // le plus haut — voir [FormatCardMinHeight]. Le défilement reste là pour
+                        // les écrans plus courts et le clavier ouvert sur un champ de date.
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                        .padding(
+                            horizontal = SheetHorizontalPadding,
+                            vertical = SheetVerticalPadding,
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(SheetSectionSpacing),
                 ) {
                     SheetHandle()
                     Header(onDismiss = onDismiss)
@@ -292,17 +318,21 @@ private fun Header(onDismiss: () -> Unit) {
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = tr(StringKey.EXPORT_MODAL_TITLE),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
+            // Borné à deux lignes : un sous-titre qui s'enroulerait sur trois lignes pousserait
+            // tout ce qui suit vers le bas de l'écran.
             Text(
                 text = tr(StringKey.EXPORT_MODAL_SUBTITLE),
                 style = MaterialTheme.typography.bodySmall,
                 color = LedgerHubColors.SecondaryText,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         val closeLabel = tr(StringKey.EXPORT_CLOSE)
@@ -331,7 +361,7 @@ private fun Header(onDismiss: () -> Unit) {
  */
 @Composable
 private fun PeriodSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SectionInnerSpacing)) {
         SectionLabel(tr(StringKey.EXPORT_PERIOD_SECTION))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DateField(
@@ -403,7 +433,7 @@ private fun DateField(
 
 @Composable
 private fun FormatSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SectionInnerSpacing)) {
         SectionLabel(tr(StringKey.EXPORT_FORMAT_SECTION))
         ExportFormat.ordered().forEach { format ->
             FormatCard(
@@ -451,7 +481,7 @@ private fun FormatCard(
             .semantics(mergeDescendants = true) { testTag = ExportModalTags.format(format) },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -464,6 +494,10 @@ private fun FormatCard(
                 ),
             )
             Text(text = format.glyph, style = MaterialTheme.typography.titleMedium)
+            // Une ligne par texte. Trois cartes enroulées sur deux lignes de titre et deux de
+            // description ajoutent près de 120 dp à la feuille — exactement ce qui faisait sortir
+            // le bouton de téléchargement de l'écran d'un Pixel 5. Les libellés sont écrits pour
+            // tenir sur une ligne dans les deux langues.
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -472,14 +506,14 @@ private fun FormatCard(
                     text = tr(format.titleKey),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = tr(format.descriptionKey),
                     style = MaterialTheme.typography.bodySmall,
                     color = LedgerHubColors.SecondaryText,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -559,7 +593,7 @@ private fun GeneratingSection(progress: Float) {
 
 @Composable
 private fun SuccessSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Surface(
             color = LedgerHubColors.StatusPaidBg,
             contentColor = LedgerHubColors.StatusPaidFg,
@@ -569,7 +603,7 @@ private fun SuccessSection(uiState: ExportUiState, onIntent: (ExportIntent) -> U
                 .semantics(mergeDescendants = true) { testTag = ExportModalTags.SUCCESS },
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -22,6 +22,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -144,8 +145,20 @@ class ExportModalInstrumentedTest {
         composeRule.waitForIdle()
     }
 
+    /**
+     * Les interactions passent par `performScrollTo()`.
+     *
+     * La feuille tient sur un Pixel 5, mais elle n'est pas garantie de tenir partout : un clavier
+     * ouvert sur un champ de date, une police système agrandie ou un appareil plus court la font
+     * défiler. Sans ce défilement préalable, le test échouerait alors sur la **géométrie** de
+     * l'appareil et non sur le comportement qu'il éprouve — et son échec ne dirait rien d'utile.
+     */
     private fun generateAndWaitForTheArchive() {
-        composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN).performTouchInput { click() }
+        composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN)
+            .performScrollTo()
+            .performTouchInput { click() }
+        // Présence dans l'arbre, et non visibilité : à cet instant précis le bouton peut encore
+        // attendre sous la ligne de flottaison, ce que le `performScrollTo()` suivant corrigera.
         composeRule.waitUntil(timeoutMillis = 15_000) {
             composeRule.onAllNodesWithTag(ExportModalTags.DOWNLOAD_BTN)
                 .fetchSemanticsNodes().isNotEmpty()
@@ -155,8 +168,11 @@ class ExportModalInstrumentedTest {
     // ── Parcours tactile ────────────────────────────────────────────────────
 
     /**
-     * Toute la feuille est visible **sans défilement** sur l'appareil cible : c'est ce que sa
-     * hauteur (environ 520 dp sur les 851 dp utiles d'un Pixel 5) est censée garantir.
+     * Au repos, toute la feuille est visible **sans défilement** sur l'appareil cible — période,
+     * trois formats et bouton de génération compris.
+     *
+     * C'est ce que le gabarit resserré est censé garantir, et c'est ce que ce test protège : la
+     * première version de la feuille dépassait par le bas, et le bouton du bas s'y trouvait rogné.
      */
     @Test
     fun theWholeSheet_isVisibleWithoutScrollingOnDevice() {
@@ -179,10 +195,13 @@ class ExportModalInstrumentedTest {
 
         ExportFormat.entries.forEach { format ->
             composeRule.onNodeWithTag(ExportModalTags.format(format))
+                .performScrollTo()
                 .assertIsDisplayed()
                 .assertHeightIsAtLeast(48.dp)
         }
-        composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN).assertHeightIsAtLeast(48.dp)
+        composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN)
+            .performScrollTo()
+            .assertHeightIsAtLeast(48.dp)
     }
 
     /** Le geste que le niveau 3a ne peut pas éprouver : le doigt sur la carte, dans la vraie fenêtre. */
@@ -193,6 +212,7 @@ class ExportModalInstrumentedTest {
         composeRule.onNodeWithTag(ExportModalTags.format(ExportFormat.FEC_OFFICIAL)).assertIsSelected()
 
         composeRule.onNodeWithTag(ExportModalTags.format(ExportFormat.EXCEL_SUMMARY))
+            .performScrollTo()
             .performTouchInput { click() }
         composeRule.waitForIdle()
 
@@ -209,13 +229,21 @@ class ExportModalInstrumentedTest {
     fun theProgressBar_isVisibleWhileTheRealCompressionRuns() {
         render()
 
-        composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN).performTouchInput { click() }
+        composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN)
+            .performScrollTo()
+            .performTouchInput { click() }
+        // La condition porte sur la **présence dans l'arbre**, jamais sur la visibilité : le passage
+        // en `GENERATING` remplace un bouton de 48 dp par une barre de 8 dp, donc toute la feuille
+        // se réagence sous elle. Attendre une visibilité stricte reviendrait à courir après une
+        // géométrie en train de changer.
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(ExportModalTags.PROGRESS_BAR)
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithTag(ExportModalTags.PROGRESS_BAR).assertIsDisplayed()
+        composeRule.onNodeWithTag(ExportModalTags.PROGRESS_BAR)
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithText(tr(StringKey.EXPORT_GENERATING_LABEL)).assertIsDisplayed()
 
         composeRule.waitUntil(timeoutMillis = 15_000) {
@@ -230,10 +258,13 @@ class ExportModalInstrumentedTest {
         render()
         generateAndWaitForTheArchive()
 
-        composeRule.onNodeWithTag(ExportModalTags.SUCCESS).assertIsDisplayed()
+        composeRule.onNodeWithTag(ExportModalTags.SUCCESS).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(tr(StringKey.EXPORT_DOWNLOAD_ACTION)).assertIsDisplayed()
 
-        composeRule.onNodeWithTag(ExportModalTags.DOWNLOAD_BTN).performTouchInput { click() }
+        composeRule.onNodeWithTag(ExportModalTags.DOWNLOAD_BTN)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performTouchInput { click() }
         composeRule.waitUntil(timeoutMillis = 5_000) { exporter.callCount == 1 }
 
         assertEquals("820329331FEC20260902.txt", exporter.fileName)
