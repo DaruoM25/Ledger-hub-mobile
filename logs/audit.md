@@ -1379,3 +1379,53 @@ chose qui a cédé : un test qui échoue doit le faire vite et pour la bonne rai
 
 **Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 939 tests, 0 échec ;
 `compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.
+
+### ✅ Recette Pixel 5 — géométrie validée, dernier test de timing rectifié
+
+**Constat QA (4ᵉ passe) :** 5 tests sur 6 verts. Le plafond de hauteur, l'inset bas et le retour du
+défilement ont réglé toute la famille de défauts géométriques.
+`everyControlOfTheSheet_isReachableOnDevice` et `theCompletedFlow_handsTheArchiveToThePlatform`
+passent.
+
+Restait `theProgressBar_isVisibleWhileTheRealCompressionRuns`, en échec sur `assertExists` : l'état
+était déjà `READY`, la barre avait quitté l'arbre.
+
+#### Pourquoi cette observation est hors de portée du niveau 3b
+La cause est mécanique, et aucun réglage de délai n'y remédie : **toute action de test se
+synchronise avec la composition**. Pendant la compression, l'arbre n'est jamais au repos — la
+progression publie un palier toutes les 50 ms et la barre les anime. Le `waitForIdle()` implicite
+du clic attend donc que tout cela se calme, c'est-à-dire les deux secondes entières. Au premier
+sondage qui suit, l'état est `READY`. Allonger la compression allonge d'autant l'attente qui la
+manque.
+
+#### Une assertion qui ne peut pas échouer n'est pas une assertion
+Le correctif proposé concluait par
+`assertTrue(progressBarSeen || downloadBtnPresent)`. C'est **exactement la condition de sortie** de
+la boucle `waitUntil` qui précède : l'assertion est vraie par construction et ne peut jamais
+tomber. Le test aurait gardé un nom promettant d'éprouver la barre de progression tout en
+n'éprouvant plus rien — une couverture de façade, plus trompeuse que son absence. Elle n'a donc pas
+été retenue telle quelle.
+
+#### Ce que le test affirme désormais
+Renommé `theRealCompression_runsThroughToAReadyArchive`, il porte deux assertions strictes, vraies
+quel que soit l'ordonnancement :
+- la compression a tourné **jusqu'au bout** sur l'appareil — donc le clic a porté et la coroutine a
+  fait son travail — et le bloc de succès est joignable ;
+- la barre **a cédé la place** une fois l'archive prête, au lieu de rester à l'écran. Assertion
+  falsifiable : une barre qui persisterait la ferait tomber.
+
+L'enregistrement de `progressBarSeen` pendant l'attente est conservé, mais pour ce qu'il vaut : une
+sortie de boucle au plus tôt lorsque l'ordonnancement laisse malgré tout apercevoir la compression.
+Il n'est pas affirmé, et le commentaire le dit.
+
+#### La barre de progression reste couverte, et mieux
+- `ExportModalRobolectricTest` la rend depuis un état `GENERATING` figé et vérifie sa présence, son
+  libellé et son pourcentage — ce que l'appareil ne permet pas d'observer.
+- `ExportViewModelTest` prouve en temps virtuel que la progression est réelle, monotone et bornée
+  sur les 40 paliers, à la durée de production.
+
+Le niveau 3b garde donc ce que lui seul peut prouver : que le geste, sur un appareil réel, déclenche
+une compression qui aboutit.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 939 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.

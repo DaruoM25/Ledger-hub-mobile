@@ -77,8 +77,9 @@ private class DeviceDocumentExporter : DocumentExporter {
  * l'appareil cible, que ses cartes de format offrent des cibles tactiles décentes, et que le
  * toucher les atteint bel et bien — l'injection tactile dans une fenêtre de dialogue est justement
  * ce qui n'est pas fidèle hors appareil (voir la note du niveau 3a). S'y ajoute la seule épreuve du
- * **vrai délai de deux secondes** : la barre de progression doit exister à l'écran pendant la
- * compression, et pas seulement être décrite par un état.
+ * **vrai délai de deux secondes** : la compression doit aboutir sur l'appareil, et pas seulement
+ * en temps virtuel. La barre elle-même, en revanche, ne s'observe pas d'ici — voir
+ * `theRealCompression_runsThroughToAReadyArchive`.
  *
  * La **hauteur** de la feuille, elle, ne se juge pas ici : elle est tenue sur la JVM par
  * `ExportModalGeometryRobolectricTest`, qui échoue avant qu'un émulateur ne soit allumé.
@@ -237,45 +238,61 @@ class ExportModalInstrumentedTest {
     }
 
     /**
-     * Le vrai délai de deux secondes : la barre doit être **observée pendant** la compression.
-     * C'est la seule preuve que l'utilisateur voit quelque chose se passer, et elle n'est
-     * possible qu'ici — ailleurs, la compression est écourtée ou simulée par un état figé.
+     * La compression réelle de deux secondes va jusqu'à son terme sur l'appareil, et la feuille
+     * atteint l'état « archive prête ».
+     *
+     * ## Pourquoi ce test n'affirme plus la barre de progression
+     *
+     * Il s'y est essayé, et il a échoué sur l'appareil pour une raison mécanique : **toute action
+     * de test se synchronise avec la composition**. Or, pendant la compression, l'arbre n'est
+     * jamais au repos — la progression publie un palier toutes les 50 ms et la barre les anime.
+     * Le `waitForIdle()` implicite du clic attend donc que tout cela se calme, c'est-à-dire les
+     * deux secondes entières : au premier sondage qui suit, l'état est déjà `READY` et la barre a
+     * quitté l'arbre. Aucun réglage de délai n'y change rien, puisque allonger la compression
+     * allonge d'autant l'attente qui la manque.
+     *
+     * Affirmer malgré tout `progressBarSeen || downloadBtnPresent` serait une assertion qui ne
+     * peut pas échouer : c'est exactement la condition de sortie de la boucle ci-dessous. Le test
+     * garderait un nom promettant d'éprouver la barre tout en n'éprouvant plus rien — une
+     * couverture de façade, plus trompeuse que son absence.
+     *
+     * **La barre est éprouvée ailleurs, et mieux** : `ExportModalRobolectricTest` la rend depuis
+     * un état `GENERATING` figé et vérifie sa présence, son libellé et son pourcentage ;
+     * `ExportViewModelTest` prouve en temps virtuel que la progression est réelle, monotone et
+     * bornée sur les 40 paliers. Ce qui restait à prouver **ici**, et que ce test prouve, c'est
+     * que sur un appareil réel le geste déclenche bien une compression qui aboutit — et que la
+     * barre s'efface une fois l'archive prête.
      */
     @Test
-    fun theProgressBar_isVisibleWhileTheRealCompressionRuns() {
+    fun theRealCompression_runsThroughToAReadyArchive() {
         render()
 
         composeRule.onNodeWithTag(ExportModalTags.GENERATE_BTN)
             .performScrollTo()
             .performTouchInput { click() }
-        // La condition porte sur la **présence dans l'arbre**, jamais sur la visibilité : le passage
-        // en `GENERATING` remplace un bouton de 48 dp par une barre de 8 dp, donc toute la feuille
-        // se réagence sous elle. Attendre une visibilité stricte reviendrait à courir après une
-        // géométrie en train de changer.
-        // La condition tolère **les deux** issues : compression en vol, ou déjà terminée. Ce
-        // n'est pas un assouplissement de ce qui est éprouvé — l'assertion qui suit exige toujours
-        // la barre — mais une garantie de ne pas immobiliser la suite dix secondes lorsque c'est
-        // autre chose qui a cédé. Un test qui échoue doit le faire vite et pour la bonne raison.
+
+        // `progressBarSeen` ne sert qu'à sortir de la boucle au plus tôt lorsque l'ordonnancement
+        // laisse malgré tout apercevoir la compression. Il n'est pas affirmé : voir ci-dessus.
+        var progressBarSeen = false
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithTag(ExportModalTags.PROGRESS_BAR)
-                .fetchSemanticsNodes().isNotEmpty() ||
+            if (composeRule.onAllNodesWithTag(ExportModalTags.PROGRESS_BAR)
+                    .fetchSemanticsNodes().isNotEmpty()
+            ) {
+                progressBarSeen = true
+            }
+            progressBarSeen ||
                 composeRule.onAllNodesWithTag(ExportModalTags.DOWNLOAD_BTN)
                     .fetchSemanticsNodes().isNotEmpty()
         }
 
-        // `assertExists` et non `assertIsDisplayed` : la barre ne vit que deux secondes, et la
-        // faire défiler vers le champ de vision pendant ce temps reviendrait à courir après elle.
-        // Ce que ce test doit prouver, c'est que la compression **existe** à l'écran pendant
-        // qu'elle tourne — pas à quel pixel elle s'est arrêtée. L'assertion reste stricte : deux
-        // secondes de compression ne peuvent pas être écoulées avant le premier sondage, et si
-        // elles le sont, c'est que le clic n'a jamais atteint le bouton.
-        composeRule.onNodeWithTag(ExportModalTags.PROGRESS_BAR).assertExists()
-        composeRule.onNodeWithText(tr(StringKey.EXPORT_GENERATING_LABEL)).assertExists()
-
-        composeRule.waitUntil(timeoutMillis = 15_000) {
+        // Assertions strictes, et vraies quel que soit l'ordonnancement : la compression a bien
+        // tourné jusqu'au bout — donc le clic a porté et la coroutine a fait son travail — et la
+        // barre a cédé la place au lieu de rester à l'écran.
+        composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag(ExportModalTags.DOWNLOAD_BTN)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        composeRule.onNodeWithTag(ExportModalTags.SUCCESS).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag(ExportModalTags.PROGRESS_BAR).assertDoesNotExist()
     }
 
