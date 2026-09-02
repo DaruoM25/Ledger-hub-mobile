@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -116,9 +116,9 @@ private val SheetMaxWidth = 560.dp
  * l'appareil, où trois tests instrumentés échouaient pour cette seule raison. Les trois cartes
  * sont les plus gros postes du gabarit : les resserrer est ce qui rend la feuille tenable.
  *
- * 60 dp reste très au-dessus des 48 dp de cible tactile exigés, ce que le niveau 3b vérifie.
+ * 56 dp reste au-dessus des 48 dp de cible tactile exigés, ce que le niveau 3b vérifie.
  */
-private val FormatCardMinHeight = 60.dp
+private val FormatCardMinHeight = 56.dp
 
 /**
  * Marges et espacements de la feuille — un **budget de hauteur**, et un budget se lit d'un seul
@@ -261,6 +261,13 @@ internal fun ExportModalContent(
                 contentColor = LedgerHubColors.PrimaryText,
                 tonalElevation = 8.dp,
                 modifier = Modifier
+                    // Bornée à la zone **réellement visible**. Le dialogue s'étend derrière les
+                    // barres système : sans ce retrait, la feuille est mesurée sur toute la hauteur
+                    // de la fenêtre, déborde sous la barre de gestes, et son bouton du bas se
+                    // retrouve rogné — sans que le défilement puisse quoi que ce soit, puisque le
+                    // conteneur défilant est alors aussi haut que son contenu. C'est ce qui a fait
+                    // échouer trois tests instrumentés sur Pixel 5.
+                    .safeDrawingPadding()
                     .fillMaxWidth()
                     .widthIn(max = SheetMaxWidth)
                     .background(LedgerHubColors.Surface, SheetShape)
@@ -272,12 +279,11 @@ internal fun ExportModalContent(
             ) {
                 Column(
                     modifier = Modifier
-                        // Barre de gestes : sans ce retrait, le bouton de génération tomberait
-                        // sous elle sur un appareil sans boutons physiques.
-                        .navigationBarsPadding()
-                        // La feuille tient sur un Pixel 5 sans défiler, y compris dans son état
-                        // le plus haut — voir [FormatCardMinHeight]. Le défilement reste là pour
-                        // les écrans plus courts et le clavier ouvert sur un champ de date.
+                        // Le défilement est la garantie de dernier recours : la feuille est
+                        // dimensionnée pour tenir sur un Pixel 5 (voir [FormatCardMinHeight] et
+                        // `ExportModalGeometryRobolectricTest`), mais une police système agrandie
+                        // ou un écran plus court la feront défiler plutôt que déborder — ce qui
+                        // n'est possible que parce que la feuille est bornée au visible ci-dessus.
                         .verticalScroll(rememberScrollState())
                         .padding(
                             horizontal = SheetHorizontalPadding,
@@ -363,7 +369,7 @@ private fun Header(onDismiss: () -> Unit) {
 private fun PeriodSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(SectionInnerSpacing)) {
         SectionLabel(tr(StringKey.EXPORT_PERIOD_SECTION))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DateField(
                 label = tr(StringKey.EXPORT_DATE_FROM_LABEL),
                 value = uiState.period.from,
@@ -481,7 +487,7 @@ private fun FormatCard(
             .semantics(mergeDescendants = true) { testTag = ExportModalTags.format(format) },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -603,7 +609,7 @@ private fun SuccessSection(uiState: ExportUiState, onIntent: (ExportIntent) -> U
                 .semantics(mergeDescendants = true) { testTag = ExportModalTags.SUCCESS },
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

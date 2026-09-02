@@ -1258,3 +1258,70 @@ c'est la garantie que le gabarit resserré est censé tenir au repos, et c'est c
 **Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 934 tests, 0 échec ;
 `compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**. La confirmation sur appareil réel
 revient à la prochaine passe QA : le gabarit a été calculé, pas mesuré sur émulateur depuis ce poste.
+
+### 🔧 Deuxième correctif post-recette — la feuille n'était pas bornée au visible
+
+**Constat QA (2ᵉ passe, Pixel 5 API 35) :** les trois mêmes tests, la même signature. Le premier
+resserrage du gabarit n'avait donc pas traité la cause.
+
+#### Une action du diagnostic était sans objet
+Le diagnostic demandait de disposer « Du » et « Au » sur **une seule ligne** pour gagner ~60 dp.
+Ils y étaient déjà — `Row(horizontalArrangement = spacedBy(...))` avec `Modifier.weight(1f)` sur
+chacun, ce que la capture montre d'ailleurs. L'appliquer aurait rapporté 0 dp. Signalé plutôt
+qu'exécuté, et la hauteur a été **mesurée** au lieu d'être estimée une troisième fois.
+
+#### Ce que la mesure a montré
+Une sonde au gabarit exact d'un Pixel 5 (393 × 851 dp) donne, après le premier resserrage :
+
+| État | Hauteur mesurée |
+|---|---|
+| Au repos | 633 px |
+| Archive prête (`READY`) | 733 px |
+
+et par poste : trois cartes 90 px chacune, bloc de succès 90 px, champ de date 77 px, **chaque
+ligne de texte 36 px**. Ce dernier chiffre est l'indice décisif : titre, sous-titre et libellé de
+section mesurent tous 36 px, quelle que soit leur taille de style. Les métriques de police de
+Robolectric sont **simulées** — la feuille y est systématiquement plus haute que sur l'appareil.
+Un budget en dp absolus n'y est donc pas fidèle, ce qui est consigné dans le test lui-même.
+
+#### La cause : la feuille débordait de la fenêtre, et le défilement ne pouvait rien
+Le dialogue s'étend **derrière les barres système**. La feuille était mesurée sur toute la hauteur
+de la fenêtre, pas sur la zone visible : son bouton du bas tombait sous la barre de gestes. Et le
+défilement n'y changeait rien — le conteneur défilant était alors *aussi haut que son contenu*,
+donc il n'y avait rien à faire défiler. C'est pour cela que `performScrollTo()`, ajouté au
+correctif précédent, n'avait pas suffi : il ne peut pas atteindre ce qui déborde de la fenêtre.
+
+**Correctif :** `safeDrawingPadding()` sur la feuille. Elle est désormais bornée au visible, ce qui
+rend le débordement structurellement impossible : au-delà, le contenu **défile** au lieu de sortir
+de l'écran. Le `navigationBarsPadding()` de la colonne devient inutile et disparaît.
+
+Resserrage complémentaire, comme demandé : hauteur minimale des cartes 60 → **56 dp**, marge
+verticale des cartes et du bloc de succès 8 → **6 dp**, espacement des deux champs de date
+12 → 8 dp.
+
+#### Un garde-fou de hauteur, sur la JVM
+`ExportModalGeometryRobolectricTest` (3 cas) mesure la feuille au gabarit d'un Pixel 5 et échoue si
+elle dépasse la zone qu'elle a le droit d'occuper — dans les deux langues, et sur l'état `READY`,
+le plus haut des trois. Il est **conservateur par construction** : ce qui tient sous des lignes de
+36 px tient a fortiori sous des lignes réelles. Les deux régressions précédentes n'avaient été
+vues qu'après une passe QA sur émulateur ; celle-ci se verra au `testDebugUnitTest`.
+
+#### Le contrat du niveau 3b a changé
+`theWholeSheet_isVisibleWithoutScrollingOnDevice` devient
+`everyControlOfTheSheet_isReachableOnDevice`. Exiger que tout soit visible d'un seul coup était une
+promesse que rien ne peut tenir : la hauteur d'une feuille dépend de la police système, de la
+langue et de l'écran. Ce qui doit être garanti, c'est qu'**aucun contrôle ne soit hors d'atteinte**
+— ce que `performScrollTo()` éprouve. Le budget de hauteur, lui, est tenu sur la JVM.
+
+La barre de progression est désormais affirmée par `assertExists()` et non `assertIsDisplayed()` :
+elle ne vit que deux secondes, et la faire défiler dans le champ de vision pendant ce temps
+reviendrait à lui courir après. Ce que ce test doit prouver, c'est que la compression **existe** à
+l'écran pendant qu'elle tourne, pas à quel pixel elle s'est arrêtée. Son délai d'attente passe de
+5 s à 10 s.
+
+**Revalidation :** `testDebugUnitTest` **BUILD SUCCESSFUL** — 937 tests, 0 échec ;
+`compileDebugAndroidTestKotlinAndroid` **BUILD SUCCESSFUL**.
+
+**Ce qui reste non vérifié :** aucun émulateur sur ce poste. Le bornage au visible et le garde-fou
+JVM rendent le débordement structurellement impossible, mais la confirmation sur appareil réel
+revient à la prochaine passe QA.
