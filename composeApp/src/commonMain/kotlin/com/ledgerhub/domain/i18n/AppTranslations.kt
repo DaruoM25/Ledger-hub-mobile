@@ -298,6 +298,31 @@ object AppTranslations {
         StringKey.AUTH_SIRENE_UNAVAILABLE to "Répertoire SIRENE indisponible, réessayez.",
         StringKey.AUTH_REGISTER_SUBMIT to "Créer mon espace",
 
+        StringKey.EXPORT_MODAL_TITLE to "Export Comptable (FEC & Factur-X)",
+        StringKey.EXPORT_MODAL_SUBTITLE to
+            "Préparez le dossier à remettre à votre expert-comptable",
+        StringKey.EXPORT_TRIGGER_LABEL to "Export comptable",
+        StringKey.EXPORT_CLOSE to "Fermer",
+        StringKey.EXPORT_PERIOD_SECTION to "Période d'export",
+        StringKey.EXPORT_DATE_FROM_LABEL to "Du",
+        StringKey.EXPORT_DATE_TO_LABEL to "Au",
+        StringKey.EXPORT_PERIOD_INVALID to "La date de fin doit suivre la date de début",
+        StringKey.EXPORT_FORMAT_SECTION to "Format de sortie",
+        StringKey.EXPORT_FORMAT_FEC_TITLE to "Format FEC Officiel",
+        StringKey.EXPORT_FORMAT_FEC_DESC to
+            "Fichier des écritures comptables opposable à l'administration",
+        StringKey.EXPORT_FORMAT_FACTURX_TITLE to "Archive Factur-X complète",
+        StringKey.EXPORT_FORMAT_FACTURX_DESC to
+            "Toutes les pièces électroniques de la période, prêtes pour le cabinet",
+        StringKey.EXPORT_FORMAT_EXCEL_TITLE to "Synthèse Excel",
+        StringKey.EXPORT_FORMAT_EXCEL_DESC to
+            "Tableau récapitulatif des factures, à ouvrir dans un tableur",
+        StringKey.EXPORT_GENERATE_ACTION to "Générer l'archive",
+        StringKey.EXPORT_GENERATING_LABEL to "Compression des pièces en cours…",
+        StringKey.EXPORT_SUCCESS_TITLE to "Archive prête",
+        StringKey.EXPORT_DOCUMENT_COUNT_LABEL to "pièce(s) couverte(s) par l'export",
+        StringKey.EXPORT_DOWNLOAD_ACTION to "Télécharger l'archive (.zip)",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -592,6 +617,30 @@ object AppTranslations {
         StringKey.AUTH_SIRENE_NOT_FOUND to "SIRET not found in the SIRENE register.",
         StringKey.AUTH_SIRENE_UNAVAILABLE to "SIRENE register unavailable, please retry.",
         StringKey.AUTH_REGISTER_SUBMIT to "Create my workspace",
+
+        StringKey.EXPORT_MODAL_TITLE to "Accounting Export (FEC & Factur-X)",
+        StringKey.EXPORT_MODAL_SUBTITLE to "Prepare the file to hand over to your accountant",
+        StringKey.EXPORT_TRIGGER_LABEL to "Accounting export",
+        StringKey.EXPORT_CLOSE to "Close",
+        StringKey.EXPORT_PERIOD_SECTION to "Export period",
+        StringKey.EXPORT_DATE_FROM_LABEL to "From",
+        StringKey.EXPORT_DATE_TO_LABEL to "To",
+        StringKey.EXPORT_PERIOD_INVALID to "The end date must follow the start date",
+        StringKey.EXPORT_FORMAT_SECTION to "Output format",
+        StringKey.EXPORT_FORMAT_FEC_TITLE to "Official FEC Format",
+        StringKey.EXPORT_FORMAT_FEC_DESC to
+            "Accounting entries file enforceable by the tax administration",
+        StringKey.EXPORT_FORMAT_FACTURX_TITLE to "Full Factur-X Archive",
+        StringKey.EXPORT_FORMAT_FACTURX_DESC to
+            "Every electronic document of the period, ready for your firm",
+        StringKey.EXPORT_FORMAT_EXCEL_TITLE to "Excel Summary",
+        StringKey.EXPORT_FORMAT_EXCEL_DESC to
+            "Summary table of your invoices, to open in a spreadsheet",
+        StringKey.EXPORT_GENERATE_ACTION to "Generate the archive",
+        StringKey.EXPORT_GENERATING_LABEL to "Compressing documents…",
+        StringKey.EXPORT_SUCCESS_TITLE to "Archive ready",
+        StringKey.EXPORT_DOCUMENT_COUNT_LABEL to "document(s) covered by the export",
+        StringKey.EXPORT_DOWNLOAD_ACTION to "Download the archive (.zip)",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",

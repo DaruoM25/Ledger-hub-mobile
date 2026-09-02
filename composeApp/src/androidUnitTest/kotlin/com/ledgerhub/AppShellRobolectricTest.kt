@@ -6,10 +6,13 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runComposeUiTest
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.ledgerhub.db.LedgerHubDatabase
+import com.ledgerhub.presentation.components.LangToggleTags
 import com.ledgerhub.presentation.dashboard.DashboardTags
+import com.ledgerhub.presentation.export.ExportModalTags
 import com.ledgerhub.presentation.directory.DirectoryTags
 import com.ledgerhub.presentation.integrations.IntegrationsHubTags
 import com.ledgerhub.presentation.invoiceform.InvoiceFormTags
@@ -107,5 +110,35 @@ class AppShellRobolectricTest {
         }
         onNodeWithTag(IntegrationsHubTags.CONTAINER).assertIsDisplayed()
         onNodeWithTag("integration_card_stripe").assertIsDisplayed()
+    }
+
+    /**
+     * Point d'entrée de l'export comptable (US-22), et **non-régression de l'en-tête** : ce
+     * quatrième déclencheur est celui qui risquait de pousser le sélecteur de langue hors de
+     * l'écran d'un téléphone. Le test constate qu'il ne l'a pas fait — c'est pour cela qu'il
+     * vérifie la présence du sélecteur, et pas seulement l'ouverture de la modale.
+     */
+    @Test
+    fun headerTrigger_opensTheExportModal_andKeepsTheLanguageSelectorVisible() = runComposeUiTest {
+        setContent { App(database = newDatabase()) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(ExportModalTags.TRIGGER).assertIsDisplayed()
+        onNodeWithTag(IntegrationsHubTags.TRIGGER).assertIsDisplayed()
+        onNodeWithTag(LangToggleTags.ROOT).assertIsDisplayed()
+
+        onNodeWithTag(ExportModalTags.TRIGGER).performClick()
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(ExportModalTags.DIALOG).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(ExportModalTags.DIALOG).assertIsDisplayed()
+        // L'appareil Robolectric par defaut ne fait que 470 dp de haut : la feuille y defile, et
+        // le bouton de generation attend sous la ligne de flottaison. C'est le comportement voulu
+        // — encore faut-il aller le chercher pour l'affirmer (meme idiome qu'AuthScreenRobolectricTest).
+        onNodeWithTag(ExportModalTags.GENERATE_BTN).performScrollTo().assertIsDisplayed()
     }
 }

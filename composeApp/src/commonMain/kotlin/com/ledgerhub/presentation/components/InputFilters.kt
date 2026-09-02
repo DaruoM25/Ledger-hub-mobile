@@ -38,6 +38,27 @@ fun filterAmount(input: String): String {
 fun filterVatNumber(input: String): String =
     input.uppercase().filter { it.isLetterOrDigit() }.take(FR_VAT_LENGTH)
 
+/**
+ * Date ISO `AAAA-MM-JJ` : seuls les chiffres sont retenus, les deux tirets sont réinsérés à leur
+ * place. L'utilisateur n'a donc ni à les taper ni à se tromper de séparateur — et le champ ne peut
+ * structurellement pas produire autre chose que la forme attendue par `ExportPeriod`.
+ *
+ * Le filtre ne juge **pas** la validité de la date : `2026-99-99` en sort intact. C'est la
+ * validation métier qui tranche, ici comme ailleurs (voir l'en-tête de ce fichier).
+ */
+fun filterIsoDate(input: String): String {
+    val digits = input.filter { it.isDigit() }.take(ISO_DATE_DIGITS)
+    return buildString {
+        digits.forEachIndexed { index, digit ->
+            if (index == YEAR_DIGITS || index == YEAR_DIGITS + MONTH_DIGITS) append('-')
+            append(digit)
+        }
+    }
+}
+
 const val SIRET_LENGTH = 14
 private const val QUANTITY_MAX_DIGITS = 6
 private const val FR_VAT_LENGTH = 13
+private const val YEAR_DIGITS = 4
+private const val MONTH_DIGITS = 2
+private const val ISO_DATE_DIGITS = 8

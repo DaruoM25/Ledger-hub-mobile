@@ -1080,3 +1080,127 @@ mise en page — tous deux trouvés par les tests avant toute recette manuelle.
 - **Le message d'erreur de connexion reste en français en dur** dans le ViewModel (repli
   `?: "Erreur inconnue lors de la connexion"`), comme dans `DirectoryViewModel`. Les messages portés
   par les ViewModels forment une dette i18n distincte, non traitée ici.
+
+---
+
+## US-22 — Modale d'export comptable (FEC & Factur-X)
+- **Date :** 2026-09-02
+- **Branche :** `feature/US-22-accounting-export-modal`
+- **Statut :** ✅ N1/N2/N3a verts (934/934 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+
+### Décision d'architecture
+Le format d'export est un **enum de domaine** (`ExportFormat`) qui porte son extension et son type
+MIME, et la période un **objet de domaine** (`ExportPeriod`) qui sait se valider. Ni l'un ni l'autre
+ne vit dans le ViewModel : c'est ce qui permet d'éprouver le filtrage et les bornes sans composition.
+
+`AccountingArchiveBuilder` filtre et trie **une seule fois**, en amont du `when` sur le format. Les
+trois documents couvrent donc exactement les mêmes pièces dans le même ordre — sans quoi deux
+exports d'une même période remis au même cabinet ne se recouperaient pas. La synthèse Excel
+réutilise `LedgerCsvExport` (US-19) au lieu de réécrire un CSV.
+
+Le FEC porte les **18 colonnes de l'article A.47 A-1 du LPF** et une écriture équilibrée par facture
+(411000 au débit du TTC, 706000 et 445710 au crédit). La ligne de TVA est omise quand la taxe est
+nulle : une ligne à `0,00` affirmerait une TVA collectée nulle sur un compte qui n'aurait pas dû
+être mouvementé.
+
+### Progression : pourquoi 40 paliers plutôt qu'une attente unique
+L'archive est produite en quelques millisecondes ; la compression annoncée est une **simulation
+assumée**. Elle est égrenée en 40 paliers de 50 ms parce qu'une barre qui saute de 0 à 100 % ne
+renseigne sur rien, et parce qu'un état qui ne change qu'une fois n'offre aux tests aucune prise.
+La barre est **déterminée** et non indéterminée : une animation infinie empêcherait `waitForIdle()`
+de rendre la main sous Robolectric.
+
+`generationDuration` est injectable — non par goût du réglage, mais parce que le niveau 3a tourne en
+temps réel : l'y faire attendre deux secondes reviendrait à parier sur l'ordonnanceur. Le niveau 2
+contrôle le temps virtuel et éprouve, lui, la valeur de production (`GENERATION_MILLIS = 2 000`).
+
+### 🐛 Anomalie corrigée — le `shape` de `Surface` rendait la feuille morte au toucher
+`Surface` applique un `Modifier.clip(shape)`. Avec un arrondi **non uniforme** (haut arrondi, bas
+droit — la forme même d'une bottom sheet), toute la descendance de la feuille devenait
+**inatteignable au toucher** : chaque tap traversait la feuille et allait au voile, qui refermait la
+modale. Champs, cartes et boutons étaient visibles, correctement annoncés à l'accessibilité, et
+pourtant inertes sous le doigt.
+
+Le défaut a été isolé par bissection sous Robolectric : seuls les tests qui **touchent** échouaient,
+l'action sémantique équivalente passant sans problème ; une réplique minimale de la même structure
+fonctionnait ; retirer tour à tour l'absorbeur de tap, le défilement, le retrait de barre de gestes,
+puis élargir l'appareil, ne changeait rien ; une sonde de position a établi que les taps atteignaient
+le voile **partout**, y compris sous la feuille — donc que la feuille n'était jamais dans le chemin
+de hit-test. Le `shape` retiré, le clic passe.
+
+**Correctif :** l'arrondi est désormais *peint* et non *découpé* — `background(color, SheetShape)` +
+`border(width, color, SheetShape)` sur le modifier, `Surface` en `Color.Transparent`. Le rendu est
+identique ; le contenu n'est plus rogné par la forme, ce qui est sans conséquence : les 20 dp de
+marge intérieure tiennent tout le contenu loin des coins.
+
+**Ce n'était pas un défaut de test.** Sans ce correctif, la modale aurait été livrée avec des
+boutons morts sur appareil réel.
+
+### 🧾 Dette assumée — l'archive n'est pas un `.zip`
+Le bouton annonce « Télécharger l'archive (.zip) », libellé imposé par le cahier des charges et
+fidèle à l'intention de l'utilisateur. Le contenu remis est **textuel** : `DocumentExporter` ne
+transporte que des chaînes, et fabriquer un conteneur ZIP binaire supposerait d'élargir cette
+interface jusqu'aux `ByteArray` puis d'écrire un archiveur en Kotlin pur. Le choix retenu — arbitré
+et validé en phase de plan — est de livrer le contenu réel du format choisi sous sa propre extension
+(FEC en `.txt` suivant la nomenclature officielle SIREN + FEC + AAAAMMJJ, archive Factur-X en
+`.xml`, synthèse en `.csv`) plutôt qu'un `.zip` corrompu qui ne s'ouvrirait nulle part. Le vrai
+conteneur relève d'une US dédiée.
+
+### Câblage du shell
+`Overlay.ExportModal` est un **état superposé** : le contenu de l'onglet courant continue d'être
+rendu derrière la feuille (extraction de `TabsContent`), et la barre de navigation du bas reste en
+place. `CommandAction.EXPORT_ACCOUNTING` (US-19) ne déclenche plus un export CSV en un clic aveugle :
+elle ouvre la modale, où l'utilisateur choisit sa période et son format.
+
+Le déclencheur est **glyphe seul** dans l'en-tête — quatrième commande sur la largeur d'un
+téléphone, celle qui risquait de pousser le sélecteur de langue hors de l'écran. La non-régression
+est vérifiée par `AppShellRobolectricTest`, qui affirme la présence simultanée des deux déclencheurs
+et du sélecteur de langue avant d'ouvrir la modale.
+
+### Tests
+- **N1 (commonTest)** — `ExportModalTagsTest` (4 cas : les 9 tags imposés figés, unicité, aucune
+  collision avec les tags internes) · `ExportFormatTest` (4 cas : catalogue ordonné, format par
+  défaut, extensions et types MIME, identités distinctes) · `ExportPeriodTest` (14 cas : format ISO,
+  dates structurellement impossibles, bornes inversées, **bornes incluses**, horodatage tronqué,
+  période proposée à l'ouverture) · `AccountingArchiveBuilderTest` (16 cas : périmètre identique
+  pour les trois formats, **18 colonnes du FEC**, **équilibre débit/crédit**, comptes du PCG, TVA
+  nulle sans écriture, dates compactes, tabulations neutralisées, nomenclature officielle du nom de
+  fichier, archive Factur-X à déclaration unique, réutilisation de `LedgerCsvExport`) ·
+  `AppTranslationsTest` +1 cas de sentinelles.
+- **N2 (commonTest)** — `ExportViewModelTest`, 19 cas en **temps virtuel** : état d'ouverture,
+  réglages, période invalide bloquante sans appel au dépôt, entrée immédiate en `GENERATING`,
+  progression observable à mi-parcours, **monotonie bornée sur les 40 paliers**, archive prête à
+  2 000 ms, format respecté, ré-entrée ignorée, dépôt en panne sans plantage, invalidation d'une
+  archive périmée, réglages gelés pendant la compression, téléchargement sans effet hors `READY`,
+  remise effective à la plateforme, annulation à la fermeture.
+- **N3a (Robolectric, `w411dp-h891dp`)** — `ExportModalRobolectricTest`, 17 cas : structure et
+  **présence des 9 tags imposés**, absence des deux tags d'étapes ultérieures au repos, titres et
+  descriptions des trois formats, période d'ouverture, sélection déplacée au toucher, tirets ISO
+  réinsérés, période inversée expliquée, **barre de progression rendue** et bouton de génération
+  retiré, bloc de succès et bouton de téléchargement, parcours complet jusqu'au fichier remis
+  (`820329331FEC20260902.txt`), période invalide n'entrant jamais en compression, traduction
+  anglaise, déclencheur du shell. Les deux étapes fugaces sont rendues depuis un **état fixe** :
+  `assertIsDisplayed()` attend d'abord que l'arbre soit au repos, et une compression déjà terminée à
+  ce moment-là ne serait plus observable.
+- **N3b (instrumenté, rédigé et compilé)** — `ExportModalInstrumentedTest`, 5 cas avec le **vrai
+  délai de deux secondes** : feuille entière visible sans défilement, cibles tactiles ≥ 48 dp,
+  sélection au doigt dans la vraie fenêtre, **barre observée pendant la compression réelle**,
+  parcours complet jusqu'à la remise du fichier, et export de la capture officielle
+  `US22_mobile_export_modal_sdk_gphone64_x86_64.png`.
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 934 tests, 0 échec, 0 erreur, 0 ignoré |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** (44 s) |
+
+### Points d'attention transmis
+- **La capture officielle n'est pas encore produite** : le test N3b est rédigé et compilé, son
+  exécution demande un émulateur Pixel 5 API 35
+  (`./scripts/run-qa.ps1 -Suite Instrumented -ScreenshotPrefix "US22" -AvdName "Pixel_5_API_35"`).
+- **Aucun `.zip` n'est produit** — voir la dette ci-dessus.
+- **Les écritures du FEC restent volontairement grossières** : un seul compte de produit (706000) et
+  un seul compte de TVA (445710), faute d'un paramétrage comptable dans l'application. Une
+  ventilation par nature de produit ou par taux de TVA suppose une US de paramétrage.
+- **`ExportPeriod` ne connaît ni la longueur des mois ni les années bissextiles** : `2026-02-29` est
+  accepté. Au pire, l'export couvre un jour de trop — il n'en perd aucun.

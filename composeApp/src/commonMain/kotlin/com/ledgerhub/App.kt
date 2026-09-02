@@ -77,7 +77,6 @@ import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.command.CommandAction
 import com.ledgerhub.domain.command.CommandPaletteShortcut
 import com.ledgerhub.domain.export.DocumentExporter
-import com.ledgerhub.domain.export.LedgerCsvExport
 import com.ledgerhub.domain.export.NoOpDocumentExporter
 import com.ledgerhub.domain.facturx.FacturXGenerator
 import com.ledgerhub.domain.facturx.toFacturXDocument
@@ -103,6 +102,9 @@ import com.ledgerhub.presentation.command.CommandPaletteTrigger
 import com.ledgerhub.presentation.command.CommandPaletteViewModel
 import com.ledgerhub.presentation.directory.DirectoryScreen
 import com.ledgerhub.presentation.directory.DirectoryViewModel
+import com.ledgerhub.presentation.export.ExportModalSheet
+import com.ledgerhub.presentation.export.ExportModalTrigger
+import com.ledgerhub.presentation.export.ExportViewModel
 import com.ledgerhub.presentation.integrations.IntegrationsHubScreen
 import com.ledgerhub.presentation.integrations.IntegrationsHubTrigger
 import com.ledgerhub.presentation.integrations.IntegrationsHubViewModel
@@ -137,6 +139,14 @@ private sealed interface Overlay {
 
     /** Hub d'intégrations (US-20) — vitrine des connecteurs, tous verrouillés à ce stade. */
     data object Integrations : Overlay
+
+    /**
+     * Modale d'export comptable FEC & Factur-X (US-22).
+     *
+     * Superposée aux onglets et non substituée à eux : c'est une feuille, pas un écran. Le shell
+     * continue donc de rendre l'onglet courant derrière elle (voir [TabsContent]).
+     */
+    data object ExportModal : Overlay
 
     data class InvoiceDetail(val number: String) : Overlay
 
@@ -232,6 +242,7 @@ fun App(
 
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
     val onOpenIntegrations = { overlay = Overlay.Integrations }
+    val onOpenExportModal = { overlay = Overlay.ExportModal }
     val onCreateCreditNote = { invoice: Invoice -> overlay = Overlay.CreditNote(invoice) }
 
     // Export Factur-X (US-06) : le XML est généré à la demande depuis les données déjà en
@@ -256,19 +267,6 @@ fun App(
 
     val onOpenCommandPalette = {
         commandPaletteViewModel.processIntent(CommandPaletteIntent.Open, language)
-    }
-
-    val onExportAccounting = {
-        exportScope.launch {
-            invoiceRepository.fetchInvoices().getOrNull()?.let { invoices ->
-                documentExporter.export(
-                    fileName = LedgerCsvExport.FILE_NAME,
-                    mimeType = LedgerCsvExport.MIME_TYPE,
-                    content = LedgerCsvExport.generate(invoices.sortedBy { it.issueDate }),
-                )
-            }
-        }
-        Unit
     }
 
     val onExportCreditNoteXml = { creditNoteNumber: String ->
@@ -314,7 +312,9 @@ fun App(
             }
 
             CommandAction.EXPORT_ACCOUNTING -> {
-                onExportAccounting()
+                // L'export ne part plus en un clic aveugle (US-19) : la palette ouvre desormais la
+                // modale, ou l'utilisateur choisit sa periode et son format avant de generer.
+                onOpenExportModal()
                 commandPaletteViewModel.processIntent(CommandPaletteIntent.ActionConsumed, language)
             }
         }
@@ -357,6 +357,7 @@ fun App(
                                 onSelectLanguage = { language = it },
                                 onOpenCommandPalette = onOpenCommandPalette,
                                 onOpenIntegrations = onOpenIntegrations,
+                                onOpenExportModal = onOpenExportModal,
                             )
                             Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                                 Card(
@@ -400,10 +401,13 @@ fun App(
                                     onSelectLanguage = { language = it },
                                     onOpenCommandPalette = onOpenCommandPalette,
                                     onOpenIntegrations = onOpenIntegrations,
+                                    onOpenExportModal = onOpenExportModal,
                                 )
                             },
                             bottomBar = {
-                                if (overlay is Overlay.None) {
+                                // La feuille d'export se superpose aux onglets : la barre reste,
+                                // sans quoi la navigation disparaitrait derriere une modale.
+                                if (overlay is Overlay.None || overlay is Overlay.ExportModal) {
                                     LedgerBottomBar(
                                         selected = destination,
                                         onSelect = { destination = it },
@@ -446,6 +450,26 @@ fun App(
                     uiState = commandPaletteState,
                     onIntent = { commandPaletteViewModel.processIntent(it, language) },
                 )
+
+                // Rendue elle aussi a la racine : la feuille surplombe les deux agencements, et
+                // son ViewModel nait et meurt avec l'overlay — il ne porte aucun etat a conserver
+                // au-dela d'un export.
+                if (overlay is Overlay.ExportModal) {
+                    val exportViewModel = remember(taxSettings) {
+                        ExportViewModel(
+                            invoiceRepository = invoiceRepository,
+                            documentExporter = documentExporter,
+                            taxSettings = taxSettings,
+                        )
+                    }
+                    DisposableEffect(exportViewModel) {
+                        onDispose { exportViewModel.onCleared() }
+                    }
+                    ExportModalSheet(
+                        viewModel = exportViewModel,
+                        onDismiss = { overlay = Overlay.None },
+                    )
+                }
             }
         }
     }
@@ -458,6 +482,7 @@ private fun LedgerHeader(
     onSelectLanguage: (AppLanguage) -> Unit,
     onOpenCommandPalette: () -> Unit,
     onOpenIntegrations: () -> Unit,
+    onOpenExportModal: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -475,6 +500,10 @@ private fun LedgerHeader(
             // Glyphe seul : l'en-tête d'un téléphone porte déjà le nom de l'application, la
             // palette et le sélecteur de langue. Un libellé de plus repousserait ce dernier hors
             // de l'écran (US-20) — la sidebar, elle, a la place de l'afficher en toutes lettres.
+            // Quatre commandes sur la largeur d'un telephone : toutes reduites a leur glyphe sauf
+            // la palette, dont le badge de raccourci est ce qui l'apprend a l'utilisateur. Le
+            // selecteur de langue doit rester visible — c'est ce que verifient les niveaux 3.
+            ExportModalTrigger(onClick = onOpenExportModal, compact = true)
             IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
             CommandPaletteTrigger(onClick = onOpenCommandPalette)
             LangToggle(current = language, onSelect = onSelectLanguage)
@@ -567,26 +596,57 @@ private fun ShellContent(
             CreditNoteFormScreen(viewModel = creditNoteViewModel, onBack = onBack)
         }
 
-        Overlay.None -> when (destination) {
-            Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
-                CreateInvoiceAction(onCreateInvoice)
-                DashboardScreen(viewModel = dashboardViewModel)
-            }
+        // La modale d'export est une feuille : elle se superpose au contenu, elle ne le remplace
+        // pas. Les deux branches rendent donc le meme onglet — c'est la racine d'App() qui pose la
+        // feuille par-dessus.
+        Overlay.None, Overlay.ExportModal -> TabsContent(
+            destination = destination,
+            onCreateInvoice = onCreateInvoice,
+            onOpenInvoice = onOpenInvoice,
+            onCreateCreditNote = onCreateCreditNote,
+            dashboardViewModel = dashboardViewModel,
+            invoiceListViewModel = invoiceListViewModel,
+            clientsViewModel = clientsViewModel,
+            directoryViewModel = directoryViewModel,
+            reconciliationViewModel = reconciliationViewModel,
+            taxSettingsViewModel = taxSettingsViewModel,
+        )
+    }
+}
 
-            Destination.INVOICES -> Column(modifier = Modifier.fillMaxSize()) {
-                CreateInvoiceAction(onCreateInvoice)
-                InvoiceListScreen(
-                    viewModel = invoiceListViewModel,
-                    onInvoiceClick = onOpenInvoice,
-                    onCreateCreditNote = onCreateCreditNote,
-                )
-            }
-
-            Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
-            Destination.DIRECTORY -> DirectoryScreen(viewModel = directoryViewModel)
-            Destination.RECONCILIATION -> ReconciliationScreen(viewModel = reconciliationViewModel)
-            Destination.SETTINGS -> TaxSettingsScreen(viewModel = taxSettingsViewModel)
+/** Contenu de l'onglet courant, hors de tout ecran superpose. */
+@Composable
+private fun TabsContent(
+    destination: Destination,
+    onCreateInvoice: () -> Unit,
+    onOpenInvoice: (String) -> Unit,
+    onCreateCreditNote: (Invoice) -> Unit,
+    dashboardViewModel: DashboardViewModel,
+    invoiceListViewModel: InvoiceListViewModel,
+    clientsViewModel: ClientsViewModel,
+    directoryViewModel: DirectoryViewModel,
+    reconciliationViewModel: ReconciliationViewModel,
+    taxSettingsViewModel: TaxSettingsViewModel,
+) {
+    when (destination) {
+        Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
+            CreateInvoiceAction(onCreateInvoice)
+            DashboardScreen(viewModel = dashboardViewModel)
         }
+
+        Destination.INVOICES -> Column(modifier = Modifier.fillMaxSize()) {
+            CreateInvoiceAction(onCreateInvoice)
+            InvoiceListScreen(
+                viewModel = invoiceListViewModel,
+                onInvoiceClick = onOpenInvoice,
+                onCreateCreditNote = onCreateCreditNote,
+            )
+        }
+
+        Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
+        Destination.DIRECTORY -> DirectoryScreen(viewModel = directoryViewModel)
+        Destination.RECONCILIATION -> ReconciliationScreen(viewModel = reconciliationViewModel)
+        Destination.SETTINGS -> TaxSettingsScreen(viewModel = taxSettingsViewModel)
     }
 }
 
@@ -640,6 +700,7 @@ private fun LedgerSidebar(
     onSelectLanguage: (AppLanguage) -> Unit,
     onOpenCommandPalette: () -> Unit,
     onOpenIntegrations: () -> Unit,
+    onOpenExportModal: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -671,6 +732,11 @@ private fun LedgerSidebar(
         // du shell tablette.
         IntegrationsHubTrigger(
             onClick = onOpenIntegrations,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+        // La sidebar a la place d'afficher le libelle en toutes lettres, contrairement a l'en-tete.
+        ExportModalTrigger(
+            onClick = onOpenExportModal,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         )
         Destination.entries.forEach { entry ->
