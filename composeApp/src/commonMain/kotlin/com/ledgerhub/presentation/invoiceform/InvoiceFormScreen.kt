@@ -107,7 +107,18 @@ object InvoiceFormTags {
     /** Pied de page légal : mention L.441-10 ou formule de courtoisie, jamais vide. */
     const val LEGAL_FOOTER = "invoice_legal_footer"
 
-    fun modeSegmentTag(mode: InvoiceFormMode) = "invoice_form_mode_segment_${mode.name}"
+    /**
+     * Tag d'un segment du sélecteur de mode.
+     *
+     * `when` exhaustif et non interpolation : le segment « Mode Page Blanche » porte le tag
+     * **imposé par le cahier des charges US-23** (`invoice_mode_canvas_btn`), et un troisième mode
+     * devrait déclarer le sien pour que le code compile. Le segment « Mode Formulaire » garde, lui,
+     * la valeur héritée de l'US-15 : aucune suite n'avait de raison d'en changer.
+     */
+    fun modeSegmentTag(mode: InvoiceFormMode) = when (mode) {
+        InvoiceFormMode.CLASSIC -> "invoice_form_mode_segment_CLASSIC"
+        InvoiceFormMode.BLANK_PAGE -> InvoiceCanvasTags.MODE_BUTTON
+    }
 
     fun errorTagFor(field: InvoiceFormField) = "invoice_form_error_${field.name}"
 

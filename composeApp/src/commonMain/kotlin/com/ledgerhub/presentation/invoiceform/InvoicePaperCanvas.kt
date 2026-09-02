@@ -52,16 +52,35 @@ import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.formatMoney
 
-/** Tags de test — contrat partagé entre l'aperçu WYSIWYG (UI) et les tests. */
+/**
+ * Tags de test de l'aperçu WYSIWYG (US-15).
+ *
+ * Les quatre tags que l'US-23 a normalisés y **délèguent** désormais : un nœud ne porte qu'un
+ * `testTag`, et c'est [InvoiceCanvasTags] qui détient les valeurs canoniques. Les suites US-15 et
+ * US-16 désignent donc toujours les mêmes nœuds par les mêmes constantes, sans une ligne réécrite
+ * — un tag est un contrat avec la QA, pas un nom de variable (même précédent que
+ * `InvoiceFormTags.CLIENT_NAME`, alias du sélecteur client de l'US-11).
+ *
+ * Les tags sans équivalent dans le cahier des charges US-23 — émetteur, champs client, cellules de
+ * ligne, ventilation TVA — gardent leurs valeurs d'origine.
+ */
 object InvoicePaperCanvasTags {
-    const val CANVAS = "invoice_paper_canvas"
+    /** Le bureau gris défilant. Alias de [InvoiceCanvasTags.CONTAINER]. */
+    const val CANVAS = InvoiceCanvasTags.CONTAINER
+
     const val CABINET_NAME = "invoice_paper_cabinet_name"
     const val CABINET_SIRET = "invoice_paper_cabinet_siret"
     const val CLIENT_NAME = "invoice_paper_client_name"
     const val CLIENT_SIRET = "invoice_paper_client_siret"
-    const val TOTAL_HT = "invoice_paper_total_ht"
-    const val TOTAL_VAT = "invoice_paper_total_vat"
-    const val TOTAL_TTC = "invoice_paper_total_ttc"
+
+    /** Alias de [InvoiceCanvasTags.TOTAL_HT]. */
+    const val TOTAL_HT = InvoiceCanvasTags.TOTAL_HT
+
+    /** Alias de [InvoiceCanvasTags.TOTAL_VAT]. */
+    const val TOTAL_VAT = InvoiceCanvasTags.TOTAL_VAT
+
+    /** Alias de [InvoiceCanvasTags.TOTAL_TTC]. */
+    const val TOTAL_TTC = InvoiceCanvasTags.TOTAL_TTC
 
     fun lineLabelTag(index: Int) = "invoice_paper_line_${index}_label"
     fun lineQuantityTag(index: Int) = "invoice_paper_line_${index}_quantity"
@@ -93,20 +112,24 @@ fun InvoicePaperCanvas(
 ) {
     val fieldsEnabled = uiState.isFormEnabled
 
+    // Le bureau : c'est lui qui défile, et c'est pour cela qu'il est distinct de la feuille.
     Surface(
         color = PaperDeskBackground,
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .semantics { testTag = InvoicePaperCanvasTags.CANVAS },
+            .semantics { testTag = InvoiceCanvasTags.CONTAINER },
     ) {
+        // La feuille A4 : c'est elle que cadre la capture QA officielle (US-23), et elle seule —
+        // le bureau qui l'entoure n'est pas le document.
         Surface(
             color = Color.White,
             shadowElevation = 6.dp,
             shape = RoundedCornerShape(2.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(16.dp)
+                .semantics { testTag = InvoiceCanvasTags.PAGE },
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -154,11 +177,16 @@ private fun PaperHeader(
         }
 
         // Header droit : encart client, éditable en place, bordé pour le distinguer de l'émetteur.
+        //
+        // `mergeDescendants = false` — explicite, bien que ce soit le défaut, parce que l'inverse
+        // serait ici un défaut : fusionner absorberait les deux champs éditables de l'encart, qui
+        // cesseraient d'être atteignables un par un, au lecteur d'écran comme aux tests.
         Column(
             modifier = Modifier
                 .weight(1f)
                 .border(width = 1.dp, color = PaperDividerColor, shape = RoundedCornerShape(6.dp))
-                .padding(12.dp),
+                .padding(12.dp)
+                .semantics(mergeDescendants = false) { testTag = InvoiceCanvasTags.CLIENT_CARD },
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
@@ -192,7 +220,14 @@ private fun PaperLinesTable(
     enabled: Boolean,
     onIntent: (InvoiceFormIntent) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // Même raison que pour l'encart client : le tableau est tagué sans fusionner, sans quoi ses
+    // cellules éditables disparaîtraient derrière un nœud unique.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = false) { testTag = InvoiceCanvasTags.ITEMS_TABLE },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             TableHeaderCell(tr(StringKey.PREVIEW_COL_DESCRIPTION), weight = 3f)
             TableHeaderCell(tr(StringKey.PREVIEW_COL_QUANTITY), weight = 1f)
@@ -273,7 +308,7 @@ private fun PaperFooterTotals(uiState: InvoiceFormUiState) {
         PaperTotalLine(
             label = tr(StringKey.PREVIEW_TOTAL_HT),
             value = formatMoney(uiState.totalHt.cents, language),
-            tag = InvoicePaperCanvasTags.TOTAL_HT,
+            tag = InvoiceCanvasTags.TOTAL_HT,
         )
         breakdown.forEach { vatBreakdown ->
             Text(
@@ -288,12 +323,12 @@ private fun PaperFooterTotals(uiState: InvoiceFormUiState) {
         PaperTotalLine(
             label = tr(StringKey.PREVIEW_TOTAL_VAT),
             value = formatMoney(uiState.totalVat.cents, language),
-            tag = InvoicePaperCanvasTags.TOTAL_VAT,
+            tag = InvoiceCanvasTags.TOTAL_VAT,
         )
         PaperTotalLine(
             label = tr(StringKey.PREVIEW_TOTAL_TTC),
             value = formatMoney(uiState.totalTtc.cents, language),
-            tag = InvoicePaperCanvasTags.TOTAL_TTC,
+            tag = InvoiceCanvasTags.TOTAL_TTC,
             emphasize = true,
         )
     }
