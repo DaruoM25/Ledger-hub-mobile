@@ -4,7 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.requiredSizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -66,24 +66,28 @@ fun ThemeToggle(
         contentColor = LedgerHubTheme.palette.SecondaryText,
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
-        // Un seul noeud sémantique pour tout le bouton : TalkBack annonce « bouton » puis la
-        // destination de l'appui, au lieu d'énumérer un conteneur et une icône. C'est aussi ce
-        // noeud que mesurent et que touchent les niveaux 3.
-        modifier = modifier.semantics(mergeDescendants = true) {
-            testTag = ThemeToggleTags.ROOT
-            this.contentDescription = description
-            role = Role.Button
-        },
+        // La cible tactile est portée par CE noeud — celui qui est tagué, mesuré et touché par
+        // les niveaux 3 — et non par la boîte interne : `requiredSizeIn` posé plus bas laissait
+        // la Surface se faire comprimer par un parent saturé, et c'est bien elle que le test
+        // mesure. `requiredSizeIn` et non `sizeIn` : un `sizeIn` reste borné par les contraintes
+        // du parent, d'où le bouton réduit à 14,5 dp mesuré sur Pixel 5 sans que rien ne le
+        // signale. La cible tactile n'est pas négociable — un débordement éventuel se voit à
+        // l'écran, au lieu de se solder par un bouton invisiblement inutilisable.
+        modifier = modifier
+            .requiredSizeIn(minWidth = MinimumTouchTarget, minHeight = MinimumTouchTarget)
+            .semantics(mergeDescendants = true) {
+                testTag = ThemeToggleTags.ROOT
+                this.contentDescription = description
+                role = Role.Button
+            },
     ) {
+        // Sans modificateur de taille : la boîte hérite du minimum de 48 dp imposé à la Surface,
+        // la zone cliquable couvre donc toute la cible et non la seule icône de 20 dp.
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .clickable(onClickLabel = description) {
-                    onToggle(mode.toggled(systemIsDark = resolved == ResolvedTheme.DARK))
-                }
-                // Le contour ne fait que 40 dp de haut dans l'en-tête ; c'est la ZONE CLIQUABLE
-                // qui doit atteindre 48 dp, et c'est elle que le test mesure.
-                .sizeIn(minWidth = MinimumTouchTarget, minHeight = MinimumTouchTarget),
+            modifier = Modifier.clickable(onClickLabel = description) {
+                onToggle(mode.toggled(systemIsDark = resolved == ResolvedTheme.DARK))
+            },
         ) {
             Icon(
                 imageVector = if (goesToLight) LedgerHubSunIcon else LedgerHubMoonIcon,

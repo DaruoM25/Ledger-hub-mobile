@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.StringKey
@@ -517,27 +518,41 @@ private fun LedgerHeader(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(tr(StringKey.APP_NAME), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        // ── Pourquoi le titre porte un `weight` et les commandes non ────────────────────────
+        // Dans un Row, les enfants SANS poids sont mesurés d'abord, avec toute la largeur
+        // disponible ; le reste va aux enfants pondérés. Le titre est donc la seule chose qui
+        // puisse être rognée ici, et les cinq commandes obtiennent toujours leur largeur pleine.
+        //
+        // Ce n'est pas une précaution théorique. Livré sans ce poids, l'en-tête a débordé sur
+        // Pixel 5 (393 dp) : la bascule de thème y a été comprimée à 14,5 dp et le sélecteur de
+        // langue refoulé hors de l'écran. Les réglages ci-dessous (recherche compacte, gouttières
+        // resserrées) rendent la place ; ce weight garantit que la prochaine commande ajoutée
+        // rognera le nom de l'application plutôt qu'une cible tactile.
+        Text(
+            tr(StringKey.APP_NAME),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Glyphe seul : l'en-tête d'un téléphone porte déjà le nom de l'application, la
-            // palette et le sélecteur de langue. Un libellé de plus repousserait ce dernier hors
-            // de l'écran (US-20) — la sidebar, elle, a la place de l'afficher en toutes lettres.
-            // Quatre commandes sur la largeur d'un telephone : toutes reduites a leur glyphe sauf
-            // la palette, dont le badge de raccourci est ce qui l'apprend a l'utilisateur. Le
-            // selecteur de langue doit rester visible — c'est ce que verifient les niveaux 3.
+            // Cinq commandes sur la largeur d'un telephone : TOUTES reduites a leur glyphe, y
+            // compris la palette. Son badge « ⌘K » n'apprend un raccourci qu'a qui peut brancher
+            // un clavier — c'est-a-dire sur la sidebar tablette, qui la garde en toutes lettres.
+            // Le selecteur de langue doit rester visible : c'est ce que verifient les niveaux 3.
             ExportModalTrigger(onClick = onOpenExportModal, compact = true)
             IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
-            CommandPaletteTrigger(onClick = onOpenCommandPalette)
+            CommandPaletteTrigger(onClick = onOpenCommandPalette, compact = true)
             // Cinquieme commande de l'en-tete (US-25) : reduite a son glyphe et posee juste a
-            // gauche du selecteur de langue, avec lequel elle forme une paire. Les deux doivent
-            // rester visibles a la largeur d'un Pixel 5 — c'est ce qu'affirment les niveaux 3.
+            // gauche du selecteur de langue, avec lequel elle forme une paire.
             ThemeToggle(mode = themeMode, resolved = resolvedTheme, onToggle = onToggleTheme)
             LangToggle(current = language, onSelect = onSelectLanguage)
         }

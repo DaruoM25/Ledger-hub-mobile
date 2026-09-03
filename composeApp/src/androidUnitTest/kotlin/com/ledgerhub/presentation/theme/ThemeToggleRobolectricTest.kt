@@ -1,10 +1,15 @@
 package com.ledgerhub.presentation.theme
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertContentDescriptionContains
@@ -72,6 +77,31 @@ class ThemeToggleRobolectricTest {
         onNodeWithTag(ThemeToggleTags.ROOT).assertIsDisplayed()
         onNodeWithTag(ThemeToggleTags.ROOT).assertHeightIsAtLeast(48.dp)
         onNodeWithTag(ThemeToggleTags.ROOT).assertWidthIsAtLeast(48.dp)
+    }
+
+    /**
+     * **Non-compression de la cible tactile.** Le bouton est placé dans une ligne délibérément trop
+     * étroite, à côté d'un voisin encombrant — la situation exacte de l'en-tête compact, où il a
+     * été livré comprimé à 14,5 dp de large sur Pixel 5.
+     *
+     * Cette propriété-là, Robolectric la mesure fidèlement : elle ne dépend pas des métriques de
+     * police (simulées, donc optimistes ici) mais des contraintes de mise en page, que
+     * `requiredSizeIn` fait ignorer au parent. La largeur réelle de l'en-tête garni, elle, reste du
+     * ressort du niveau 3b.
+     */
+    @Test
+    fun theToggle_keepsItsTouchTargetInsideACrampedRow() = runComposeUiTest {
+        setContent {
+            LedgerHubTheme(mode = ThemeMode.DARK) {
+                Row(modifier = Modifier.width(120.dp)) {
+                    Box(modifier = Modifier.width(100.dp).height(40.dp))
+                    ThemeToggle(mode = ThemeMode.DARK, resolved = LedgerHubTheme.resolved, onToggle = {})
+                }
+            }
+        }
+
+        onNodeWithTag(ThemeToggleTags.ROOT).assertWidthIsAtLeast(48.dp)
+        onNodeWithTag(ThemeToggleTags.ROOT).assertHeightIsAtLeast(48.dp)
     }
 
     /**

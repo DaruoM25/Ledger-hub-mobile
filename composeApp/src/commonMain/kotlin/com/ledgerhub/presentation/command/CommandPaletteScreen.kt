@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,40 +78,59 @@ private val ScrimColor = Color(0xCC0B1020)
 /**
  * Déclencheur de la palette, posé dans l'en-tête global (US-19).
  *
- * Porte l'icône de recherche **et** le badge du raccourci : sur un appareil sans clavier le badge
- * ne sert à rien, mais c'est aussi ce qui apprend le raccourci à l'utilisateur qui en branchera un.
+ * Porte l'icône de recherche, le libellé **et** le badge du raccourci : sur un appareil sans
+ * clavier le badge ne sert à rien, mais c'est aussi ce qui apprend le raccourci à l'utilisateur qui
+ * en branchera un.
+ *
+ * ## Le mode [compact] (US-25)
+ *
+ * Réduit le déclencheur à sa seule loupe, comme le font déjà `ExportModalTrigger` et
+ * `IntegrationsHubTrigger`. Ce n'est pas un choix esthétique : la barre étendue occupait à elle
+ * seule le tiers de la largeur d'un Pixel 5, et l'arrivée d'une cinquième commande dans l'en-tête
+ * (la bascule de thème) y a poussé le sélecteur de langue **hors de l'écran** — constaté sur
+ * l'appareil, pas déduit. Le badge de raccourci n'a de valeur pédagogique que là où un clavier
+ * peut être branché : la sidebar tablette, qui garde le déclencheur en toutes lettres.
  */
 @Composable
-fun CommandPaletteTrigger(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun CommandPaletteTrigger(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         shape = RoundedCornerShape(10.dp),
         modifier = modifier
-            .heightIn(min = 40.dp)
+            .sizeIn(minWidth = 40.dp, minHeight = 40.dp)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { testTag = CommandPaletteTags.TRIGGER },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) 8.dp else 12.dp,
+                vertical = 8.dp,
+            ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("🔍", style = MaterialTheme.typography.labelLarge)
-            Text(
-                text = tr(StringKey.COMMAND_PALETTE_TRIGGER_LABEL),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(6.dp),
-            ) {
+            if (!compact) {
                 Text(
-                    text = SHORTCUT_BADGE,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    text = tr(StringKey.COMMAND_PALETTE_TRIGGER_LABEL),
+                    style = MaterialTheme.typography.labelLarge,
                 )
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(6.dp),
+                ) {
+                    Text(
+                        text = SHORTCUT_BADGE,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
             }
         }
     }

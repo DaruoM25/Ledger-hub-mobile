@@ -1677,7 +1677,7 @@ Corrigées, pas contournées.
 ## US-25 — Bascule dynamique Thème Sombre / Clair
 - **Date :** 2026-09-03
 - **Branche :** `feature/US-25-theme-toggle-dark-light`
-- **Statut :** ✅ N1/N2/N3a verts (1041/1041 tests), N3b rédigé et compilé — exécution émulateur à la charge de la QA
+- **Statut :** ✅ N1/N2/N3a verts, N3b **exécuté sur Pixel 5 API 35** — voir le correctif d'en-tête en fin de section
 
 ### Le vrai poids de l'US n'était pas le bouton
 Le composant de bascule tient en quatre-vingts lignes. Ce qui coûtait, c'était que **140 lectures
@@ -1847,3 +1847,82 @@ en `commonMain`.
   l'échelle Tailwind (fond ≤ 200, texte ≥ 600), ce qui place les rapports au-dessus de 4,5:1 par
   construction. Un contrôle instrumenté au colorimètre reste à faire si l'accessibilité doit être
   certifiée.
+
+### 🔧 Correctif — débordement de l'en-tête sur Pixel 5 (recette N3b du 2026-09-03)
+- **Statut :** ✅ N1/N2/N3a verts (1042/1042 tests JVM) — **N3b exécuté sur Pixel 5 API 35, 5/5 verts**,
+  capture officielle produite et versionnée.
+
+Le risque annoncé à la livraison s'est réalisé. Mesuré sur l'appareil : `theme_toggle_btn` comprimé
+à **14,5 dp** de large, `lang_toggle` refoulé **hors de l'écran**. Le thème clair, lui, était
+correct — c'est bien la place, et elle seule, qui manquait.
+
+#### Pourquoi les niveaux 3a ne l'avaient pas vu
+`AppShellRobolectricTest` affirmait déjà la coexistence des deux commandes, et il passait. Ce n'est
+pas un test complaisant, c'est une limite connue de l'outil, déjà consignée en US-22 : **Robolectric
+ne mesure pas le texte fidèlement**, ses métriques de police sont simulées. Il sous-estime donc la
+largeur de tout ce qui contient du texte, et un en-tête qui déborde sur l'appareil y tient sans
+peine. Cette classe de défaut est hors de portée du niveau 3a — c'est la raison d'être du 3b.
+
+#### Ce qui a été rendu, et dans quel ordre
+| Levier | Gain |
+|---|---|
+| `CommandPaletteTrigger(compact = true)` — loupe seule, comme l'export et le hub | ~105 dp |
+| Gouttières de l'en-tête `spacedBy(8.dp)` → `4.dp` | 16 dp |
+| Marge horizontale de l'en-tête `20.dp` → `8.dp` | 24 dp |
+| Padding interne des segments de langue `12.dp` → `2.dp` | 20 dp |
+
+Le badge « ⌘K » disparaît de l'en-tête compact et **reste dans la sidebar tablette** : il n'apprend
+un raccourci qu'à qui peut brancher un clavier. Le padding des segments de langue tombe à 2 dp sans
+rien coûter à l'ergonomie : c'est le plancher tactile de 48 dp qui donne désormais sa largeur au
+segment, cette marge ne faisait que gonfler le sélecteur de 20 dp au détriment du nom de
+l'application.
+
+#### La garantie structurelle, qui vaut mieux que les quatre réglages ci-dessus
+Les réglages rendent de la place ; ils ne garantissent rien pour la prochaine commande ajoutée.
+Deux invariants ont donc été posés :
+
+1. **Le titre est le seul enfant pondéré de l'en-tête** (`weight(1f, fill = false)` + ellipse). Dans
+   un `Row`, les enfants sans poids sont mesurés d'abord, avec toute la largeur disponible. Les cinq
+   commandes obtiennent donc toujours leur largeur pleine, et c'est le nom de l'application qui se
+   rogne en dernier recours — jamais une cible tactile.
+2. **`requiredSizeIn` et non `sizeIn`** sur `ThemeToggle` et sur les segments de `LangToggle`. Un
+   `sizeIn` reste borné par les contraintes du parent : c'est très exactement ce qui produisait un
+   bouton de 14,5 dp *sans que rien ne le signale*. La cible tactile ignore désormais la contrainte,
+   et un débordement futur se verra à l'écran au lieu de se solder par un bouton invisiblement
+   inutilisable.
+
+Le contrainte est portée par la **Surface taguée**, pas par la boîte interne : première rédaction du
+correctif, elle était sur la boîte, et le noeud `theme_toggle_btn` — celui que les tests mesurent et
+que le doigt touche — continuait de se faire comprimer à 20 dp. Le test l'a attrapée.
+
+#### Le test qui manquait
+`ThemeToggleRobolectricTest.theToggle_keepsItsTouchTargetInsideACrampedRow` place le bouton dans une
+ligne délibérément trop étroite et exige qu'il conserve ses 48 dp. Cette propriété-là, Robolectric la
+mesure fidèlement : elle ne dépend pas des métriques de police mais des contraintes de mise en page.
+C'est le garde-fou qui manquait — celui qui aurait attrapé le défaut sans allumer d'émulateur.
+
+`LangToggle` gagne au passage une vraie cible tactile : ses segments faisaient 32 dp de haut depuis
+l'US-02, ils en font 48.
+
+#### 🧾 Recette — quatre échecs instrumentés **antérieurs** à cette US
+La passe complète `connectedDebugAndroidTest` (80 tests) rend 4 échecs, tous étrangers à l'US-25 :
+US-10, US-11 (×2) et US-13 échouent sur `EACCES` en écrivant leur capture dans `/sdcard/Download`.
+Cause : après réinstallation de l'APK, l'application ne peut plus écraser une entrée MediaStore
+créée par l'installation précédente. Ces tests-là écrivent **sans `runCatching`**, contrairement à
+ceux des US-20 à US-25, et transforment donc un incident de stockage en échec de test.
+
+Vérifié, pas supposé : les quatre fichiers supprimés du device, les quatre tests repassent au vert
+sans aucune modification de code. **Conséquence pratique pour la QA : supprimer la capture visée sur
+le device avant de relancer, faute de quoi on rapatrie l'image de la passe précédente** — c'est ce
+qui a d'abord donné l'illusion que le correctif n'avait rien changé.
+
+#### Commandes de validation du correctif
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 1042 tests, 0 échec |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** |
+| `./gradlew.bat :composeApp:connectedDebugAndroidTest` (filtré US-25) | **5/5 verts** sur Pixel_5_API_35 |
+
+La capture officielle `screenshots/US25_mobile_theme_toggle_sdk_gphone64_x86_64.png` est produite et
+versionnée : nom de l'application entier, cinq commandes présentes, sélecteur FR/EN complet, shell en
+thème clair.
