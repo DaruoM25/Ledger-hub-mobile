@@ -1,6 +1,7 @@
 package com.ledgerhub
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertContentDescriptionContains
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -10,7 +11,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runComposeUiTest
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.ledgerhub.db.LedgerHubDatabase
+import com.ledgerhub.domain.i18n.AppLanguage
+import com.ledgerhub.domain.i18n.AppTranslations
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.presentation.components.LangToggleTags
+import com.ledgerhub.presentation.components.ThemeToggleTags
 import com.ledgerhub.presentation.dashboard.DashboardTags
 import com.ledgerhub.presentation.export.ExportModalTags
 import com.ledgerhub.presentation.directory.DirectoryTags
@@ -140,5 +145,69 @@ class AppShellRobolectricTest {
         // le bouton de generation attend sous la ligne de flottaison. C'est le comportement voulu
         // — encore faut-il aller le chercher pour l'affirmer (meme idiome qu'AuthScreenRobolectricTest).
         onNodeWithTag(ExportModalTags.GENERATE_BTN).performScrollTo().assertIsDisplayed()
+    }
+
+    // ── Bascule de thème dans le shell (US-25) ───────────────────────────────
+
+    /**
+     * **Non-régression de l'en-tête.** La bascule de thème est la cinquième commande à se disputer
+     * la largeur d'un téléphone (après l'export, le hub, la palette et le sélecteur de langue).
+     * Ce test ne se contente donc pas de la trouver : il exige que le sélecteur de langue soit
+     * TOUJOURS visible à côté d'elle. C'est l'assertion qui remplace une estimation de largeur.
+     */
+    @Test
+    fun header_carriesTheThemeToggleWithoutPushingOutTheLanguageSelector() = runComposeUiTest {
+        setContent { App(database = newDatabase()) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(ThemeToggleTags.ROOT).assertIsDisplayed()
+        onNodeWithTag(LangToggleTags.ROOT).assertIsDisplayed()
+        onNodeWithTag(ExportModalTags.TRIGGER).assertIsDisplayed()
+        onNodeWithTag(IntegrationsHubTags.TRIGGER).assertIsDisplayed()
+    }
+
+    /**
+     * Le geste de bout en bout, dans le vrai shell et sur une base SQLDelight réelle : appuyer sur
+     * le bouton de l'en-tête bascule le thème de l'application.
+     *
+     * Ce qui est observable ici, c'est le bouton lui-même : il annonce la destination de l'appui,
+     * donc son icône et sa description **changent** quand le thème a effectivement basculé — le
+     * soleil (« aller au clair ») cède la place à la lune (« revenir au sombre »). Que la palette
+     * Material change réellement de valeurs est affirmé par `ThemeToggleRobolectricTest`, qui peut
+     * sonder l'intérieur du thème ; ici, on prouve que le shell câble bien le geste à l'état.
+     *
+     * L'app démarre en sombre (`ThemeMode.Default`) : le mode par défaut est explicite, l'état
+     * initial ne dépend donc pas de `isSystemInDarkTheme()` — `false` sous Robolectric.
+     */
+    @Test
+    fun tappingTheHeaderToggle_switchesTheShellTheme() = runComposeUiTest {
+        setContent { App(database = newDatabase()) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(ThemeToggleTags.ICON_SUN, useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithTag(ThemeToggleTags.ROOT)
+            .assertContentDescriptionContains(
+                AppTranslations.get(StringKey.THEME_TOGGLE_TO_LIGHT, AppLanguage.FR),
+            )
+
+        onNodeWithTag(ThemeToggleTags.ROOT).performClick()
+        waitForIdle()
+
+        onNodeWithTag(ThemeToggleTags.ICON_MOON, useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithTag(ThemeToggleTags.ROOT)
+            .assertContentDescriptionContains(
+                AppTranslations.get(StringKey.THEME_TOGGLE_TO_DARK, AppLanguage.FR),
+            )
+
+        // Le shell n'a pas bronché : l'écran reste en place et l'en-tête garde ses deux commandes.
+        onNodeWithTag(DashboardTags.SCREEN).assertIsDisplayed()
+        onNodeWithTag(ThemeToggleTags.ROOT).assertIsDisplayed()
+        onNodeWithTag(LangToggleTags.ROOT).assertIsDisplayed()
     }
 }

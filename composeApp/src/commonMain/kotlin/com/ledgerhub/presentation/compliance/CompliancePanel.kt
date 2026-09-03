@@ -29,7 +29,7 @@ import com.ledgerhub.domain.compliance.ComplianceReport
 import com.ledgerhub.domain.compliance.ComplianceStatus
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.presentation.i18n.tr
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /**
  * Tags de test — contrat partagé entre le panneau (commonMain) et les trois niveaux de tests.
@@ -68,9 +68,9 @@ private val FailedGlyph = "✕"
 
 @Composable
 private fun statusColor(status: ComplianceStatus): Color = when (status) {
-    ComplianceStatus.PASSED -> LedgerHubColors.StatusPaidFg
-    ComplianceStatus.WARNING -> LedgerHubColors.StatusPendingFg
-    ComplianceStatus.FAILED -> LedgerHubColors.ErrorText
+    ComplianceStatus.PASSED -> LedgerHubTheme.palette.StatusPaidFg
+    ComplianceStatus.WARNING -> LedgerHubTheme.palette.StatusPendingFg
+    ComplianceStatus.FAILED -> LedgerHubTheme.palette.ErrorText
 }
 
 private fun statusGlyph(status: ComplianceStatus): String = when (status) {
@@ -126,13 +126,13 @@ fun CompliancePanel(
             Text(
                 text = tr(StringKey.COMPLIANCE_PANEL_SUBTITLE),
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.SecondaryText,
+                color = LedgerHubTheme.palette.SecondaryText,
             )
 
             Button(
                 onClick = onScan,
                 enabled = enabled,
-                colors = ButtonDefaults.buttonColors(containerColor = LedgerHubColors.Accent),
+                colors = ButtonDefaults.buttonColors(containerColor = LedgerHubTheme.palette.Accent),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
@@ -145,7 +145,7 @@ fun CompliancePanel(
                 Text(
                     text = tr(StringKey.COMPLIANCE_NOT_SCANNED),
                     style = MaterialTheme.typography.bodySmall,
-                    color = LedgerHubColors.SecondaryText,
+                    color = LedgerHubTheme.palette.SecondaryText,
                 )
             } else {
                 ComplianceChecklist(report)
@@ -206,7 +206,7 @@ private fun ChecklistRow(finding: ComplianceFinding) {
             Text(
                 text = tr(finding.messageKey),
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.SecondaryText,
+                color = LedgerHubTheme.palette.SecondaryText,
             )
         }
     }
@@ -225,15 +225,15 @@ private fun ComplianceAlert(report: ComplianceReport) {
         Text(
             text = tr(StringKey.COMPLIANCE_ALL_PASSED),
             style = MaterialTheme.typography.bodySmall,
-            color = LedgerHubColors.StatusPaidFg,
+            color = LedgerHubTheme.palette.StatusPaidFg,
             fontWeight = FontWeight.SemiBold,
         )
         return
     }
 
     val blocking = report.overallStatus.isBlocking
-    val background = if (blocking) LedgerHubColors.StatusPendingBg else LedgerHubColors.StatusDraftBg
-    val foreground = if (blocking) LedgerHubColors.ErrorText else LedgerHubColors.StatusPendingFg
+    val background = if (blocking) LedgerHubTheme.palette.StatusPendingBg else LedgerHubTheme.palette.StatusDraftBg
+    val foreground = if (blocking) LedgerHubTheme.palette.ErrorText else LedgerHubTheme.palette.StatusPendingFg
     val title = if (blocking) {
         tr(StringKey.COMPLIANCE_ALERT_ERROR_TITLE)
     } else {

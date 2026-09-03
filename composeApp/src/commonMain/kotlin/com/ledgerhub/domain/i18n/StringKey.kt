@@ -19,6 +19,12 @@ enum class StringKey {
     OVERLAY_BACK_DASHBOARD,
     OVERLAY_BACK_INVOICES,
 
+    // ── Bascule de thème (US-25) ────────────────────────────────────────────
+    // Libellés d'accessibilité : le bouton n'affiche qu'un glyphe, ce sont ces chaînes que
+    // TalkBack énonce. Elles nomment la **destination** de l'appui, pas l'état courant.
+    THEME_TOGGLE_TO_LIGHT,
+    THEME_TOGGLE_TO_DARK,
+
     // ── Navigation ──────────────────────────────────────────────────────────
     NAV_OVERVIEW,
     NAV_INVOICES,

@@ -54,7 +54,7 @@ import com.ledgerhub.domain.export.ExportFormat
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.presentation.components.filterIsoDate
 import com.ledgerhub.presentation.i18n.tr
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /**
  * Tags de test — contrat partagé entre l'UI (commonMain) et les trois niveaux de tests.
@@ -285,7 +285,7 @@ internal fun ExportModalContent(
                 // voir [SheetShape]. La couleur de contenu, elle, reste portée par `Surface` —
                 // c'est ce qui donne aux textes leur teinte par défaut sans la répéter partout.
                 color = Color.Transparent,
-                contentColor = LedgerHubColors.PrimaryText,
+                contentColor = LedgerHubTheme.palette.PrimaryText,
                 tonalElevation = 8.dp,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -295,8 +295,8 @@ internal fun ExportModalContent(
                     // bouton du bas reste sous la barre système, ce qui a fait échouer trois tests
                     // instrumentés sur Pixel 5.
                     .heightIn(max = SheetMaxHeight)
-                    .background(LedgerHubColors.Surface, SheetShape)
-                    .border(1.dp, LedgerHubColors.Border, SheetShape)
+                    .background(LedgerHubTheme.palette.Surface, SheetShape)
+                    .border(1.dp, LedgerHubTheme.palette.Border, SheetShape)
                     // Absorbe le tap : sans cela, toucher la feuille la fermerait, le voile
                     // recevant l'evenement juste derriere.
                     .pointerInput(Unit) { detectTapGestures { } }
@@ -339,7 +339,7 @@ private fun SheetHandle() {
             modifier = Modifier
                 .width(36.dp)
                 .heightIn(min = 4.dp, max = 4.dp)
-                .background(LedgerHubColors.Border, RoundedCornerShape(2.dp)),
+                .background(LedgerHubTheme.palette.Border, RoundedCornerShape(2.dp)),
         )
     }
 }
@@ -365,7 +365,7 @@ private fun Header(onDismiss: () -> Unit) {
             Text(
                 text = tr(StringKey.EXPORT_MODAL_SUBTITLE),
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.SecondaryText,
+                color = LedgerHubTheme.palette.SecondaryText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -374,7 +374,7 @@ private fun Header(onDismiss: () -> Unit) {
         Text(
             text = "✕",
             style = MaterialTheme.typography.titleMedium,
-            color = LedgerHubColors.SecondaryText,
+            color = LedgerHubTheme.palette.SecondaryText,
             modifier = Modifier
                 .sizeIn(minWidth = 40.dp, minHeight = 40.dp)
                 .clickable(onClick = onDismiss)
@@ -421,7 +421,7 @@ private fun PeriodSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Un
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.ErrorText,
+                color = LedgerHubTheme.palette.ErrorText,
                 modifier = Modifier.semantics {
                     testTag = ExportModalTags.PERIOD_ERROR
                     contentDescription = message
@@ -450,15 +450,15 @@ private fun DateField(
         // par le filtre. Un clavier alphabétique n'offrirait ici que des touches inopérantes.
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = LedgerHubColors.InputBackground,
-            unfocusedContainerColor = LedgerHubColors.InputBackground,
-            disabledContainerColor = LedgerHubColors.InputBackground,
-            focusedTextColor = LedgerHubColors.PrimaryText,
-            unfocusedTextColor = LedgerHubColors.PrimaryText,
-            focusedIndicatorColor = LedgerHubColors.Accent,
-            unfocusedIndicatorColor = LedgerHubColors.InputBorder,
-            focusedLabelColor = LedgerHubColors.SecondaryText,
-            unfocusedLabelColor = LedgerHubColors.SecondaryText,
+            focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+            unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+            disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+            focusedTextColor = LedgerHubTheme.palette.PrimaryText,
+            unfocusedTextColor = LedgerHubTheme.palette.PrimaryText,
+            focusedIndicatorColor = LedgerHubTheme.palette.Accent,
+            unfocusedIndicatorColor = LedgerHubTheme.palette.InputBorder,
+            focusedLabelColor = LedgerHubTheme.palette.SecondaryText,
+            unfocusedLabelColor = LedgerHubTheme.palette.SecondaryText,
         ),
         modifier = modifier.semantics { testTag = tag },
     )
@@ -497,12 +497,12 @@ private fun FormatCard(
     onSelect: () -> Unit,
 ) {
     Surface(
-        color = if (selected) LedgerHubColors.Accent.copy(alpha = 0.14f) else LedgerHubColors.InputBackground,
-        contentColor = LedgerHubColors.PrimaryText,
+        color = if (selected) LedgerHubTheme.palette.Accent.copy(alpha = 0.14f) else LedgerHubTheme.palette.InputBackground,
+        contentColor = LedgerHubTheme.palette.PrimaryText,
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(
             width = if (selected) 2.dp else 1.dp,
-            color = if (selected) LedgerHubColors.Accent else LedgerHubColors.Border,
+            color = if (selected) LedgerHubTheme.palette.Accent else LedgerHubTheme.palette.Border,
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -524,8 +524,8 @@ private fun FormatCard(
                 selected = selected,
                 onClick = null,
                 colors = RadioButtonDefaults.colors(
-                    selectedColor = LedgerHubColors.Accent,
-                    unselectedColor = LedgerHubColors.SecondaryText,
+                    selectedColor = LedgerHubTheme.palette.Accent,
+                    unselectedColor = LedgerHubTheme.palette.SecondaryText,
                 ),
             )
             Text(text = format.glyph, style = MaterialTheme.typography.titleMedium)
@@ -547,7 +547,7 @@ private fun FormatCard(
                 Text(
                     text = tr(format.descriptionKey),
                     style = MaterialTheme.typography.bodySmall,
-                    color = LedgerHubColors.SecondaryText,
+                    color = LedgerHubTheme.palette.SecondaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -569,7 +569,7 @@ private fun ActionSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Un
         ExportStage.IDLE -> Button(
             onClick = { onIntent(ExportIntent.GenerateRequested) },
             enabled = uiState.isGenerateEnabled,
-            colors = ButtonDefaults.buttonColors(containerColor = LedgerHubColors.Accent),
+            colors = ButtonDefaults.buttonColors(containerColor = LedgerHubTheme.palette.Accent),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
@@ -601,8 +601,8 @@ private fun GeneratingSection(progress: Float) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LinearProgressIndicator(
             progress = { animated },
-            color = LedgerHubColors.Accent,
-            trackColor = LedgerHubColors.InputBorder,
+            color = LedgerHubTheme.palette.Accent,
+            trackColor = LedgerHubTheme.palette.InputBorder,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 8.dp)
@@ -615,12 +615,12 @@ private fun GeneratingSection(progress: Float) {
             Text(
                 text = tr(StringKey.EXPORT_GENERATING_LABEL),
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.SecondaryText,
+                color = LedgerHubTheme.palette.SecondaryText,
             )
             Text(
                 text = "${(progress * 100).toInt()} %",
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.SecondaryText,
+                color = LedgerHubTheme.palette.SecondaryText,
             )
         }
     }
@@ -630,8 +630,8 @@ private fun GeneratingSection(progress: Float) {
 private fun SuccessSection(uiState: ExportUiState, onIntent: (ExportIntent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Surface(
-            color = LedgerHubColors.StatusPaidBg,
-            contentColor = LedgerHubColors.StatusPaidFg,
+            color = LedgerHubTheme.palette.StatusPaidBg,
+            contentColor = LedgerHubTheme.palette.StatusPaidFg,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -659,7 +659,7 @@ private fun SuccessSection(uiState: ExportUiState, onIntent: (ExportIntent) -> U
         }
         Button(
             onClick = { onIntent(ExportIntent.DownloadRequested) },
-            colors = ButtonDefaults.buttonColors(containerColor = LedgerHubColors.Accent),
+            colors = ButtonDefaults.buttonColors(containerColor = LedgerHubTheme.palette.Accent),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
@@ -676,6 +676,6 @@ private fun SectionLabel(text: String) {
         text = text,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
-        color = LedgerHubColors.SecondaryText,
+        color = LedgerHubTheme.palette.SecondaryText,
     )
 }

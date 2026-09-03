@@ -1673,3 +1673,256 @@ Corrigées, pas contournées.
   SIREN.
 - **Le contrôle de TVA porte sur l'émetteur seul.** Le numéro de TVA du client n'est pas saisi dans
   le formulaire ; l'auditer supposerait de l'ajouter, ce qui déborde le périmètre.
+
+## US-25 — Bascule dynamique Thème Sombre / Clair
+- **Date :** 2026-09-03
+- **Branche :** `feature/US-25-theme-toggle-dark-light`
+- **Statut :** ✅ N1/N2/N3a verts, N3b **exécuté sur Pixel 5 API 35** — voir le correctif d'en-tête en fin de section
+
+### Le vrai poids de l'US n'était pas le bouton
+Le composant de bascule tient en quatre-vingts lignes. Ce qui coûtait, c'était que **140 lectures
+de couleur réparties dans dix écrans** pointaient directement sur `LedgerHubColors.X` — des
+constantes, donc des teintes figées à la compilation, qu'aucune bascule ne pouvait atteindre.
+Mapper les tokens sur un second `ColorScheme` Material n'aurait repeint que ce qui lit
+`MaterialTheme.colorScheme` : la modale d'export, le hub d'intégrations, le sélecteur de client et
+le panneau de conformité seraient restés sombres sur fond clair.
+
+Les tokens sont donc devenus les champs d'une valeur (`LedgerHubPalette`), publiée par
+`LedgerHubTheme` via `LocalLedgerHubPalette` et lue par `LedgerHubTheme.palette`. **Les noms de
+propriétés ont été conservés à l'identique** (`Accent`, `SecondaryText`, `StatusPaidBg`…) : la
+migration des sites d'appel s'est faite par changement de préfixe, jamais par réécriture — aucune
+inversion de token n'a pu s'y glisser. Les valeurs sombres ne sont pas retapées non plus :
+`LedgerHubPalette.Dark` référence `LedgerHubColors`, le thème historique est inchangé au bit près.
+
+Quatre constantes de fichier ont dû devenir des propriétés `@Composable` (les teintes de badge du
+hub d'intégrations) : une couleur figée à l'initialisation de la classe ne peut pas suivre un
+thème. C'était le seul site non composable du lot, et le compilateur l'a signalé de lui-même.
+
+### Règle de déclinaison claire
+Surfaces et textes **inversés sur l'échelle Tailwind slate** (`slate-950` → `slate-50`,
+`slate-900` → blanc, `slate-400` → `slate-600`). L'accent `blue-600` ne bouge pas : c'est
+l'identité de la marque, pas une teinte d'ambiance, et le décliner ferait de la bascule un
+changement de marque.
+
+Les couleurs sémantiques de la version claire sont plus **sombres** que celles de la version
+sombre (`emerald-400` → `emerald-600`) : sur fond clair, le contraste se gagne en descendant
+l'échelle. Les badges de statut sont **inversés** (fond pâle, texte saturé) plutôt qu'éclaircis —
+convention du Web de référence, et un `emerald-900` sur du blanc serait illisible.
+
+`ThemeToggleRobolectricTest` affirme que **tous** les tokens visibles diffèrent entre les deux
+déclinaisons : une palette claire recopiée par mégarde sur la sombre passerait sinon tous les
+autres tests.
+
+### `SYSTEM` est une préférence, pas une apparence
+`ThemeMode` (DARK/LIGHT/SYSTEM) et `ResolvedTheme` (DARK/LIGHT) sont deux types distincts. Aucun
+`ColorScheme` ne peut être choisi à partir de `SYSTEM` seul, et cette impossibilité est
+structurelle plutôt que documentaire. C'est bien la préférence qui est persistée, `SYSTEM`
+compris — pas l'apparence qu'elle donnait le jour du choix.
+
+L'obscurité du système est **injectée** dans le domaine (`resolve(systemIsDark)`), jamais lue :
+`isSystemInDarkTheme()` n'est appelé qu'à un seul endroit de l'app, dans `LedgerHubTheme`. La
+règle reste donc testable en Kotlin pur, dans les deux environnements, sans émulateur — et les
+niveaux 3 restent déterministes, alors que Robolectric rend toujours `false`.
+
+**Une bascule depuis `SYSTEM` prend l'inverse de l'apparence effective**, et non une valeur fixe :
+retomber sur `LIGHT` alors que le système est déjà clair ferait, une fois sur deux, un bouton de
+bascule qui ne change rien à l'écran. Un test le vérifie dans les deux configurations.
+
+### Afficher d'abord, persister ensuite — arbitrage assumé
+`ThemeIntent.Toggle` met l'état à jour **avant** d'écrire en base. Un aller-retour disque ne doit
+pas retarder un repeint : l'utilisateur a appuyé sur un bouton d'apparence, il attend une
+apparence. Corollaire assumé et couvert par un test — un échec d'écriture ne rétablit pas l'ancien
+thème à l'écran : la préférence sera simplement oubliée au prochain lancement, ce qui vaut mieux
+qu'un thème qui revient en arrière tout seul sous les yeux de l'utilisateur.
+
+### Persistance — table nouvelle, migration obligatoire
+`UiPreferences` est une table mono-ligne (CHECK sur la clé primaire, comme `TaxSettings`),
+**séparée** des paramètres fiscaux : une préférence d'affichage n'a rien à faire dans les
+paramètres fiscaux d'un cabinet, et les deux n'ont ni le même cycle de vie ni la même portée.
+Schéma passé en version 8 : `UiPreferences.sq`, migration `7.sqm`, instantané `databases/8.db`.
+`SchemaMigrationVerificationTest` couvre l'ensemble sans une ligne de test supplémentaire.
+
+Une valeur illisible en base (constante renommée entre deux versions) retombe sur `ThemeMode.DARK`
+plutôt que de faire échouer le chargement — même règle que le repli de `VatRate` dans
+`SqlDelightTaxSettingsRepository`. Un test l'écrit par la requête brute : aucune API du domaine ne
+permet de la produire, et c'est précisément le point.
+
+### ⚠️ L'instantané `8.db` n'a PAS été produit par la tâche Gradle
+`generateCommonMainLedgerHubDatabaseSchema` **échoue sur ce poste**, du même mal que
+`verifyCommonMainLedgerHubDatabaseMigration` (documenté en US-17 et désactivé pour cette raison) :
+la tâche s'exécute dans un worker Gradle en isolation processus, hors de portée des
+`System.setProperty` du build et des `systemProperty` des tâches, et sqlite-jdbc n'y charge pas sa
+bibliothèque native — `UnsatisfiedLinkError: org.sqlite.core.NativeDB._open_utf8`. Passer
+`JAVA_TOOL_OPTIONS` n'y change rien (constaté).
+
+`8.db` a donc été produit hors Gradle, dans une JVM dont les propriétés sont maîtrisées : copie de
+`7.db`, application du `7.sqm`, puis `PRAGMA user_version = 8` — exactement le chemin de migration.
+**Ce n'est pas une auto-validation** : l'instantané est ensuite comparé par
+`SchemaMigrationVerificationTest` au schéma que les seuls fichiers `.sq` produisent sur une base
+neuve. S'il avait été faux, la suite JVM aurait échoué. Le jour où la tâche Gradle redeviendra
+exécutable, elle doit rendre le même fichier.
+
+### Le bouton : un seul, à droite, réduit à son glyphe
+Miroir formel de `LangToggle` (même `Surface`, même `RoundedCornerShape(10.dp)`, même contour d'un
+dp) pour qu'ils se lisent comme une paire, mais **un seul bouton et non deux segments** : le tag
+imposé est au singulier (`theme_toggle_btn`), et l'en-tête d'un téléphone ne peut pas porter une
+seconde commande à deux segments à côté du sélecteur FR/EN.
+
+L'icône annonce la **destination** de l'appui et non l'état courant — soleil en thème sombre
+(« appuyer m'amène au clair »), lune en thème clair. C'est aussi ce que dit sa description
+d'accessibilité, seule chose que TalkBack énonce puisque le bouton n'a pas de libellé. Le bouton
+forme un **noeud sémantique unique** (`mergeDescendants`) avec le rôle `Button` : TalkBack annonce
+« bouton » puis la destination, au lieu d'énumérer un conteneur et une icône.
+
+Soleil et lune sont décrits en `ImageVector.Builder` : `material-icons-extended` est absent des
+dépendances (même constat qu'en US-19 et US-20), et un caractère Unicode dépendrait de la police
+de l'appareil et ne se teinterait pas proprement.
+
+### Largeur d'en-tête — affirmée, jamais estimée
+La bascule est la **cinquième** commande de l'en-tête compact (export, hub, palette, langue). Le
+sélecteur de langue est celui qui serait poussé dehors le premier. Aucun calcul de largeur n'a été
+opposé à ce risque : deux tests l'affirment, `AppShellRobolectricTest` et
+`ThemeToggleInstrumentedTest`, en exigeant que `theme_toggle_btn` **et** `lang_toggle` soient
+affichés ensemble. Le bouton est présent dans les deux shells — en-tête compact et sidebar
+tablette — pour la même raison que la palette et le hub : cantonné à l'en-tête, il disparaîtrait
+du shell étendu.
+
+### Thème violet des avoirs — décliné lui aussi
+`CreditNoteTheme` était un `darkColorScheme` figé : resté tel quel, l'écran d'avoir aurait été un
+trou noir au milieu d'une application claire. Il lit désormais l'apparence effective ambiante
+(`LocalResolvedTheme`) et décline sa gamme violet/indigo. Le badge « AVOIR EN BROUILLON » est le
+seul token inchangé : il était déjà clair (`violet-100` sur `violet-800`).
+
+### 🧾 Dette assumée — `AuthScreen` reste sombre
+L'écran d'authentification porte son propre `MaterialTheme` imbriqué en `darkColorScheme` (dette
+déjà consignée en US-03). Il **n'est câblé nulle part dans `App`** — aucun `theme_toggle_btn` n'y
+est atteignable, et aucune preuve QA ne pourrait donc être produite sur sa bascule. Ses lectures de
+palette ont bien été migrées vers `LedgerHubTheme.palette`, dont le défaut hors thème est la
+déclinaison sombre : son apparence est inchangée. Le recâbler relève du flux d'authentification,
+pas de cette US.
+
+### 🧾 Point d'attention — un éclair sombre au démarrage
+La préférence est relue en asynchrone ; l'état initial est `DARK` (comportement historique). Un
+utilisateur ayant choisi le thème clair peut donc voir une frame sombre au lancement. Corriger cela
+demanderait une lecture bloquante avant le premier rendu — écarté pour ne pas ralentir le
+démarrage de l'application au bénéfice d'une seule frame.
+
+### Capture officielle — cadrage volontairement différent des US-20 à US-24
+Les cinq US précédentes cadrent leur capture sur le composant. Ici, photographier un bouton de
+48 dp ne prouverait rien : ce que l'US doit démontrer, c'est l'application **repeinte**. La capture
+porte donc sur la **racine du shell en thème clair** — en-tête (bouton compris) et tableau de bord
+sur fond clair. Le composant est le détail, l'écran est la preuve.
+
+### iOS
+Aucun code plateforme requis : `isSystemInDarkTheme()` et SQLDelight couvrent les deux cibles
+depuis `commonMain`. La règle d'or KMP du build reste respectée — aucun import `android.*` ajouté
+en `commonMain`.
+
+### Pyramide QA
+| Niveau | Test | Ce qu'il prouve |
+|---|---|---|
+| N1 | `ThemeModeTest` (10) | Résolution, cycles DARK→LIGHT→DARK, bascule depuis `SYSTEM`, repli de stockage, jeu de modes figé |
+| N1 | `ThemeToggleTagsTest` (2) | `theme_toggle_btn` figé en littéral |
+| N1 | `AppTranslationsTest` | Les trois nouvelles clés traduites FR **et** EN (invariant existant) |
+| N2 | `ThemeViewModelTest` (10) | Émission, persistance, relecture par la session suivante, échec d'écriture non régressif |
+| N2 | `SqlDelightThemePreferenceRepositoryTest` (5) | SQL réel : base vierge, aller-retour des trois modes, table mono-ligne, valeur inconnue |
+| N3a | `ThemeToggleRobolectricTest` (7) | Rendu, cible tactile, icône, description bilingue, **palette M3 effectivement échangée**, déclinaisons distinctes |
+| N3a | `AppShellRobolectricTest` (+2) | Coexistence avec `lang_toggle`, bascule au clic dans le vrai shell sur base SQLDelight |
+| N3b | `ThemeToggleInstrumentedTest` (5) | Pixel 5 : place dans l'en-tête, cible ≥ 48 dp, bascule **au doigt**, aller-retour, capture officielle |
+
+### Commandes de validation
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 1041 tests, 0 échec, 0 erreur, 0 ignoré |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** |
+
+### Points d'attention transmis
+- **La capture officielle n'est pas encore produite** : le test N3b est rédigé et compilé, son
+  exécution demande un émulateur Pixel 5 API 35
+  (`./scripts/run-qa.ps1 -Suite Instrumented -ScreenshotPrefix "US25" -AvdName "Pixel_5_API_35"`).
+- **`ThemeMode.SYSTEM` est implémenté et testé mais n'a pas d'entrée dans l'interface** : le bouton
+  est binaire, et aucun écran de paramètres n'expose encore le troisième choix. `ThemeIntent.Select`
+  est le point d'entrée prêt pour cela.
+- **Le contraste n'a pas été mesuré**, il a été construit : les couples de la palette claire suivent
+  l'échelle Tailwind (fond ≤ 200, texte ≥ 600), ce qui place les rapports au-dessus de 4,5:1 par
+  construction. Un contrôle instrumenté au colorimètre reste à faire si l'accessibilité doit être
+  certifiée.
+
+### 🔧 Correctif — débordement de l'en-tête sur Pixel 5 (recette N3b du 2026-09-03)
+- **Statut :** ✅ N1/N2/N3a verts (1042/1042 tests JVM) — **N3b exécuté sur Pixel 5 API 35, 5/5 verts**,
+  capture officielle produite et versionnée.
+
+Le risque annoncé à la livraison s'est réalisé. Mesuré sur l'appareil : `theme_toggle_btn` comprimé
+à **14,5 dp** de large, `lang_toggle` refoulé **hors de l'écran**. Le thème clair, lui, était
+correct — c'est bien la place, et elle seule, qui manquait.
+
+#### Pourquoi les niveaux 3a ne l'avaient pas vu
+`AppShellRobolectricTest` affirmait déjà la coexistence des deux commandes, et il passait. Ce n'est
+pas un test complaisant, c'est une limite connue de l'outil, déjà consignée en US-22 : **Robolectric
+ne mesure pas le texte fidèlement**, ses métriques de police sont simulées. Il sous-estime donc la
+largeur de tout ce qui contient du texte, et un en-tête qui déborde sur l'appareil y tient sans
+peine. Cette classe de défaut est hors de portée du niveau 3a — c'est la raison d'être du 3b.
+
+#### Ce qui a été rendu, et dans quel ordre
+| Levier | Gain |
+|---|---|
+| `CommandPaletteTrigger(compact = true)` — loupe seule, comme l'export et le hub | ~105 dp |
+| Gouttières de l'en-tête `spacedBy(8.dp)` → `4.dp` | 16 dp |
+| Marge horizontale de l'en-tête `20.dp` → `8.dp` | 24 dp |
+| Padding interne des segments de langue `12.dp` → `2.dp` | 20 dp |
+
+Le badge « ⌘K » disparaît de l'en-tête compact et **reste dans la sidebar tablette** : il n'apprend
+un raccourci qu'à qui peut brancher un clavier. Le padding des segments de langue tombe à 2 dp sans
+rien coûter à l'ergonomie : c'est le plancher tactile de 48 dp qui donne désormais sa largeur au
+segment, cette marge ne faisait que gonfler le sélecteur de 20 dp au détriment du nom de
+l'application.
+
+#### La garantie structurelle, qui vaut mieux que les quatre réglages ci-dessus
+Les réglages rendent de la place ; ils ne garantissent rien pour la prochaine commande ajoutée.
+Deux invariants ont donc été posés :
+
+1. **Le titre est le seul enfant pondéré de l'en-tête** (`weight(1f, fill = false)` + ellipse). Dans
+   un `Row`, les enfants sans poids sont mesurés d'abord, avec toute la largeur disponible. Les cinq
+   commandes obtiennent donc toujours leur largeur pleine, et c'est le nom de l'application qui se
+   rogne en dernier recours — jamais une cible tactile.
+2. **`requiredSizeIn` et non `sizeIn`** sur `ThemeToggle` et sur les segments de `LangToggle`. Un
+   `sizeIn` reste borné par les contraintes du parent : c'est très exactement ce qui produisait un
+   bouton de 14,5 dp *sans que rien ne le signale*. La cible tactile ignore désormais la contrainte,
+   et un débordement futur se verra à l'écran au lieu de se solder par un bouton invisiblement
+   inutilisable.
+
+Le contrainte est portée par la **Surface taguée**, pas par la boîte interne : première rédaction du
+correctif, elle était sur la boîte, et le noeud `theme_toggle_btn` — celui que les tests mesurent et
+que le doigt touche — continuait de se faire comprimer à 20 dp. Le test l'a attrapée.
+
+#### Le test qui manquait
+`ThemeToggleRobolectricTest.theToggle_keepsItsTouchTargetInsideACrampedRow` place le bouton dans une
+ligne délibérément trop étroite et exige qu'il conserve ses 48 dp. Cette propriété-là, Robolectric la
+mesure fidèlement : elle ne dépend pas des métriques de police mais des contraintes de mise en page.
+C'est le garde-fou qui manquait — celui qui aurait attrapé le défaut sans allumer d'émulateur.
+
+`LangToggle` gagne au passage une vraie cible tactile : ses segments faisaient 32 dp de haut depuis
+l'US-02, ils en font 48.
+
+#### 🧾 Recette — quatre échecs instrumentés **antérieurs** à cette US
+La passe complète `connectedDebugAndroidTest` (80 tests) rend 4 échecs, tous étrangers à l'US-25 :
+US-10, US-11 (×2) et US-13 échouent sur `EACCES` en écrivant leur capture dans `/sdcard/Download`.
+Cause : après réinstallation de l'APK, l'application ne peut plus écraser une entrée MediaStore
+créée par l'installation précédente. Ces tests-là écrivent **sans `runCatching`**, contrairement à
+ceux des US-20 à US-25, et transforment donc un incident de stockage en échec de test.
+
+Vérifié, pas supposé : les quatre fichiers supprimés du device, les quatre tests repassent au vert
+sans aucune modification de code. **Conséquence pratique pour la QA : supprimer la capture visée sur
+le device avant de relancer, faute de quoi on rapatrie l'image de la passe précédente** — c'est ce
+qui a d'abord donné l'illusion que le correctif n'avait rien changé.
+
+#### Commandes de validation du correctif
+| Commande | Résultat |
+|---|---|
+| `./gradlew.bat :composeApp:testDebugUnitTest --no-daemon` | **BUILD SUCCESSFUL** — 1042 tests, 0 échec |
+| `./gradlew.bat :composeApp:compileDebugAndroidTestKotlinAndroid --no-daemon` | **BUILD SUCCESSFUL** |
+| `./gradlew.bat :composeApp:connectedDebugAndroidTest` (filtré US-25) | **5/5 verts** sur Pixel_5_API_35 |
+
+La capture officielle `screenshots/US25_mobile_theme_toggle_sdk_gphone64_x86_64.png` est produite et
+versionnée : nom de l'application entier, cinq commandes présentes, sélecteur FR/EN complet, shell en
+thème clair.

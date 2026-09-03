@@ -46,10 +46,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.presentation.components.LangToggle
+import com.ledgerhub.presentation.components.ThemeToggle
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.data.invoice.SqlDelightInvoiceRepository
@@ -64,6 +66,7 @@ import com.ledgerhub.data.audit.SqlDelightAuditRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
 import com.ledgerhub.data.settings.SqlDelightTaxSettingsRepository
+import com.ledgerhub.data.theme.SqlDelightThemePreferenceRepository
 import com.ledgerhub.db.LedgerHubDatabase
 import com.ledgerhub.domain.dashboard.GetDashboardAnalyticsUseCase
 import com.ledgerhub.domain.invoice.Invoice
@@ -81,6 +84,8 @@ import com.ledgerhub.domain.export.NoOpDocumentExporter
 import com.ledgerhub.domain.facturx.FacturXGenerator
 import com.ledgerhub.domain.facturx.toFacturXDocument
 import com.ledgerhub.domain.settings.TaxSettings
+import com.ledgerhub.domain.theme.ResolvedTheme
+import com.ledgerhub.domain.theme.ThemeMode
 import com.ledgerhub.presentation.dashboard.DashboardIntent
 import com.ledgerhub.presentation.dashboard.DashboardScreen
 import com.ledgerhub.presentation.dashboard.DashboardViewModel
@@ -112,8 +117,9 @@ import com.ledgerhub.presentation.reconciliation.ReconciliationScreen
 import com.ledgerhub.presentation.reconciliation.ReconciliationViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsScreen
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
-import com.ledgerhub.presentation.theme.LedgerHubColors
 import com.ledgerhub.presentation.theme.LedgerHubTheme
+import com.ledgerhub.presentation.theme.ThemeIntent
+import com.ledgerhub.presentation.theme.ThemeViewModel
 import kotlinx.coroutines.launch
 
 /** Compte utilisateur courant, en dur tant qu'il n'y a pas de flux d'authentification (v1). */
@@ -198,6 +204,8 @@ fun App(
         ChangeInvoiceStatusUseCase(invoiceRepository)
     }
     val taxSettingsRepository = remember(database) { SqlDelightTaxSettingsRepository(database) }
+    // Préférence de thème (US-25) : persistée comme le reste, dans la base SQLDelight partagée.
+    val themePreferenceRepository = remember(database) { SqlDelightThemePreferenceRepository(database) }
 
     // ViewModels des onglets — créés une fois, conservés entre les changements d'onglet.
     val dashboardViewModel = remember {
@@ -209,6 +217,7 @@ fun App(
     val clientsViewModel = remember { ClientsViewModel(clientRepository) }
     val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
     val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
+    val themeViewModel = remember { ThemeViewModel(themePreferenceRepository) }
     val reconciliationViewModel = remember {
         ReconciliationViewModel(
             invoiceRepository = invoiceRepository,
@@ -239,6 +248,11 @@ fun App(
     var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
     var language by remember { mutableStateOf(AppLanguage.FR) }
+
+    // Thème actif (US-25). La préférence est relue une seule fois : c'est ensuite le bouton de
+    // bascule qui fait autorité, et rien d'autre dans l'app ne l'écrit.
+    val themeState by themeViewModel.uiState.collectAsState()
+    LaunchedEffect(themeViewModel) { themeViewModel.processIntent(ThemeIntent.Load) }
 
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
     val onOpenIntegrations = { overlay = Overlay.Integrations }
@@ -326,7 +340,11 @@ fun App(
     val shortcutFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { shortcutFocusRequester.requestFocus() } }
 
-    LedgerHubTheme {
+    LedgerHubTheme(mode = themeState.mode) {
+        // Lue SOUS LedgerHubTheme : c'est lui qui résout `SYSTEM`, le shell n'a pas à le refaire.
+        val resolvedTheme = LedgerHubTheme.resolved
+        val onToggleTheme = { mode: ThemeMode -> themeViewModel.processIntent(ThemeIntent.Select(mode)) }
+
         CompositionLocalProvider(LocalAppLanguage provides language) {
             Surface(
                 color = MaterialTheme.colorScheme.background,
@@ -352,9 +370,12 @@ fun App(
                             LedgerSidebar(
                                 selected = destination,
                                 language = language,
+                                themeMode = themeState.mode,
+                                resolvedTheme = resolvedTheme,
                                 onSelect = { destination = it; overlay = Overlay.None },
                                 onCreateInvoice = onCreateInvoice,
                                 onSelectLanguage = { language = it },
+                                onToggleTheme = onToggleTheme,
                                 onOpenCommandPalette = onOpenCommandPalette,
                                 onOpenIntegrations = onOpenIntegrations,
                                 onOpenExportModal = onOpenExportModal,
@@ -398,7 +419,10 @@ fun App(
                             topBar = {
                                 LedgerHeader(
                                     language = language,
+                                    themeMode = themeState.mode,
+                                    resolvedTheme = resolvedTheme,
                                     onSelectLanguage = { language = it },
+                                    onToggleTheme = onToggleTheme,
                                     onOpenCommandPalette = onOpenCommandPalette,
                                     onOpenIntegrations = onOpenIntegrations,
                                     onOpenExportModal = onOpenExportModal,
@@ -475,11 +499,17 @@ fun App(
     }
 }
 
-/** En-tête mobile : nom de l'app + sélecteur de langue (le « Header » demandé par l'US-02, côté mobile). */
+/**
+ * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
+ * l'US-02, côté mobile ; la bascule clair/sombre s'y ajoute en US-25).
+ */
 @Composable
 private fun LedgerHeader(
     language: AppLanguage,
+    themeMode: ThemeMode,
+    resolvedTheme: ResolvedTheme,
     onSelectLanguage: (AppLanguage) -> Unit,
+    onToggleTheme: (ThemeMode) -> Unit,
     onOpenCommandPalette: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onOpenExportModal: () -> Unit,
@@ -488,24 +518,42 @@ private fun LedgerHeader(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(tr(StringKey.APP_NAME), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        // ── Pourquoi le titre porte un `weight` et les commandes non ────────────────────────
+        // Dans un Row, les enfants SANS poids sont mesurés d'abord, avec toute la largeur
+        // disponible ; le reste va aux enfants pondérés. Le titre est donc la seule chose qui
+        // puisse être rognée ici, et les cinq commandes obtiennent toujours leur largeur pleine.
+        //
+        // Ce n'est pas une précaution théorique. Livré sans ce poids, l'en-tête a débordé sur
+        // Pixel 5 (393 dp) : la bascule de thème y a été comprimée à 14,5 dp et le sélecteur de
+        // langue refoulé hors de l'écran. Les réglages ci-dessous (recherche compacte, gouttières
+        // resserrées) rendent la place ; ce weight garantit que la prochaine commande ajoutée
+        // rognera le nom de l'application plutôt qu'une cible tactile.
+        Text(
+            tr(StringKey.APP_NAME),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Glyphe seul : l'en-tête d'un téléphone porte déjà le nom de l'application, la
-            // palette et le sélecteur de langue. Un libellé de plus repousserait ce dernier hors
-            // de l'écran (US-20) — la sidebar, elle, a la place de l'afficher en toutes lettres.
-            // Quatre commandes sur la largeur d'un telephone : toutes reduites a leur glyphe sauf
-            // la palette, dont le badge de raccourci est ce qui l'apprend a l'utilisateur. Le
-            // selecteur de langue doit rester visible — c'est ce que verifient les niveaux 3.
+            // Cinq commandes sur la largeur d'un telephone : TOUTES reduites a leur glyphe, y
+            // compris la palette. Son badge « ⌘K » n'apprend un raccourci qu'a qui peut brancher
+            // un clavier — c'est-a-dire sur la sidebar tablette, qui la garde en toutes lettres.
+            // Le selecteur de langue doit rester visible : c'est ce que verifient les niveaux 3.
             ExportModalTrigger(onClick = onOpenExportModal, compact = true)
             IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
-            CommandPaletteTrigger(onClick = onOpenCommandPalette)
+            CommandPaletteTrigger(onClick = onOpenCommandPalette, compact = true)
+            // Cinquieme commande de l'en-tete (US-25) : reduite a son glyphe et posee juste a
+            // gauche du selecteur de langue, avec lequel elle forme une paire.
+            ThemeToggle(mode = themeMode, resolved = resolvedTheme, onToggle = onToggleTheme)
             LangToggle(current = language, onSelect = onSelectLanguage)
         }
     }
@@ -695,9 +743,12 @@ private fun LedgerBottomBar(selected: Destination, onSelect: (Destination) -> Un
 private fun LedgerSidebar(
     selected: Destination,
     language: AppLanguage,
+    themeMode: ThemeMode,
+    resolvedTheme: ResolvedTheme,
     onSelect: (Destination) -> Unit,
     onCreateInvoice: () -> Unit,
     onSelectLanguage: (AppLanguage) -> Unit,
+    onToggleTheme: (ThemeMode) -> Unit,
     onOpenCommandPalette: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onOpenExportModal: () -> Unit,
@@ -720,7 +771,15 @@ private fun LedgerSidebar(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
-            LangToggle(current = language, onSelect = onSelectLanguage)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Meme raison que pour la palette et le hub : cantonnee a l'en-tete compact, la
+                // bascule disparaitrait du shell tablette.
+                ThemeToggle(mode = themeMode, resolved = resolvedTheme, onToggle = onToggleTheme)
+                LangToggle(current = language, onSelect = onSelectLanguage)
+            }
         }
         // Le declencheur existe dans les DEUX shells : cantonne a l'en-tete compact, il
         // disparaitrait sur tablette, ou la palette est justement la plus utile (clavier branche).
@@ -774,7 +833,7 @@ private fun LedgerSidebar(
         Text(
             tr(StringKey.SIDEBAR_COMPLIANCE),
             style = MaterialTheme.typography.labelSmall,
-            color = LedgerHubColors.SecondaryText,
+            color = LedgerHubTheme.palette.SecondaryText,
             modifier = Modifier.padding(8.dp),
         )
     }

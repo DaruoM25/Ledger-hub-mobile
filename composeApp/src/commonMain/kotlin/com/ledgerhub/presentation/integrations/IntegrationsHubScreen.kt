@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -33,7 +34,7 @@ import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.integrations.IntegrationModule
 import com.ledgerhub.domain.integrations.IntegrationStatus
 import com.ledgerhub.presentation.i18n.tr
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /**
  * Tags de test — contrat partagé entre l'UI (commonMain) et les trois niveaux de tests.
@@ -91,10 +92,13 @@ private const val LockedCardAlpha = 0.7f
 // Reprises du thème (indigo des devis, ambre des statuts en attente) : le hub n'introduit pas une
 // palette de plus. Elles sont peintes à **pleine opacité**, contrairement au reste de la carte —
 // c'est tout l'objet du badge que d'être lu en premier.
-private val BetaBadgeBg = LedgerHubColors.QuotePendingBg
-private val BetaBadgeFg = LedgerHubColors.QuotePendingFg
-private val ComingSoonBadgeBg = LedgerHubColors.StatusPendingBg
-private val ComingSoonBadgeFg = LedgerHubColors.StatusPendingFg
+//
+// Propriétés `@Composable` et non constantes de fichier : depuis l'US-25 la palette dépend du thème
+// actif, une valeur figée à l'initialisation de la classe resterait sombre en thème clair.
+private val BetaBadgeBg: Color @Composable @ReadOnlyComposable get() = LedgerHubTheme.palette.QuotePendingBg
+private val BetaBadgeFg: Color @Composable @ReadOnlyComposable get() = LedgerHubTheme.palette.QuotePendingFg
+private val ComingSoonBadgeBg: Color @Composable @ReadOnlyComposable get() = LedgerHubTheme.palette.StatusPendingBg
+private val ComingSoonBadgeFg: Color @Composable @ReadOnlyComposable get() = LedgerHubTheme.palette.StatusPendingFg
 
 @Composable
 fun IntegrationsHubScreen(viewModel: IntegrationsHubViewModel) {
@@ -133,7 +137,7 @@ internal fun IntegrationsHubContent(
         Text(
             text = tr(StringKey.INTEGRATIONS_SUBTITLE),
             style = MaterialTheme.typography.bodyMedium,
-            color = LedgerHubColors.SecondaryText,
+            color = LedgerHubTheme.palette.SecondaryText,
         )
 
         uiState.noticeModule?.let { module ->
@@ -173,9 +177,9 @@ internal fun IntegrationsHubContent(
 @Composable
 private fun IntegrationCard(module: IntegrationModule, onClick: () -> Unit) {
     Surface(
-        color = LedgerHubColors.Surface.copy(alpha = LockedCardAlpha),
+        color = LedgerHubTheme.palette.Surface.copy(alpha = LockedCardAlpha),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, LedgerHubColors.Border),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = CardMinHeight)
@@ -191,14 +195,14 @@ private fun IntegrationCard(module: IntegrationModule, onClick: () -> Unit) {
                 text = tr(module.titleKey),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = LedgerHubColors.PrimaryText.copy(alpha = LockedCardAlpha),
+                color = LedgerHubTheme.palette.PrimaryText.copy(alpha = LockedCardAlpha),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = tr(module.descriptionKey),
                 style = MaterialTheme.typography.bodySmall,
-                color = LedgerHubColors.SecondaryText,
+                color = LedgerHubTheme.palette.SecondaryText,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -247,10 +251,10 @@ private fun IntegrationBadge(module: IntegrationModule) {
 @Composable
 private fun LockedNotice(module: IntegrationModule, onDismiss: () -> Unit) {
     Surface(
-        color = LedgerHubColors.InputBackground,
-        contentColor = LedgerHubColors.SecondaryText,
+        color = LedgerHubTheme.palette.InputBackground,
+        contentColor = LedgerHubTheme.palette.SecondaryText,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, LedgerHubColors.Border),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)

@@ -31,7 +31,7 @@ import com.ledgerhub.domain.directory.LuhnChecksum
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.ValidationResult
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /**
  * Tags de test du sélecteur client (US-11) — noms repris littéralement du contrat de test, en
@@ -147,9 +147,9 @@ fun ClientPicker(
 
         if (isExpanded && suggestions.isNotEmpty()) {
             Surface(
-                color = LedgerHubColors.Surface,
+                color = LedgerHubTheme.palette.Surface,
                 shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, LedgerHubColors.InputBorder),
+                border = BorderStroke(1.dp, LedgerHubTheme.palette.InputBorder),
                 modifier = Modifier.fillMaxWidth().semantics { testTag = ClientPickerTags.CLIENT_SUGGESTIONS_LIST },
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -328,12 +328,12 @@ private fun DialogField(
 /** Habillage commun des champs — repris à l'identique du formulaire de facture. */
 @Composable
 private fun ledgerFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = LedgerHubColors.InputBackground,
-    unfocusedContainerColor = LedgerHubColors.InputBackground,
-    disabledContainerColor = LedgerHubColors.InputBackground,
-    focusedBorderColor = LedgerHubColors.Accent,
-    unfocusedBorderColor = LedgerHubColors.InputBorder,
-    focusedTextColor = LedgerHubColors.PrimaryText,
-    unfocusedTextColor = LedgerHubColors.PrimaryText,
-    cursorColor = LedgerHubColors.Accent,
+    focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+    unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+    disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+    focusedBorderColor = LedgerHubTheme.palette.Accent,
+    unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
+    focusedTextColor = LedgerHubTheme.palette.PrimaryText,
+    unfocusedTextColor = LedgerHubTheme.palette.PrimaryText,
+    cursorColor = LedgerHubTheme.palette.Accent,
 )
