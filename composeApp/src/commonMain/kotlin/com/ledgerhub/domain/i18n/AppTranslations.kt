@@ -21,6 +21,8 @@ object AppTranslations {
         StringKey.ACTION_CREATE_INVOICE to "Créer une facture",
         StringKey.OVERLAY_BACK_DASHBOARD to "Retour au tableau de bord",
         StringKey.OVERLAY_BACK_INVOICES to "Retour aux factures",
+        StringKey.THEME_TOGGLE_TO_LIGHT to "Passer en thème clair",
+        StringKey.THEME_TOGGLE_TO_DARK to "Passer en thème sombre",
 
         StringKey.NAV_OVERVIEW to "Vue d'ensemble",
         StringKey.NAV_INVOICES to "Factures",
@@ -376,6 +378,8 @@ object AppTranslations {
         StringKey.ACTION_CREATE_INVOICE to "Create invoice",
         StringKey.OVERLAY_BACK_DASHBOARD to "Back to dashboard",
         StringKey.OVERLAY_BACK_INVOICES to "Back to invoices",
+        StringKey.THEME_TOGGLE_TO_LIGHT to "Switch to light theme",
+        StringKey.THEME_TOGGLE_TO_DARK to "Switch to dark theme",
 
         StringKey.NAV_OVERVIEW to "Dashboard",
         StringKey.NAV_INVOICES to "Invoices",

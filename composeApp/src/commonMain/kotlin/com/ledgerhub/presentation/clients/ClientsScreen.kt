@@ -37,7 +37,7 @@ import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.presentation.components.filterSiret
 import com.ledgerhub.presentation.i18n.tr
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests. */
 object ClientsTags {
@@ -116,8 +116,8 @@ internal fun ClientsView(
             Banner(
                 text = message,
                 tag = ClientsTags.FEEDBACK,
-                containerColor = LedgerHubColors.StatusPaidBg,
-                contentColor = LedgerHubColors.StatusPaidFg,
+                containerColor = LedgerHubTheme.palette.StatusPaidBg,
+                contentColor = LedgerHubTheme.palette.StatusPaidFg,
             )
         }
         uiState.errorMessage?.let { message ->
@@ -329,14 +329,14 @@ internal fun DialogField(
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = LedgerHubColors.InputBackground,
-                unfocusedContainerColor = LedgerHubColors.InputBackground,
-                disabledContainerColor = LedgerHubColors.InputBackground,
-                focusedBorderColor = LedgerHubColors.Accent,
-                unfocusedBorderColor = LedgerHubColors.InputBorder,
-                focusedTextColor = LedgerHubColors.PrimaryText,
-                unfocusedTextColor = LedgerHubColors.PrimaryText,
-                cursorColor = LedgerHubColors.Accent,
+                focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+                focusedBorderColor = LedgerHubTheme.palette.Accent,
+                unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
+                focusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                unfocusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                cursorColor = LedgerHubTheme.palette.Accent,
             ),
             modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
         )

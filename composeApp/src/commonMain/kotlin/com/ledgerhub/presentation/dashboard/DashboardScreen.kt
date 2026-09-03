@@ -44,7 +44,7 @@ import com.ledgerhub.presentation.i18n.formatIsoDate
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.formatMoney
 import com.ledgerhub.presentation.theme.InvoiceStatusTone
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 import com.ledgerhub.presentation.theme.statusColors
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest / Robolectric). */
@@ -195,8 +195,8 @@ private fun KpiGrid(uiState: DashboardUiState) {
                 value = formatMoney(uiState.pendingQuotesTotalCents, lang),
                 caption = tr(StringKey.KPI_QUOTES_PENDING_CAPTION),
                 glyph = "📝",
-                accent = LedgerHubColors.QuotePendingBg,
-                valueColor = LedgerHubColors.QuotePendingFg,
+                accent = LedgerHubTheme.palette.QuotePendingBg,
+                valueColor = LedgerHubTheme.palette.QuotePendingFg,
             )
         }
     }
@@ -474,8 +474,8 @@ private fun QuoteFollowUpRow(item: QuoteFollowUpItem) {
     // Expiré = rouge, expire aujourd'hui ou demain = ambre, au-delà = neutre. Le délai est
     // l'information qui décide de l'action, il porte donc la couleur.
     val deadlineColor = when {
-        item.isExpired -> LedgerHubColors.ErrorText
-        item.daysRemaining <= URGENT_THRESHOLD_DAYS -> LedgerHubColors.StatusPendingFg
+        item.isExpired -> LedgerHubTheme.palette.ErrorText
+        item.daysRemaining <= URGENT_THRESHOLD_DAYS -> LedgerHubTheme.palette.StatusPendingFg
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val deadlineLabel = when {

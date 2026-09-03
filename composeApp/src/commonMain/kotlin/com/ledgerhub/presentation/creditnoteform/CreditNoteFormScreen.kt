@@ -50,7 +50,6 @@ import com.ledgerhub.domain.creditnote.CreditNoteReason
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 import com.ledgerhub.presentation.invoices.formatMoney
-import com.ledgerhub.presentation.theme.CreditNoteColors
 import com.ledgerhub.presentation.theme.CreditNoteTheme
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
@@ -108,7 +107,7 @@ internal fun CreditNoteFormContent(
 
     CreditNoteTheme {
         Scaffold(
-            containerColor = CreditNoteColors.Background,
+            containerColor = CreditNoteTheme.palette.Background,
             topBar = { CreditNoteTopBar(onBack = onBack) },
         ) { innerPadding ->
             Column(
@@ -198,7 +197,7 @@ internal fun CreditNoteFormContent(
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .semantics { testTag = CreditNoteFormTags.SUBMIT_BUTTON },
-                    colors = ButtonDefaults.buttonColors(containerColor = CreditNoteColors.Accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = CreditNoteTheme.palette.Accent),
                 ) {
                     Text("Valider l'avoir")
                 }
@@ -210,7 +209,7 @@ internal fun CreditNoteFormContent(
 @Composable
 private fun CreditNoteTopBar(onBack: () -> Unit) {
     Surface(
-        color = CreditNoteColors.HeaderBar,
+        color = CreditNoteTheme.palette.HeaderBar,
         contentColor = Color.White,
         modifier = Modifier
             .fillMaxWidth()
@@ -245,8 +244,8 @@ private fun CreditNoteTopBar(onBack: () -> Unit) {
 @Composable
 private fun DraftBadge() {
     Surface(
-        color = CreditNoteColors.BadgeBg,
-        contentColor = CreditNoteColors.BadgeFg,
+        color = CreditNoteTheme.palette.BadgeBg,
+        contentColor = CreditNoteTheme.palette.BadgeFg,
         shape = RoundedCornerShape(999.dp),
         modifier = Modifier.semantics {
             testTag = CreditNoteFormTags.DRAFT_BADGE
@@ -264,7 +263,7 @@ private fun DraftBadge() {
                 modifier = Modifier
                     .size(8.dp)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(CreditNoteColors.BadgeFg),
+                    .background(CreditNoteTheme.palette.BadgeFg),
             )
             Text(
                 "AVOIR EN BROUILLON",
@@ -281,7 +280,7 @@ private fun ReferenceCard(uiState: CreditNoteFormUiState) {
         Text(
             "RÉFÉRENCE",
             style = MaterialTheme.typography.labelSmall,
-            color = CreditNoteColors.SecondaryText,
+            color = CreditNoteTheme.palette.SecondaryText,
         )
         // Référence croisée Factur-X 2026 : le couple numéro + date de la facture annulée.
         Text(
@@ -380,8 +379,8 @@ private fun TotalsCartridge(uiState: CreditNoteFormUiState, lang: com.ledgerhub.
             .fillMaxWidth()
             .semantics { testTag = CreditNoteFormTags.TOTALS_CARTRIDGE },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CreditNoteColors.CartridgeBg),
-        border = BorderStroke(1.dp, CreditNoteColors.CartridgeBorder),
+        colors = CardDefaults.cardColors(containerColor = CreditNoteTheme.palette.CartridgeBg),
+        border = BorderStroke(1.dp, CreditNoteTheme.palette.CartridgeBorder),
     ) {
         Column(
             modifier = Modifier
@@ -394,20 +393,20 @@ private fun TotalsCartridge(uiState: CreditNoteFormUiState, lang: com.ledgerhub.
                 "MONTANT TOTAL À DÉDUIRE / REMBOURSER",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = CreditNoteColors.SecondaryText,
+                color = CreditNoteTheme.palette.SecondaryText,
             )
             Text(
                 text = formatMoney(uiState.totalTtc.cents, lang),
                 modifier = Modifier.semantics { testTag = CreditNoteFormTags.TOTAL_TTC },
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = CreditNoteColors.CreditNegative,
+                color = CreditNoteTheme.palette.CreditNegative,
             )
             Text(
                 text = "HT ${formatMoney(uiState.totalHt.cents, lang)}  ·  TVA ${formatMoney(uiState.totalVat.cents, lang)}",
                 modifier = Modifier.semantics { testTag = CreditNoteFormTags.TOTAL_BREAKDOWN },
                 style = MaterialTheme.typography.bodyMedium,
-                color = CreditNoteColors.SecondaryText,
+                color = CreditNoteTheme.palette.SecondaryText,
             )
         }
     }
@@ -418,8 +417,8 @@ private fun CreditNoteCard(content: @Composable androidx.compose.foundation.layo
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CreditNoteColors.Surface),
-        border = BorderStroke(1.dp, CreditNoteColors.CardBorder),
+        colors = CardDefaults.cardColors(containerColor = CreditNoteTheme.palette.Surface),
+        border = BorderStroke(1.dp, CreditNoteTheme.palette.CardBorder),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

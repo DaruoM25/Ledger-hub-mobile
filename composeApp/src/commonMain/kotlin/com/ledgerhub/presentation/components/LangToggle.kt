@@ -16,7 +16,7 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.AppLanguage
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 object LangToggleTags {
     const val ROOT = "lang_toggle"
@@ -26,7 +26,7 @@ object LangToggleTags {
 
 /**
  * Sélecteur de langue « tactique » : deux demi-boutons `🇫🇷 FR` | `🇬🇧 EN`. L'actif est peint en
- * [LedgerHubColors.Accent], l'inactif reste discret sur le thème slate-950. Un clic sur un segment
+ * [LedgerHubTheme.palette.Accent], l'inactif reste discret sur le thème slate-950. Un clic sur un segment
  * bascule immédiatement la langue (l'état est hissé dans `App.kt`).
  */
 @Composable
@@ -36,9 +36,9 @@ fun LangToggle(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = LedgerHubColors.Surface,
+        color = LedgerHubTheme.palette.Surface,
         shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, LedgerHubColors.Border),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
         modifier = modifier.semantics { testTag = LangToggleTags.ROOT },
     ) {
         Row {
@@ -62,11 +62,11 @@ fun LangToggle(
 private fun LangSegment(label: String, tag: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text = label,
-        color = if (selected) Color.White else LedgerHubColors.SecondaryText,
+        color = if (selected) Color.White else LedgerHubTheme.palette.SecondaryText,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .background(if (selected) LedgerHubColors.Accent else Color.Transparent)
+            .background(if (selected) LedgerHubTheme.palette.Accent else Color.Transparent)
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .semantics { testTag = tag },
     )

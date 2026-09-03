@@ -1,0 +1,17 @@
+-- Préférences d'interface — table mono-ligne, sur le modèle de TaxSettings : le CHECK sur la clé
+-- primaire interdit structurellement une seconde ligne. Il n'existe qu'un jeu de préférences.
+--
+-- Séparée de TaxSettings à dessein : une préférence d'affichage n'a rien à faire dans les
+-- paramètres fiscaux d'un cabinet, et les deux n'ont ni le même cycle de vie ni la même portée.
+CREATE TABLE UiPreferences (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    -- Nom de la constante ThemeMode (DARK / LIGHT / SYSTEM). C'est bien la *préférence* qui est
+    -- stockée, y compris SYSTEM, et non l'apparence qu'elle produisait au moment du choix.
+    themeMode TEXT NOT NULL DEFAULT 'DARK'
+);
+
+selectThemeMode:
+SELECT themeMode FROM UiPreferences WHERE id = 1;
+
+upsertThemeMode:
+INSERT OR REPLACE INTO UiPreferences(id, themeMode) VALUES (1, ?);

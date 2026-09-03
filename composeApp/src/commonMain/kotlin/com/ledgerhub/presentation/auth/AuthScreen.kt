@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.presentation.components.filterSiret
 import com.ledgerhub.presentation.i18n.tr
-import com.ledgerhub.presentation.theme.LedgerHubColors
+import com.ledgerhub.presentation.theme.LedgerHubTheme
 
 /**
  * Tags de test — contrat partagé entre l'UI (commonMain) et les trois niveaux de tests.
@@ -115,9 +115,9 @@ internal fun AuthContent(
     onIntent: (AuthIntent) -> Unit = {},
 ) {
     val colorScheme = darkColorScheme(
-        primary = LedgerHubColors.Accent,
-        background = LedgerHubColors.Background,
-        surface = LedgerHubColors.Surface,
+        primary = LedgerHubTheme.palette.Accent,
+        background = LedgerHubTheme.palette.Background,
+        surface = LedgerHubTheme.palette.Surface,
         onBackground = Color.White,
         onSurface = Color.White,
         error = Color(0xFFF87171),
@@ -127,7 +127,7 @@ internal fun AuthContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(LedgerHubColors.Background)
+                .background(LedgerHubTheme.palette.Background)
                 .statusBarsPadding()
                 .semantics { testTag = AuthTags.SCREEN },
             contentAlignment = Alignment.Center,
@@ -138,7 +138,7 @@ internal fun AuthContent(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(24.dp)
-                    .background(LedgerHubColors.Surface, RoundedCornerShape(20.dp))
+                    .background(LedgerHubTheme.palette.Surface, RoundedCornerShape(20.dp))
                     .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -146,7 +146,7 @@ internal fun AuthContent(
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .background(LedgerHubColors.Accent, RoundedCornerShape(14.dp)),
+                        .background(LedgerHubTheme.palette.Accent, RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("📄", fontSize = 26.sp)
@@ -176,7 +176,7 @@ internal fun AuthContent(
                         tr(StringKey.AUTH_LOGIN_SUBTITLE)
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = LedgerHubColors.SecondaryText,
+                    color = LedgerHubTheme.palette.SecondaryText,
                     textAlign = TextAlign.Center,
                 )
 
@@ -219,7 +219,7 @@ internal fun AuthContent(
                 Button(
                     onClick = { onIntent(AuthIntent.Submit) },
                     enabled = if (uiState.isRegistering) uiState.isRegisterEnabled else uiState.isSubmitEnabled,
-                    colors = ButtonDefaults.buttonColors(containerColor = LedgerHubColors.Accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = LedgerHubTheme.palette.Accent),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 20.dp)
@@ -248,12 +248,12 @@ internal fun AuthContent(
                     Row(modifier = Modifier.padding(top = 12.dp)) {
                         Text(
                             text = tr(StringKey.AUTH_NO_ACCOUNT_PROMPT),
-                            color = LedgerHubColors.SecondaryText,
+                            color = LedgerHubTheme.palette.SecondaryText,
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Text(
                             text = tr(StringKey.AUTH_REGISTER_LINK),
-                            color = LedgerHubColors.Accent,
+                            color = LedgerHubTheme.palette.Accent,
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
@@ -266,7 +266,7 @@ internal fun AuthContent(
                 Text(
                     text = tr(StringKey.AUTH_DISCLAIMER),
                     style = MaterialTheme.typography.labelSmall,
-                    color = LedgerHubColors.SecondaryText,
+                    color = LedgerHubTheme.palette.SecondaryText,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 20.dp),
                 )
@@ -314,14 +314,14 @@ private fun ModeTab(label: String, tag: String, selected: Boolean, onClick: () -
             text = label,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) Color.White else LedgerHubColors.SecondaryText,
+            color = if (selected) Color.White else LedgerHubTheme.palette.SecondaryText,
             modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
         )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(2.dp)
-                .background(if (selected) LedgerHubColors.Accent else Color.Transparent),
+                .background(if (selected) LedgerHubTheme.palette.Accent else Color.Transparent),
         )
     }
 }
@@ -352,7 +352,7 @@ private fun SiretSection(uiState: AuthUiState, onIntent: (AuthIntent) -> Unit) {
                     modifier = Modifier
                         .size(LoaderSize)
                         .semantics { testTag = AuthTags.SIRET_LOADER },
-                    color = LedgerHubColors.Accent,
+                    color = LedgerHubTheme.palette.Accent,
                     strokeWidth = 2.dp,
                 )
             } else {
@@ -375,7 +375,7 @@ private fun SiretSection(uiState: AuthUiState, onIntent: (AuthIntent) -> Unit) {
             tr(StringKey.AUTH_SIRET_HELPER)
         },
         style = MaterialTheme.typography.labelSmall,
-        color = LedgerHubColors.SecondaryText,
+        color = LedgerHubTheme.palette.SecondaryText,
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
     )
 
@@ -409,8 +409,8 @@ private fun SiretSection(uiState: AuthUiState, onIntent: (AuthIntent) -> Unit) {
 @Composable
 private fun SireneVerifiedBadge() {
     Surface(
-        color = LedgerHubColors.StatusPaidBg,
-        contentColor = LedgerHubColors.StatusPaidFg,
+        color = LedgerHubTheme.palette.StatusPaidBg,
+        contentColor = LedgerHubTheme.palette.StatusPaidFg,
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -457,26 +457,26 @@ private fun AuthField(
     trailingIcon: @Composable (() -> Unit)? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = LedgerHubColors.SecondaryText)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = LedgerHubTheme.palette.SecondaryText)
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
             singleLine = true,
-            placeholder = { Text(placeholder, color = LedgerHubColors.SecondaryText.copy(alpha = 0.6f)) },
+            placeholder = { Text(placeholder, color = LedgerHubTheme.palette.SecondaryText.copy(alpha = 0.6f)) },
             visualTransformation = visualTransformation,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             trailingIcon = trailingIcon,
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = LedgerHubColors.InputBackground,
-                unfocusedContainerColor = LedgerHubColors.InputBackground,
-                disabledContainerColor = LedgerHubColors.InputBackground,
-                focusedBorderColor = LedgerHubColors.Accent,
-                unfocusedBorderColor = LedgerHubColors.InputBorder,
+                focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+                focusedBorderColor = LedgerHubTheme.palette.Accent,
+                unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
-                cursorColor = LedgerHubColors.Accent,
+                cursorColor = LedgerHubTheme.palette.Accent,
             ),
             modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
         )

@@ -1,0 +1,13 @@
+-- Migration 7 → 8 — US-25, bascule Thème Sombre / Clair.
+--
+-- Une table nouvelle. `Schema.create` ne s'exécutant que sur une base neuve, ce .sqm l'installe
+-- sur les bases déjà déployées (dette A-01, close en US-05). L'invariant est vérifié par
+-- SchemaMigrationVerificationTest, qui migre chaque instantané databases/N.db et le compare au
+-- schéma courant.
+--
+-- La définition est recopiée à l'identique de UiPreferences.sq : toute divergence, jusqu'à l'ordre
+-- des colonnes, ferait échouer la comparaison de schéma.
+CREATE TABLE UiPreferences (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    themeMode TEXT NOT NULL DEFAULT 'DARK'
+);
