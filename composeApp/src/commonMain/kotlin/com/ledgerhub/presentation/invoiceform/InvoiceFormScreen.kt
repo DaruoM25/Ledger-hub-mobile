@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.VatRate
+import com.ledgerhub.presentation.compliance.CompliancePanel
 import com.ledgerhub.presentation.components.ClientPicker
 import com.ledgerhub.presentation.components.ClientPickerTags
 import com.ledgerhub.presentation.components.QuickClientDialog
@@ -345,6 +346,16 @@ internal fun InvoiceFormContent(
             )
             LegalFooterText(applyB2bPenalties = uiState.applyB2bPenalties)
         }
+
+        // Panneau d'audit (US-24) — après les mentions légales et avant les actions : un contrôle
+        // de conformité conclut la saisie, il ne l'ouvre pas. Absent du mode canvas à dessein : la
+        // feuille A4 est un document, et y poser un panneau de contrôle casserait l'illusion
+        // papier que l'US-15 puis l'US-23 ont construite.
+        CompliancePanel(
+            report = uiState.complianceReport,
+            enabled = enabled,
+            onScan = { onIntent(InvoiceFormIntent.ComplianceScanRequested) },
+        )
 
         when (val status = uiState.submissionStatus) {
             SubmissionStatus.Loading -> LoadingIndicator()

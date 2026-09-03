@@ -59,6 +59,15 @@ sealed interface InvoiceFormIntent {
      */
     data class ToggleB2bPenalties(val enabled: Boolean) : InvoiceFormIntent
 
+    /**
+     * Lance l'audit de conformité Factur-X 2026 (US-24) sur la facture en cours de saisie.
+     *
+     * À la demande, et non en continu : un contrôle réglementaire est un geste que l'utilisateur
+     * pose avant d'émettre, pas un commentaire permanent sur sa frappe. Le rapport produit est
+     * d'ailleurs invalidé à la modification suivante — voir `InvoiceFormUiState.complianceReport`.
+     */
+    data object ComplianceScanRequested : InvoiceFormIntent
+
     /** Ajoute une ligne de prestation vierge en fin de liste. */
     data object AddLine : InvoiceFormIntent
 

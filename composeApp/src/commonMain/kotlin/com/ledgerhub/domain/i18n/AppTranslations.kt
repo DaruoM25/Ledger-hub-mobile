@@ -320,6 +320,42 @@ object AppTranslations {
         StringKey.EXPORT_DOCUMENT_COUNT_LABEL to "pièce(s) couverte(s) par l'export",
         StringKey.EXPORT_DOWNLOAD_ACTION to "Télécharger l'archive (.zip)",
 
+        StringKey.COMPLIANCE_PANEL_TITLE to "Audit de conformité 2026",
+        StringKey.COMPLIANCE_PANEL_SUBTITLE to "Contrôlez la facture avant de l'émettre",
+        StringKey.COMPLIANCE_SCAN_ACTION to "Scanner la conformité",
+        StringKey.COMPLIANCE_NOT_SCANNED to "Aucun contrôle effectué pour l'instant.",
+        StringKey.COMPLIANCE_ALL_PASSED to "Facture conforme à la norme Factur-X 2026.",
+        StringKey.COMPLIANCE_ALERT_WARNING_TITLE to "Conformité incomplète",
+        StringKey.COMPLIANCE_ALERT_ERROR_TITLE to "Facture non conforme",
+        StringKey.COMPLIANCE_CHECK_SIRET_TITLE to "Identifiants SIRET",
+        StringKey.COMPLIANCE_CHECK_VAT_TITLE to "Numéro de TVA intracommunautaire",
+        StringKey.COMPLIANCE_CHECK_LEGAL_TITLE to "Mentions légales obligatoires",
+        StringKey.COMPLIANCE_CHECK_FACTURX_TITLE to "Structure Factur-X 2026",
+        StringKey.COMPLIANCE_SIRET_OK to "SIRET émetteur et client valides.",
+        StringKey.COMPLIANCE_SIRET_ISSUER_INVALID to
+            "SIRET de l'émetteur absent ou incomplet — 14 chiffres attendus.",
+        StringKey.COMPLIANCE_SIRET_CLIENT_INVALID to
+            "SIRET du client absent ou incomplet — 14 chiffres attendus.",
+        StringKey.COMPLIANCE_SIRET_LUHN to
+            "Clé de contrôle SIRET incohérente — vérifiez la saisie.",
+        StringKey.COMPLIANCE_VAT_OK to "Numéro de TVA valide et cohérent avec le SIREN.",
+        StringKey.COMPLIANCE_VAT_ABSENT to
+            "Aucun numéro de TVA — admis en franchise en base.",
+        StringKey.COMPLIANCE_VAT_MALFORMED to
+            "Numéro de TVA au format invalide — FRXX999999999 attendu.",
+        StringKey.COMPLIANCE_VAT_KEY_MISMATCH to
+            "Numéro de TVA incohérent avec le SIREN de l'émetteur.",
+        StringKey.COMPLIANCE_LEGAL_OK to
+            "Pénalités de retard et indemnité de 40 € mentionnées.",
+        StringKey.COMPLIANCE_LEGAL_MISSING to
+            "Mentions B2B désactivées — obligatoires entre professionnels (art. L.441-10).",
+        StringKey.COMPLIANCE_FACTURX_OK to "Structure, devise et totaux conformes.",
+        StringKey.COMPLIANCE_FACTURX_NO_LINE to "Aucune ligne de prestation exploitable.",
+        StringKey.COMPLIANCE_FACTURX_TOTALS to
+            "Totaux incohérents avec les lignes de la facture.",
+        StringKey.COMPLIANCE_FACTURX_DISABLED to
+            "Génération Factur-X désactivée sur cette facture.",
+
         StringKey.MONTH_ABBR_1 to "janv.",
         StringKey.MONTH_ABBR_2 to "févr.",
         StringKey.MONTH_ABBR_3 to "mars",
@@ -635,6 +671,37 @@ object AppTranslations {
         StringKey.EXPORT_SUCCESS_TITLE to "Archive ready",
         StringKey.EXPORT_DOCUMENT_COUNT_LABEL to "document(s) covered by the export",
         StringKey.EXPORT_DOWNLOAD_ACTION to "Download the archive (.zip)",
+
+        StringKey.COMPLIANCE_PANEL_TITLE to "2026 Compliance Audit",
+        StringKey.COMPLIANCE_PANEL_SUBTITLE to "Check the invoice before issuing it",
+        StringKey.COMPLIANCE_SCAN_ACTION to "Scan compliance",
+        StringKey.COMPLIANCE_NOT_SCANNED to "No check has been run yet.",
+        StringKey.COMPLIANCE_ALL_PASSED to "Invoice compliant with the Factur-X 2026 standard.",
+        StringKey.COMPLIANCE_ALERT_WARNING_TITLE to "Incomplete compliance",
+        StringKey.COMPLIANCE_ALERT_ERROR_TITLE to "Non-compliant invoice",
+        StringKey.COMPLIANCE_CHECK_SIRET_TITLE to "SIRET identifiers",
+        StringKey.COMPLIANCE_CHECK_VAT_TITLE to "Intra-EU VAT number",
+        StringKey.COMPLIANCE_CHECK_LEGAL_TITLE to "Mandatory legal notices",
+        StringKey.COMPLIANCE_CHECK_FACTURX_TITLE to "Factur-X 2026 structure",
+        StringKey.COMPLIANCE_SIRET_OK to "Issuer and customer SIRET are valid.",
+        StringKey.COMPLIANCE_SIRET_ISSUER_INVALID to
+            "Issuer SIRET missing or incomplete — 14 digits expected.",
+        StringKey.COMPLIANCE_SIRET_CLIENT_INVALID to
+            "Customer SIRET missing or incomplete — 14 digits expected.",
+        StringKey.COMPLIANCE_SIRET_LUHN to "SIRET checksum inconsistent — please review the entry.",
+        StringKey.COMPLIANCE_VAT_OK to "VAT number valid and consistent with the SIREN.",
+        StringKey.COMPLIANCE_VAT_ABSENT to "No VAT number — allowed under the small business scheme.",
+        StringKey.COMPLIANCE_VAT_MALFORMED to
+            "VAT number format is invalid — FRXX999999999 expected.",
+        StringKey.COMPLIANCE_VAT_KEY_MISMATCH to
+            "VAT number inconsistent with the issuer SIREN.",
+        StringKey.COMPLIANCE_LEGAL_OK to "Late payment penalties and the 40 € fee are stated.",
+        StringKey.COMPLIANCE_LEGAL_MISSING to
+            "B2B notices disabled — mandatory between businesses (Article L.441-10).",
+        StringKey.COMPLIANCE_FACTURX_OK to "Structure, currency and totals are compliant.",
+        StringKey.COMPLIANCE_FACTURX_NO_LINE to "No usable line item.",
+        StringKey.COMPLIANCE_FACTURX_TOTALS to "Totals inconsistent with the invoice lines.",
+        StringKey.COMPLIANCE_FACTURX_DISABLED to "Factur-X generation is disabled on this invoice.",
 
         StringKey.MONTH_ABBR_1 to "Jan",
         StringKey.MONTH_ABBR_2 to "Feb",

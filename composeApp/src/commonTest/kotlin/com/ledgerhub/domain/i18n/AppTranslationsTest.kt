@@ -270,6 +270,57 @@ class AppTranslationsTest {
         assertEquals("To", AppTranslations.get(StringKey.EXPORT_DATE_TO_LABEL, AppLanguage.EN))
     }
 
+    /**
+     * Panneau d'audit de conformité (US-24). Le libellé du bouton est **imposé par le cahier des
+     * charges** ; la mention des 40 € l'est par l'article L.441-10, dont la formulation est déjà
+     * figée par `b2bLegalMentions_useTheStatutoryWording`. Une reformulation de confort casse ce
+     * test.
+     */
+    @Test
+    fun compliancePanel_usesTheSpecifiedWording() {
+        assertEquals(
+            "Scanner la conformité",
+            AppTranslations.get(StringKey.COMPLIANCE_SCAN_ACTION, AppLanguage.FR),
+        )
+        assertEquals(
+            "Scan compliance",
+            AppTranslations.get(StringKey.COMPLIANCE_SCAN_ACTION, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Audit de conformité 2026",
+            AppTranslations.get(StringKey.COMPLIANCE_PANEL_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "2026 Compliance Audit",
+            AppTranslations.get(StringKey.COMPLIANCE_PANEL_TITLE, AppLanguage.EN),
+        )
+
+        assertEquals(
+            "Identifiants SIRET",
+            AppTranslations.get(StringKey.COMPLIANCE_CHECK_SIRET_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Numéro de TVA intracommunautaire",
+            AppTranslations.get(StringKey.COMPLIANCE_CHECK_VAT_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Mentions légales obligatoires",
+            AppTranslations.get(StringKey.COMPLIANCE_CHECK_LEGAL_TITLE, AppLanguage.FR),
+        )
+        assertEquals(
+            "Structure Factur-X 2026",
+            AppTranslations.get(StringKey.COMPLIANCE_CHECK_FACTURX_TITLE, AppLanguage.FR),
+        )
+
+        // L'indemnité forfaitaire de 40 € est une exigence du cahier des charges : le message de
+        // conformité la nomme, il ne se contente pas d'évoquer « les mentions ».
+        assertEquals(
+            "Pénalités de retard et indemnité de 40 € mentionnées.",
+            AppTranslations.get(StringKey.COMPLIANCE_LEGAL_OK, AppLanguage.FR),
+        )
+    }
+
     @Test
     fun appLanguage_toggle_isBinaryAndSymmetric() {
         assertEquals(AppLanguage.EN, AppLanguage.FR.toggled())

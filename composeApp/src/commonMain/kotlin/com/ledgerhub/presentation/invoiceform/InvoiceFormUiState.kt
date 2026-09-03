@@ -1,5 +1,6 @@
 package com.ledgerhub.presentation.invoiceform
 
+import com.ledgerhub.domain.compliance.ComplianceReport
 import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.Money
@@ -64,6 +65,15 @@ data class InvoiceFormUiState(
     val applyB2bPenalties: Boolean = true,
     val submittedInvoice: Invoice? = null,
     val submissionStatus: SubmissionStatus = SubmissionStatus.Idle,
+    /**
+     * Rapport du dernier audit de conformité (US-24), ou `null` si aucun n'a été demandé — ou si
+     * la facture a changé depuis.
+     *
+     * L'invalidation à la frappe n'est pas une précaution : un rapport périmé présenté comme
+     * actuel ferait émettre une facture sur la foi d'un contrôle qui ne porte plus sur elle. Elle
+     * a lieu dans `revalidate()`, sur le chemin que toute modification emprunte déjà.
+     */
+    val complianceReport: ComplianceReport? = null,
 ) {
     /**
      * Une écriture est en cours. Propriété **dérivée** de [submissionStatus] et non champ stocké :
