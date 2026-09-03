@@ -67,7 +67,7 @@ class LanguageUiTest {
     @Test
     fun languageToggle_switchesEveryUiStringAndCurrencyFormat_instantly() = runComposeUiTest {
         val database = seededDatabase()
-        setContent { App(database = database) }
+        setContent { App(database = database, startAuthenticated = true) }
 
         // Attendre le rendu du tableau de bord et du KPI monétaire (chargement asynchrone).
         waitUntil(timeoutMillis = 10_000) {

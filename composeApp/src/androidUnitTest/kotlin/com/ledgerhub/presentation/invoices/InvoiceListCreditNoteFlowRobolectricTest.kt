@@ -94,7 +94,7 @@ class InvoiceListCreditNoteFlowRobolectricTest {
 
     @Test
     fun fromApp_tappingCreateCreditNote_opensTheCreditNoteScreen() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         onNodeWithText("Factures").performClick()
 

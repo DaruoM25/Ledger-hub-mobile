@@ -30,6 +30,8 @@ object AppTranslations {
         StringKey.NAV_SETTINGS to "Paramètres",
         StringKey.NAV_DIRECTORY to "Annuaire DGFIP",
         StringKey.NAV_RECONCILIATION to "Rapprochement",
+        StringKey.NAV_EREPORTING to "e-Reporting DGFIP",
+        StringKey.EREPORTING_TRIGGER_SUBTITLE to "Déclarations B2C et encaissements à transmettre au PPF",
 
         StringKey.DASHBOARD_SUBTITLE to "Pilotez votre activité et votre conformité 2026",
         StringKey.DASHBOARD_LOADING to "Chargement du tableau de bord…",
@@ -387,6 +389,8 @@ object AppTranslations {
         StringKey.NAV_SETTINGS to "Settings",
         StringKey.NAV_DIRECTORY to "DGFIP Directory",
         StringKey.NAV_RECONCILIATION to "Reconciliation",
+        StringKey.NAV_EREPORTING to "DGFIP e-Reporting",
+        StringKey.EREPORTING_TRIGGER_SUBTITLE to "B2C statements and collections to submit to the PPF",
 
         StringKey.DASHBOARD_SUBTITLE to "Track your activity and 2026 compliance",
         StringKey.DASHBOARD_LOADING to "Loading dashboard…",
