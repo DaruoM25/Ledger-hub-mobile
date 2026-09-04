@@ -175,8 +175,10 @@ android {
         applicationId  = "com.ledgerhub.app"
         minSdk         = 26      // Android 8 — couverture ~96% du parc mondial
         targetSdk      = 35
-        versionCode    = 1
-        versionName    = "0.1.0-shipaton"
+        // Release Candidate 1 (US-26). versionCode incremente a chaque livrable installable :
+        // Android refuse la mise a jour d'un APK dont le code n'a pas augmente.
+        versionCode    = 2
+        versionName    = "1.0.0-RC1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

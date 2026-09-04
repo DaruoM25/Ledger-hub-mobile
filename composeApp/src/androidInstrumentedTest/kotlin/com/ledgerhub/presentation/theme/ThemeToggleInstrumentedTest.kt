@@ -66,7 +66,7 @@ class ThemeToggleInstrumentedTest {
     /** Monte le shell complet et attend que le tableau de bord soit à l'écran. */
     private fun renderShell() {
         val database = newDatabase()
-        composeRule.setContent { App(database = database) }
+        composeRule.setContent { App(database = database, startAuthenticated = true) }
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
         }

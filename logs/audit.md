@@ -1926,3 +1926,77 @@ qui a d'abord donné l'illusion que le correctif n'avait rien changé.
 La capture officielle `screenshots/US25_mobile_theme_toggle_sdk_gphone64_x86_64.png` est produite et
 versionnée : nom de l'application entier, cinq commandes présentes, sélecteur FR/EN complet, shell en
 thème clair.
+
+---
+
+## US-26 (RC1) — Authentification locale autonome (SQLDelight)
+
+- **Branche :** `feature/US-26-release-candidate`
+- **Commit :** `fix: implement local auth persistence with SQLDelight for standalone RC1`
+
+### Le problème
+
+L'US-26 avait relié l'écran d'authentification au shell, mais la porte s'ouvrait sur du vide :
+`KtorAuthRepository` interrogeait `POST http://10.0.2.2:3000/api/auth/login`, un backend de
+développement qui n'existe sur aucun poste de recette, et `AuthViewModel.register` se contentait de
+lever un drapeau en mémoire. En pratique, seule l'inscription faisait entrer — et n'importe quel
+formulaire rempli suffisait. L'écran l'annonçait lui-même : « Authentification fictive ».
+
+Un contournement (mock, bypass) a été écarté : la RC1 doit être **autonome**, pas complaisante.
+
+### Ce qui a été fait
+
+**Base — table `UserAccount`** (`UserAccount.sq`, migration `8.sqm`, instantané `databases/9.db`)
+Schéma en version 9. L'email est la clé primaire, sous forme normalisée : l'unicité est portée par
+le schéma et non par une vérification applicative contournable. Le mot de passe n'y figure jamais en
+clair — `passwordSalt` (16 octets tirés au hasard par compte) et `passwordHash` (SHA-256 salé, 4096
+itérations, `domain.auth.PasswordHash`, réutilisant le SHA-256 Kotlin pur déjà écrit pour le
+scellement des factures).
+
+**Domaine** — `UserAccount`, `normalizeEmail`, `PasswordHash`, et deux échecs nommés :
+`InvalidCredentialsException` (adresse inconnue **et** mot de passe faux, un seul message, pour ne
+pas révéler quelles adresses ont un compte) et `EmailAlreadyRegisteredException`. Le contrat
+`AuthRepository` gagne `register` et rend le compte plutôt que `Unit`.
+
+**Données** — `SqlDelightAuthRepository` remplace `KtorAuthRepository`, supprimé avec le
+`authBaseUrl` expect/actual qu'il était seul à consommer. L'inscription lit puis écrit dans une
+**seule transaction** : entre un `selectByEmail` isolé et l'insertion, une seconde inscription
+pourrait s'intercaler et l'échec remonterait comme une violation de contrainte SQLite illisible. La
+dérivation du condensat reste hors transaction — 4096 itérations ne doivent pas tenir la base
+verrouillée.
+
+**Présentation** — `AuthViewModel` n'a plus de dépôt par défaut (aucun n'est fabricable sans la
+base) ; `register` devient asynchrone et porte l'indicateur de chargement, comme `login`.
+`AuthGate` construit le dépôt là où l'application dispose de la `database`. Le message d'accueil
+cesse de mentir : « Compte enregistré sur cet appareil — aucun identifiant n'est envoyé sur
+Internet » / « Account stored on this device… ».
+
+### Pyramide de tests
+
+| Niveau | Fichier | Ce qui est verrouillé |
+|---|---|---|
+| 1 | `PasswordHashTest` (8) | Déterminisme sous un même sel, divergence sous deux sels, refus d'un condensat tronqué, rien du mot de passe dans l'empreinte |
+| 2 | `SqlDelightAuthRepositoryTest` (10) | Cycle inscription → connexion sur **vraie** base, survie à l'instance du dépôt, mot de passe jamais en clair, email insensible à la casse, transaction annulée sur adresse déjà prise |
+| 2 | `AuthViewModelTest` (20) | Le compte transmis au dépôt (SIRET normalisé, entreprise vérifiée), l'inscription non vérifiée n'écrit rien, l'adresse déjà prise remonte à l'écran |
+| 3a | `AuthScreenRobolectricTest` (9) | Inchangé — parcours sémantique de l'inscription par SIRET |
+
+`SchemaMigrationVerificationTest` valide l'instantané `9.db` : chaque base en version N, migrée,
+retombe sur le schéma courant. C'est ce qui rend acceptable la génération manuelle de l'instantané
+(la tâche Gradle `generateCommonMainLedgerHubDatabaseSchema` échoue sur ce poste, cf. US-17/US-25 —
+worker en isolation processus, hors de portée de `org.sqlite.tmpdir`).
+
+### Commandes de validation
+
+| Commande | Résultat |
+|---|---|
+| `./gradlew :composeApp:compileDebugKotlinAndroid` | **BUILD SUCCESSFUL** |
+| `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** — 1076 tests, 0 échec |
+| `./gradlew :composeApp:compileDebugAndroidTestKotlinAndroid` | **BUILD SUCCESSFUL** |
+
+### Limite assumée
+
+`PasswordHash` n'est ni Argon2 ni PBKDF2 : aucune primitive de dérivation de clé n'existe en
+`commonMain` sans dépendance nouvelle. Pour un compte **local**, dont le secret ne franchit jamais
+l'appareil et ne protège aucun service distant, l'écart est acceptable. Il cesserait de l'être le
+jour où ces comptes seraient synchronisés — le remplacement se ferait dans ce seul objet, seul
+endroit qui connaisse la forme de l'empreinte.

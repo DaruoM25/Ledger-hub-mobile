@@ -33,6 +33,10 @@ enum class StringKey {
     NAV_DIRECTORY,
     NAV_RECONCILIATION,
 
+    // ── e-Reporting (US-26 : l'écran existait depuis l'US-08, sans point d'entrée) ───────────
+    NAV_EREPORTING,
+    EREPORTING_TRIGGER_SUBTITLE,
+
     // ── Tableau de bord ─────────────────────────────────────────────────────
     DASHBOARD_SUBTITLE,
     DASHBOARD_LOADING,

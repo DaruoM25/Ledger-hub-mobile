@@ -26,6 +26,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.ledgerhub.data.sirene.MockSireneLookupService
 import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.auth.UserAccount
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.AppTranslations
 import com.ledgerhub.domain.i18n.StringKey
@@ -62,8 +63,13 @@ class AuthScreenInstrumentedTest {
 
     /** Connexion hors sujet : seul le répertoire SIRENE est sollicité par ce niveau. */
     private class UnusedAuthRepository : AuthRepository {
-        override suspend fun login(email: String, password: String): Result<Unit> =
-            Result.success(Unit)
+        override suspend fun login(email: String, password: String): Result<UserAccount> =
+            Result.success(UserAccount(email, companyName = "", siret = ""))
+
+        override suspend fun register(
+            account: UserAccount,
+            password: String,
+        ): Result<UserAccount> = Result.success(account)
     }
 
     @Composable

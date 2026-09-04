@@ -1,0 +1,21 @@
+-- Migration 8 → 9 — US-26, authentification locale autonome (RC1).
+--
+-- Une table nouvelle. `Schema.create` ne s'exécutant que sur une base neuve, ce .sqm l'installe
+-- sur les bases déjà déployées (dette A-01, close en US-05). L'invariant est vérifié par
+-- SchemaMigrationVerificationTest, qui migre chaque instantané databases/N.db et le compare au
+-- schéma courant.
+--
+-- Les comptes existants : il n'y en a pas. L'écran d'authentification n'ouvrait jusqu'ici sur rien
+-- de persistant, donc aucune reprise de données n'est à faire — une base migrée arrive sans compte,
+-- et son porteur passe par l'inscription comme sur une installation neuve.
+--
+-- La définition est recopiée à l'identique de UserAccount.sq : toute divergence, jusqu'à l'ordre
+-- des colonnes, ferait échouer la comparaison de schéma.
+CREATE TABLE UserAccount (
+    email TEXT NOT NULL PRIMARY KEY,
+    passwordSalt TEXT NOT NULL,
+    passwordHash TEXT NOT NULL,
+    companyName TEXT NOT NULL DEFAULT '',
+    siret TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL
+);

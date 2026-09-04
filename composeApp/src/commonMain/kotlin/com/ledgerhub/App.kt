@@ -1,5 +1,9 @@
 package com.ledgerhub
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +43,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -63,10 +68,13 @@ import com.ledgerhub.data.reconciliation.MockBankTransactionRepository
 import com.ledgerhub.data.reconciliation.SqlDelightReconciliationRepository
 import com.ledgerhub.data.directory.SqlDelightDirectoryRepository
 import com.ledgerhub.data.audit.SqlDelightAuditRepository
+import com.ledgerhub.data.auth.SqlDelightAuthRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
 import com.ledgerhub.data.settings.SqlDelightTaxSettingsRepository
 import com.ledgerhub.data.theme.SqlDelightThemePreferenceRepository
+import com.ledgerhub.data.sirene.KtorSireneLookupService
+import com.ledgerhub.data.ereporting.SqlDelightEReportingRepository
 import com.ledgerhub.db.LedgerHubDatabase
 import com.ledgerhub.domain.dashboard.GetDashboardAnalyticsUseCase
 import com.ledgerhub.domain.invoice.Invoice
@@ -116,6 +124,10 @@ import com.ledgerhub.presentation.integrations.IntegrationsHubViewModel
 import com.ledgerhub.presentation.reconciliation.ReconciliationScreen
 import com.ledgerhub.presentation.reconciliation.ReconciliationViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsScreen
+import com.ledgerhub.presentation.ereporting.EReportingScreen
+import com.ledgerhub.presentation.ereporting.EReportingViewModel
+import com.ledgerhub.presentation.auth.AuthScreen
+import com.ledgerhub.presentation.auth.AuthViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubTheme
 import com.ledgerhub.presentation.theme.ThemeIntent
@@ -154,6 +166,16 @@ private sealed interface Overlay {
      */
     data object ExportModal : Overlay
 
+    /**
+     * Déclarations e-Reporting (US-08), rendues joignables en US-26.
+     *
+     * En surimpression et non en septième onglet : la barre de navigation compacte porte déjà six
+     * destinations, dont les libellés se coupent sur un Pixel 5 — un septième les rendrait
+     * illisibles. Le point d'entrée vit donc dans l'onglet Paramètres, où l'on va déjà régler la
+     * conformité.
+     */
+    data object EReporting : Overlay
+
     data class InvoiceDetail(val number: String) : Overlay
 
     /** Émission d'un avoir annulant [invoice] — US-05. */
@@ -174,6 +196,15 @@ fun App(
     database: LedgerHubDatabase,
     /** Remise des documents générés à la plateforme — voir [DocumentExporter]. */
     documentExporter: DocumentExporter = NoOpDocumentExporter,
+    /**
+     * Ouvre directement le shell, sans passer par l'écran d'authentification (US-26).
+     *
+     * Le défaut est `false` — la porte est fermée par défaut, et c'est le sens sûr : un appelant
+     * qui oublierait le paramètre livrerait une application **gardée**, jamais une application
+     * ouverte. Les tests d'interface du shell, eux, passent `true` : ils éprouvent la navigation,
+     * pas la porte, et celle-ci a ses propres tests.
+     */
+    startAuthenticated: Boolean = false,
 ) {
     val invoiceRepository = remember(database) {
         SqlDelightInvoiceRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
@@ -206,6 +237,8 @@ fun App(
     val taxSettingsRepository = remember(database) { SqlDelightTaxSettingsRepository(database) }
     // Préférence de thème (US-25) : persistée comme le reste, dans la base SQLDelight partagée.
     val themePreferenceRepository = remember(database) { SqlDelightThemePreferenceRepository(database) }
+    // e-Reporting (US-08), branché sur la base partagée en US-26.
+    val eReportingRepository = remember(database) { SqlDelightEReportingRepository(database) }
 
     // ViewModels des onglets — créés une fois, conservés entre les changements d'onglet.
     val dashboardViewModel = remember {
@@ -257,6 +290,7 @@ fun App(
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
     val onOpenIntegrations = { overlay = Overlay.Integrations }
     val onOpenExportModal = { overlay = Overlay.ExportModal }
+    val onOpenEReporting = { overlay = Overlay.EReporting }
     val onCreateCreditNote = { invoice: Invoice -> overlay = Overlay.CreditNote(invoice) }
 
     // Export Factur-X (US-06) : le XML est généré à la demande depuis les données déjà en
@@ -340,6 +374,23 @@ fun App(
     val shortcutFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { shortcutFocusRequester.requestFocus() } }
 
+    // ── Porte d'authentification (US-26) ────────────────────────────────────────────────────
+    // `rememberSaveable` : une rotation ne doit pas redemander une connexion. La session ne
+    // survit en revanche pas à la fermeture du processus — aucun jeton n'est persisté, et
+    // prétendre le contraire supposerait un stockage sécurisé qui n'existe pas encore ici.
+    var authenticated by rememberSaveable { mutableStateOf(startAuthenticated) }
+    if (!authenticated) {
+        LedgerHubTheme(mode = themeState.mode) {
+            CompositionLocalProvider(LocalAppLanguage provides language) {
+                AuthGate(database = database, onAuthenticated = { authenticated = true })
+            }
+        }
+        // Sortie anticipée plutôt qu'un `else` enveloppant tout le shell : la composition du shell
+        // n'a alors simplement pas lieu tant que la porte est fermée, et le corps de `App` reste
+        // lisible au lieu d'être décalé d'un niveau sur plusieurs centaines de lignes.
+        return
+    }
+
     LedgerHubTheme(mode = themeState.mode) {
         // Lue SOUS LedgerHubTheme : c'est lui qui résout `SYSTEM`, le shell n'a pas à le refaire.
         val resolvedTheme = LedgerHubTheme.resolved
@@ -409,6 +460,8 @@ fun App(
                                         reconciliationViewModel = reconciliationViewModel,
                                         taxSettingsViewModel = taxSettingsViewModel,
                                         taxSettings = taxSettings,
+                                        eReportingRepository = eReportingRepository,
+                                        onOpenEReporting = onOpenEReporting,
                                     )
                                 }
                             }
@@ -462,6 +515,8 @@ fun App(
                                     reconciliationViewModel = reconciliationViewModel,
                                     taxSettingsViewModel = taxSettingsViewModel,
                                     taxSettings = taxSettings,
+                                    eReportingRepository = eReportingRepository,
+                                    onOpenEReporting = onOpenEReporting,
                                 )
                             }
                         }
@@ -498,6 +553,92 @@ fun App(
         }
     }
 }
+
+/**
+ * Porte d'authentification (US-26) — l'écran de connexion/inscription, relié au shell et à la base.
+ *
+ * Développé et testé en US-21, il n'était référencé nulle part : la recette manuelle l'avait
+ * relevé comme dette de navigation (voir `qa/MASTER_TEST_PLAN_MOBILE.md`). Le voici branché.
+ *
+ * ## Les dépendances injectées ici, et nulle part ailleurs
+ *
+ * [AuthViewModel] retombe par défaut sur [com.ledgerhub.data.sirene.MockSireneLookupService] —
+ * pratique pour un aperçu isolé ou un test, mais ce n'est pas ce que l'application doit servir.
+ * L'implémentation réelle est donc fournie explicitement ici, au seul endroit où l'application
+ * compose l'écran pour de bon. Le dépôt d'authentification, lui, n'a aucune valeur par défaut :
+ * il lui faut la [database], que seule cette fonction reçoit.
+ *
+ * ## Les deux chemins d'entrée
+ *
+ * Connexion **et** inscription ouvrent la porte, mais aucune des deux ne l'ouvre gratuitement
+ * depuis l'US-26 : l'inscription écrit un compte dans la base locale, la connexion le retrouve.
+ * Il n'y a plus de serveur à démarrer pour entrer — l'application est autonome — et plus de porte
+ * qui s'ouvre sur un simple formulaire rempli.
+ */
+@Composable
+private fun AuthGate(database: LedgerHubDatabase, onAuthenticated: () -> Unit) {
+    val sireneLookupService = remember { KtorSireneLookupService() }
+    val authRepository = remember(database) { SqlDelightAuthRepository(database) }
+    val authViewModel = remember(sireneLookupService, authRepository) {
+        AuthViewModel(
+            authRepository = authRepository,
+            sireneLookupService = sireneLookupService,
+        )
+    }
+    DisposableEffect(authViewModel) { onDispose { authViewModel.onCleared() } }
+
+    val uiState by authViewModel.uiState.collectAsState()
+    LaunchedEffect(uiState.loginSucceeded, uiState.registrationSucceeded) {
+        if (uiState.loginSucceeded || uiState.registrationSucceeded) onAuthenticated()
+    }
+
+    AuthScreen(viewModel = authViewModel)
+}
+
+/**
+ * Point d'entrée de l'e-Reporting, posé en tête de l'onglet Paramètres (US-26).
+ *
+ * Même forme que [CreateInvoiceAction] au-dessus du tableau de bord : une action qui précède
+ * l'écran plutôt qu'un septième onglet, la barre de navigation compacte étant déjà pleine.
+ */
+@Composable
+private fun EReportingAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = EREPORTING_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🧾", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_EREPORTING),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(StringKey.EREPORTING_TRIGGER_SUBTITLE),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur e-Reporting — figé par `AppShellRobolectricTest`. */
+internal const val EREPORTING_TRIGGER_TAG = "ereporting_trigger"
 
 /**
  * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
@@ -582,6 +723,8 @@ private fun ShellContent(
     reconciliationViewModel: ReconciliationViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
     taxSettings: TaxSettings,
+    eReportingRepository: SqlDelightEReportingRepository,
+    onOpenEReporting: () -> Unit,
 ) {
     when (overlay) {
         Overlay.Integrations -> {
@@ -590,6 +733,18 @@ private fun ShellContent(
             val integrationsHubViewModel = remember { IntegrationsHubViewModel() }
             OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
                 IntegrationsHubScreen(viewModel = integrationsHubViewModel)
+            }
+        }
+
+        Overlay.EReporting -> {
+            // Le ViewModel charge ses déclarations dès sa création (bloc `init`) : le lier à
+            // l'overlay suffit, et une déclaration transmise sera relue au prochain passage.
+            val eReportingViewModel = remember(eReportingRepository) {
+                EReportingViewModel(repository = eReportingRepository)
+            }
+            DisposableEffect(eReportingViewModel) { onDispose { eReportingViewModel.onCleared() } }
+            OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
+                EReportingScreen(viewModel = eReportingViewModel)
             }
         }
 
@@ -658,6 +813,7 @@ private fun ShellContent(
             directoryViewModel = directoryViewModel,
             reconciliationViewModel = reconciliationViewModel,
             taxSettingsViewModel = taxSettingsViewModel,
+            onOpenEReporting = onOpenEReporting,
         )
     }
 }
@@ -675,6 +831,7 @@ private fun TabsContent(
     directoryViewModel: DirectoryViewModel,
     reconciliationViewModel: ReconciliationViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
+    onOpenEReporting: () -> Unit,
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -694,7 +851,12 @@ private fun TabsContent(
         Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
         Destination.DIRECTORY -> DirectoryScreen(viewModel = directoryViewModel)
         Destination.RECONCILIATION -> ReconciliationScreen(viewModel = reconciliationViewModel)
-        Destination.SETTINGS -> TaxSettingsScreen(viewModel = taxSettingsViewModel)
+        // L'e-Reporting n'a pas d'onglet à lui : son point d'entrée vit ici, au-dessus des
+        // paramètres fiscaux, là où l'on règle déjà la conformité (US-26).
+        Destination.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+            EReportingAction(onOpenEReporting)
+            TaxSettingsScreen(viewModel = taxSettingsViewModel)
+        }
     }
 }
 

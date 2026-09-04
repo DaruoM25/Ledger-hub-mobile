@@ -1,7 +1,7 @@
-# Master Test Plan — LedgerHub Mobile (US-01 à US-25)
+# Master Test Plan — LedgerHub Mobile (US-01 à US-26)
 
 **Application :** LedgerHub Mobile — facturation B2B conforme Factur-X 2026 (Compose Multiplatform, Android validé / iOS on hold)
-**Périmètre :** parité fonctionnelle mobile, 25 User Stories
+**Périmètre :** parité fonctionnelle mobile, 26 User Stories
 **Support de recette :** émulateur ou appareil physique Android (référence QA du projet : Pixel 5, API 35, 393×851 dp)
 **Langue de rédaction des scénarios :** français — l'application démarre en français par défaut
 
@@ -15,28 +15,31 @@
 - Les identifiants entre backticks (ex. `theme_toggle_btn`) sont les tags techniques (`testTag`) posés sur les éléments — utiles si le testeur dispose d'un outil d'inspection d'accessibilité, mais chaque scénario reste lisible sans eux : ils ne remplacent jamais la description visuelle du geste.
 - Sauf mention contraire, les scénarios s'exécutent en **portrait, largeur compacte** (téléphone). Les scénarios de largeur étendue (tablette / paysage ≥ 840 dp) sont regroupés dans le module 9.
 
-## ⚠️ Point d'attention transversal — deux écrans non câblés dans la navigation
+## ✅ Point d'attention transversal — levé en US-26
 
-Les écrans de connexion/inscription (`login_screen`, module 1) et e-Reporting (`ereporting_screen`, module 11) **existent dans le code mais ne sont reliés à aucune navigation de l'application** : `App.kt` ne les référence nulle part, et aucun bouton du shell n'y mène. Un testeur qui lance l'application arrive directement sur le tableau de bord, base de démonstration déjà peuplée, sans jamais croiser ces deux écrans. Les modules 1 et 11 documentent les scénarios attendus **pour mémoire et pour une recette outillée** (harnais de test dédié), mais un testeur manuel sur l'APK standard doit les sauter et les signaler comme **non exécutables en l'état** plutôt que comme échec. Détail complet, avec les autres anomalies connues, dans l'encart **⚠️ Dette Technique & Anomalies Connues** en fin de document.
+Les écrans de connexion/inscription (`login_screen`, module 1) et e-Reporting (`ereporting_screen`, module 11) n'étaient reliés à aucune navigation : un testeur arrivait directement sur le tableau de bord sans jamais les croiser. **C'est corrigé.** L'application s'ouvre désormais sur l'écran d'authentification, et l'e-Reporting est joignable depuis l'onglet Paramètres. Les modules 1 et 11 sont donc **exécutables manuellement sur l'APK standard**.
+
+L'authentification est en outre devenue **autonome** (US-26) : le compte est créé puis vérifié dans la base SQLDelight de l'appareil, sans serveur ni réseau. Les scénarios ci-dessous n'exigent plus aucun backend démarré ; en revanche, **une installation neuve n'a aucun compte** — il faut s'inscrire avant de pouvoir se connecter.
 
 ---
 
-## 1. Inscription & Authentification (US-21)
+## 1. Inscription & Authentification (US-21, US-26)
 
-> ⚠️ Non atteignable depuis le parcours normal de l'application — voir l'avertissement ci-dessus. Les scénarios suivants supposent un harnais de test qui monte `AuthScreen` directement (`login_screen`), ou une future intégration dans `App.kt`.
+> Écran d'accueil de l'application depuis l'US-26 : il s'affiche au lancement, avant le shell. Le compte vit dans la base locale de l'appareil — aucun serveur à démarrer, et **aucun compte préexistant sur une installation neuve** : commencer par [MOB-AUTH-10].
 
 ### [MOB-AUTH-01] Connexion nominale
 **Type :** Passant
-**Préconditions :** Écran de connexion affiché (`login_screen`), onglet « Connexion » actif par défaut.
+**Préconditions :** Un compte a déjà été créé sur l'appareil ([MOB-AUTH-10]). Écran de connexion affiché (`login_screen`), onglet « Connexion » actif par défaut.
 **Actions :**
-1. Taper dans le champ « Adresse email » (`login_email_field`) et saisir une adresse valide (ex. `demo@ledgerhub.app`).
-2. Taper dans le champ « Mot de passe » (`login_password_field`) et saisir un mot de passe quelconque non vide.
+1. Taper dans le champ « Adresse email » (`login_email_field`) et saisir l'adresse du compte créé.
+2. Taper dans le champ « Mot de passe » (`login_password_field`) et saisir son mot de passe.
 3. Taper sur « Se connecter » (`login_submit_button`).
 
 **Résultat attendu :**
 - Après l'étape 1-2 : le bouton « Se connecter » devient actif (il était grisé/inerte tant qu'un des deux champs était vide).
-- Après l'étape 3 : un indicateur de chargement (`login_loading_indicator`) apparaît brièvement pendant l'appel réseau.
-- Résultat final : aucune erreur affichée ; le drapeau interne de succès est levé (à vérifier via le harnais, aucune navigation visible n'existe encore).
+- Après l'étape 3 : un indicateur de chargement (`login_loading_indicator`) apparaît brièvement pendant la vérification.
+- Résultat final : aucune erreur affichée ; **le shell s'ouvre sur le tableau de bord**.
+- La casse de l'adresse est sans effet : `Vous@Cabinet.fr` ouvre le même compte que `vous@cabinet.fr`.
 
 ### [MOB-AUTH-02] Connexion — champs vides
 **Type :** Non passant
@@ -46,16 +49,17 @@ Les écrans de connexion/inscription (`login_screen`, module 1) et e-Reporting (
 
 **Résultat attendu :** le bouton reste inerte (grisé ou sans effet au tap) : `email.isNotBlank() && password.isNotBlank()` doit être faux.
 
-### [MOB-AUTH-03] Connexion — échec réseau / identifiants refusés
+### [MOB-AUTH-03] Connexion — identifiants refusés
 **Type :** Non passant
-**Préconditions :** Écran de connexion, email/mot de passe saisis, backend configuré pour renvoyer une erreur (ou réseau coupé).
+**Préconditions :** Écran de connexion. Deux passes : (a) une adresse **inconnue** de l'appareil ; (b) l'adresse d'un compte existant avec un **mauvais** mot de passe.
 **Actions :**
 1. Saisir email et mot de passe.
 2. Taper « Se connecter ».
 
 **Résultat attendu :**
-- L'indicateur de chargement disparaît.
-- Un message d'erreur apparaît dans `login_error_message` (message du serveur, ou repli « Erreur inconnue lors de la connexion » si le serveur ne fournit aucun détail).
+- L'indicateur de chargement disparaît, le shell **ne s'ouvre pas**.
+- Le message « Identifiants invalides » apparaît dans `login_error_message`.
+- **Le message est le même dans les deux passes** : l'application ne doit jamais révéler quelles adresses portent un compte sur l'appareil.
 - Les champs saisis restent affichés (rien n'est effacé) pour permettre une nouvelle tentative.
 
 ### [MOB-AUTH-04] Bascule vers l'inscription
@@ -114,6 +118,31 @@ Les écrans de connexion/inscription (`login_screen`, module 1) et e-Reporting (
 **Résultat attendu :**
 - Après l'étape 1 : le texte modifié reste tel quel, sans être écrasé par une future réponse SIRENE.
 - Après l'étape 2 : le nom modifié manuellement **n'est pas effacé** (seul un nom encore auto-rempli serait vidé quand le SIRET redescend sous 14 chiffres).
+
+### [MOB-AUTH-10] Inscription — le compte est réellement enregistré (US-26)
+**Type :** Passant
+**Préconditions :** Installation neuve (ou données de l'application effacées), écran d'authentification affiché.
+**Actions :**
+1. Onglet « Inscription » : saisir le SIRET de démonstration, attendre le badge vert, puis saisir une adresse email et un mot de passe.
+2. Taper « Créer mon espace ».
+3. Une fois le tableau de bord ouvert, **fermer entièrement l'application** (la retirer des applications récentes) et la relancer.
+4. Onglet « Connexion » : saisir la **même** adresse et le **même** mot de passe, taper « Se connecter ».
+
+**Résultat attendu :**
+- Après l'étape 2 : le shell s'ouvre sur le tableau de bord.
+- Après l'étape 3 : l'application redemande une authentification (la session n'est pas conservée).
+- Après l'étape 4 : la connexion aboutit **sans réseau ni serveur** — le compte a survécu à la fermeture du processus. Mode avion activé, le résultat doit être identique.
+
+### [MOB-AUTH-11] Inscription — adresse déjà utilisée (US-26)
+**Type :** Non passant
+**Préconditions :** [MOB-AUTH-10] déjà exécuté, donc un compte existe sur l'appareil.
+**Actions :**
+1. Onglet « Inscription » : refaire une inscription complète avec la **même adresse email** et un mot de passe différent.
+2. Taper « Créer mon espace ».
+
+**Résultat attendu :**
+- Le shell ne s'ouvre pas ; le message « Un compte existe déjà pour cette adresse — connectez-vous. » apparaît dans `login_error_message`.
+- Le compte d'origine est intact : la connexion avec le **premier** mot de passe fonctionne toujours, celle avec le second échoue.
 
 ---
 
@@ -1237,7 +1266,7 @@ Les écrans de connexion/inscription (`login_screen`, module 1) et e-Reporting (
 
 ## 11. e-Reporting (US-08)
 
-> ⚠️ **Non atteignable depuis le parcours normal de l'application** — comme l'écran de connexion (module 1), `EReportingScreen` et `EReportingViewModel` ne sont référencés nulle part dans `App.kt` ni dans aucun autre écran de production : aucun onglet de la barre basse, aucune sidebar, aucune surimpression n'y mène. Un testeur manuel sur l'APK standard ne peut pas l'atteindre. Les scénarios ci-dessous supposent un harnais de test montant `EReportingScreen` directement, ou une intégration future dans la navigation. Voir l'encart Dette Technique ci-après.
+> Joignable depuis l'US-26 : onglet **Paramètres**, action « e-Reporting » posée en tête d'écran. Elle s'ouvre en surimpression et non en septième onglet — la barre de navigation compacte en porte déjà six, dont les libellés se coupent sur un Pixel 5.
 
 ### [MOB-ERP-01] Bandeau de conformité permanent
 **Type :** Passant
@@ -1312,15 +1341,15 @@ Les écrans de connexion/inscription (`login_screen`, module 1) et e-Reporting (
 
 Cet encart consolide les écarts constatés en explorant le code source pendant la rédaction de ce plan de test — à ne **pas** rouvrir comme des anomalies « nouvelles » à chaque campagne de recette, mais à garder sous les yeux d'un testeur pour qu'il n'y perde pas de temps en diagnostic, et sous ceux d'un product owner pour arbitrage.
 
-### 1. Deux écrans complets, entièrement développés et testés unitairement, sont injoignables depuis l'application
+### 1. ✅ Clos en US-26 — les deux écrans injoignables sont câblés, et l'authentification est réelle
 | Écran | Statut du code | Statut de la navigation |
 |---|---|---|
-| Connexion / Inscription (`login_screen`, US-21) | Implémenté, testé (N1/N2/N3a/N3b) | **Aucune référence dans `App.kt`** — aucun bouton, aucun onglet, aucune surimpression n'y mène |
-| e-Reporting (`ereporting_screen`, US-08) | Implémenté, testé | **Aucune référence dans `App.kt`** — même constat |
+| Connexion / Inscription (`login_screen`, US-21) | Implémenté, testé (N1/N2/N3a/N3b) | ✅ **Écran d'accueil** — l'application s'ouvre dessus, avant le shell |
+| e-Reporting (`ereporting_screen`, US-08) | Implémenté, testé | ✅ **Onglet Paramètres** — action en tête d'écran, ouverte en surimpression |
 
-Vérifié par recherche exhaustive du nom de la classe/fonction dans `commonMain`, `androidMain` et `iosMain` : en dehors de leur propre paquet, aucune occurrence en dehors de mentions en commentaire KDoc. Ce n'est donc pas un oubli d'un seul bouton mais une **absence totale de câblage** — ces deux US sont fonctionnellement complètes et invisibles pour un utilisateur final comme pour un testeur manuel sur l'APK standard.
+Le constat d'origine — les deux écrans complets, testés, et référencés nulle part dans `App.kt` — a été relevé pendant la rédaction de ce plan puis corrigé en US-26. Les modules 1 et 11 sont désormais exécutables en parcourant l'application normalement, sans harnais.
 
-**Impact recette :** les modules 1 (Auth) et 11 (e-Reporting) de ce plan ne sont exécutables qu'avec un harnais de test dédié (montage direct du composable), jamais en parcourant l'application normalement. Un testeur qui ne trouve pas ces écrans en explorant l'app **ne doit pas conclure à une régression** — c'est l'état actuel, documenté ici.
+Une seconde moitié de cette dette a été close dans la foulée : l'écran de connexion s'adressait à un backend HTTP local (`http://10.0.2.2:3000`) qui n'existe pas hors poste de développement, et l'inscription ne faisait que lever un drapeau en mémoire. L'authentification est désormais **autonome** — le compte est écrit dans la base SQLDelight de l'appareil, mot de passe salé et haché (`domain.auth.PasswordHash`), et la connexion l'y retrouve. L'application n'a donc plus aucune dépendance réseau pour démarrer.
 
 ### 2. Quatre écrans ignorent le système d'internationalisation (`tr()` / `StringKey`)
 | Écran | Bascule FR/EN | Constat |
@@ -1355,7 +1384,7 @@ La présence du Rapprochement bancaire dans cette liste comme cas conforme élim
 | US-05 | Cycle d'annulation comptable (avoirs) | 4.6 |
 | US-06 | Export Factur-X (CII/BASIC) | 4.1 (bascule Factur-X), 6 |
 | US-07 | Cycle de vie DGFIP & piste d'audit fiable | 4.5, 4.7 |
-| US-08 | e-Reporting mobile | 11 (⚠️ écran non câblé dans la navigation — voir Dette Technique) |
+| US-08 | e-Reporting mobile | 11 (câblé dans l'onglet Paramètres depuis l'US-26) |
 | US-09 | Annuaire DGFIP (PPF/PDP) | 3.2 |
 | US-10 | Avoir (formulaire dédié) | 4.6 |
 | US-11 | Sélecteur de client (ClientPicker) | 3.3 |
@@ -1373,5 +1402,6 @@ La présence du Rapprochement bancaire dans cette liste comme cas conforme élim
 | US-23 | Mode Canvas A4 | 4.2 |
 | US-24 | Panneau d'audit de conformité | 5 |
 | US-25 | Bascule Thème Sombre/Clair | 9.3 |
+| US-26 | Release candidate : navigation auth/e-Reporting, SIRENE réelle, compte local | 1 (MOB-AUTH-01/03/10/11), 11 |
 
 **Note sur le périmètre :** ce plan couvre désormais 11 modules — les 9 initialement demandés, complétés par Rapprochement bancaire (US-18, module 10) et e-Reporting (US-08, module 11). Seule l'US-14 (aperçu PDF de facture) reste hors périmètre, n'ayant été demandée dans aucune des deux passes de rédaction.

@@ -30,6 +30,8 @@ object AppTranslations {
         StringKey.NAV_SETTINGS to "Paramètres",
         StringKey.NAV_DIRECTORY to "Annuaire DGFIP",
         StringKey.NAV_RECONCILIATION to "Rapprochement",
+        StringKey.NAV_EREPORTING to "e-Reporting DGFIP",
+        StringKey.EREPORTING_TRIGGER_SUBTITLE to "Déclarations B2C et encaissements à transmettre au PPF",
 
         StringKey.DASHBOARD_SUBTITLE to "Pilotez votre activité et votre conformité 2026",
         StringKey.DASHBOARD_LOADING to "Chargement du tableau de bord…",
@@ -282,7 +284,7 @@ object AppTranslations {
         StringKey.AUTH_LOGIN_SUBMIT to "Se connecter",
         StringKey.AUTH_NO_ACCOUNT_PROMPT to "Pas encore de compte ? ",
         StringKey.AUTH_REGISTER_LINK to "S'inscrire",
-        StringKey.AUTH_DISCLAIMER to "Authentification fictive — aucun identifiant réel n'est stocké",
+        StringKey.AUTH_DISCLAIMER to "Compte enregistré sur cet appareil — aucun identifiant n'est envoyé sur Internet",
 
         StringKey.AUTH_TAB_LOGIN to "Connexion",
         StringKey.AUTH_TAB_REGISTER to "Inscription",
@@ -387,6 +389,8 @@ object AppTranslations {
         StringKey.NAV_SETTINGS to "Settings",
         StringKey.NAV_DIRECTORY to "DGFIP Directory",
         StringKey.NAV_RECONCILIATION to "Reconciliation",
+        StringKey.NAV_EREPORTING to "DGFIP e-Reporting",
+        StringKey.EREPORTING_TRIGGER_SUBTITLE to "B2C statements and collections to submit to the PPF",
 
         StringKey.DASHBOARD_SUBTITLE to "Track your activity and 2026 compliance",
         StringKey.DASHBOARD_LOADING to "Loading dashboard…",
@@ -637,7 +641,7 @@ object AppTranslations {
         StringKey.AUTH_LOGIN_SUBMIT to "Sign in",
         StringKey.AUTH_NO_ACCOUNT_PROMPT to "No account yet? ",
         StringKey.AUTH_REGISTER_LINK to "Sign up",
-        StringKey.AUTH_DISCLAIMER to "Mock authentication — no real credentials are stored",
+        StringKey.AUTH_DISCLAIMER to "Account stored on this device — no credentials are sent over the internet",
 
         StringKey.AUTH_TAB_LOGIN to "Sign in",
         StringKey.AUTH_TAB_REGISTER to "Sign up",

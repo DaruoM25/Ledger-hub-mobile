@@ -14,9 +14,11 @@ import com.ledgerhub.db.LedgerHubDatabase
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.AppTranslations
 import com.ledgerhub.domain.i18n.StringKey
+import com.ledgerhub.presentation.auth.AuthTags
 import com.ledgerhub.presentation.components.LangToggleTags
 import com.ledgerhub.presentation.components.ThemeToggleTags
 import com.ledgerhub.presentation.dashboard.DashboardTags
+import com.ledgerhub.presentation.ereporting.EReportingTags
 import com.ledgerhub.presentation.export.ExportModalTags
 import com.ledgerhub.presentation.directory.DirectoryTags
 import com.ledgerhub.presentation.integrations.IntegrationsHubTags
@@ -44,7 +46,7 @@ class AppShellRobolectricTest {
 
     @Test
     fun app_startsOnOverview_andRendersDashboard() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -54,7 +56,7 @@ class AppShellRobolectricTest {
 
     @Test
     fun bottomBar_navigatesToClientsPlaceholder() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -67,7 +69,7 @@ class AppShellRobolectricTest {
 
     @Test
     fun bottomBar_navigatesToDgfipDirectory() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -83,7 +85,7 @@ class AppShellRobolectricTest {
 
     @Test
     fun createInvoiceButton_opensInvoiceForm() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -101,7 +103,7 @@ class AppShellRobolectricTest {
      */
     @Test
     fun headerTrigger_opensTheIntegrationsHub() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -125,7 +127,7 @@ class AppShellRobolectricTest {
      */
     @Test
     fun headerTrigger_opensTheExportModal_andKeepsTheLanguageSelectorVisible() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -157,7 +159,7 @@ class AppShellRobolectricTest {
      */
     @Test
     fun header_carriesTheThemeToggleWithoutPushingOutTheLanguageSelector() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -184,7 +186,7 @@ class AppShellRobolectricTest {
      */
     @Test
     fun tappingTheHeaderToggle_switchesTheShellTheme() = runComposeUiTest {
-        setContent { App(database = newDatabase()) }
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
@@ -209,5 +211,72 @@ class AppShellRobolectricTest {
         onNodeWithTag(DashboardTags.SCREEN).assertIsDisplayed()
         onNodeWithTag(ThemeToggleTags.ROOT).assertIsDisplayed()
         onNodeWithTag(LangToggleTags.ROOT).assertIsDisplayed()
+    }
+
+    // ── Porte d'authentification (US-26) ─────────────────────────────────────
+
+    /**
+     * **La dette de navigation relevée par la recette, refermée.** L'écran de connexion existait
+     * depuis l'US-21, entièrement testé, et n'était référencé nulle part : lancer l'application
+     * ouvrait le tableau de bord sans jamais le montrer. Il garde désormais l'entrée.
+     *
+     * Ce test appelle `App` **sans** `startAuthenticated` — donc exactement comme `MainActivity`.
+     */
+    @Test
+    fun app_withoutAuthentication_showsTheLoginScreenInsteadOfTheShell() = runComposeUiTest {
+        setContent { App(database = newDatabase()) }
+        waitForIdle()
+
+        onNodeWithTag(AuthTags.SCREEN).assertIsDisplayed()
+        onNodeWithTag(DashboardTags.SCREEN).assertDoesNotExist()
+    }
+
+    /** Le contrepoint : la porte franchie, c'est bien le shell qui est rendu. */
+    @Test
+    fun app_whenAlreadyAuthenticated_skipsTheLoginScreen() = runComposeUiTest {
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(AuthTags.SCREEN).assertDoesNotExist()
+    }
+
+    // ── e-Reporting (US-26) ──────────────────────────────────────────────────
+
+    /**
+     * Second écran orphelin refermé. Le point d'entrée vit dans l'onglet Paramètres et non dans
+     * un septième onglet : la barre de navigation compacte porte déjà six destinations dont les
+     * libellés se coupent sur un Pixel 5.
+     */
+    @Test
+    fun settingsTab_carriesTheEReportingEntryPoint() = runComposeUiTest {
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithText("Paramètres").performClick()
+
+        onNodeWithTag(EREPORTING_TRIGGER_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun theEReportingEntryPoint_opensTheEReportingScreen() = runComposeUiTest {
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithText("Paramètres").performClick()
+        onNodeWithTag(EREPORTING_TRIGGER_TAG).performClick()
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(EReportingTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(EReportingTags.SCREEN).assertIsDisplayed()
+        onNodeWithTag(EReportingTags.BADGE).assertIsDisplayed()
     }
 }
