@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.data.sirene.MockSireneLookupService
 import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.auth.UserAccount
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.AppTranslations
 import com.ledgerhub.domain.i18n.StringKey
@@ -62,8 +63,13 @@ class AuthScreenRobolectricTest {
 
     /** Connexion hors sujet ici : le dépôt d'authentification n'est jamais sollicité. */
     private class UnusedAuthRepository : AuthRepository {
-        override suspend fun login(email: String, password: String): Result<Unit> =
-            Result.success(Unit)
+        override suspend fun login(email: String, password: String): Result<UserAccount> =
+            Result.success(UserAccount(email, companyName = "", siret = ""))
+
+        override suspend fun register(
+            account: UserAccount,
+            password: String,
+        ): Result<UserAccount> = Result.success(account)
     }
 
     /**

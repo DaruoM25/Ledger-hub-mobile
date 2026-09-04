@@ -9,8 +9,8 @@ actual fun createPlatformHttpClient(): HttpClient = HttpClient(Darwin) {
     install(ContentNegotiation) { json() }
 }
 
-/** Le simulateur iOS partage la pile réseau de la machine hôte — pas d'alias spécial requis. */
-actual val authBaseUrl: String = "http://127.0.0.1:3000"
-
-/** Même backend local que l'auth (routes `/api/invoices` du même serveur de dev) — voir [authBaseUrl]. */
+/**
+ * Backend local de dev (routes `/api/invoices`). Le simulateur iOS partage la pile réseau de la
+ * machine hôte — pas d'alias spécial requis.
+ */
 actual val ledgerApiBaseUrl: String = "http://127.0.0.1:3000"

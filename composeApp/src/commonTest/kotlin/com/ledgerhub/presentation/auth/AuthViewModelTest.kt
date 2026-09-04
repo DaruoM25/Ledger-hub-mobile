@@ -2,6 +2,9 @@ package com.ledgerhub.presentation.auth
 
 import com.ledgerhub.data.sirene.MockSireneLookupService
 import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.auth.EmailAlreadyRegisteredException
+import com.ledgerhub.domain.auth.InvalidCredentialsException
+import com.ledgerhub.domain.auth.UserAccount
 import com.ledgerhub.domain.sirene.SireneCompany
 import com.ledgerhub.domain.sirene.SireneLookupResult
 import com.ledgerhub.domain.sirene.SireneLookupService
@@ -16,26 +19,47 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Faux repository — pas d'accès réseau dans les tests, contrôle direct du succès/échec.
- * [delayMillis] simule un appel réseau non instantané — nécessaire pour observer l'état
- * `Loading` intermédiaire sous [StandardTestDispatcher] (voir MockCreditNoteRepository pour le
- * même principe) : sans délai, la coroutine se termine entièrement dans le même `runCurrent()`.
+ * Faux dépôt de comptes — pas de base dans les tests de ce niveau, contrôle direct du succès et de
+ * l'échec. Le comportement réel (hachage, unicité de l'adresse) est éprouvé un cran plus bas, par
+ * `SqlDelightAuthRepositoryTest` sur une vraie base.
+ *
+ * [delayMillis] simule une opération non instantanée — nécessaire pour observer l'état `Loading`
+ * intermédiaire sous [StandardTestDispatcher] (voir MockCreditNoteRepository pour le même
+ * principe) : sans délai, la coroutine se termine entièrement dans le même `runCurrent()`.
  */
 private class FakeAuthRepository(
-    private val result: Result<Unit>,
+    private val loginFailure: Throwable? = null,
+    private val registerFailure: Throwable? = null,
     private val delayMillis: Long = 0L,
 ) : AuthRepository {
     var lastEmail: String? = null
+        private set
     var lastPassword: String? = null
+        private set
 
-    override suspend fun login(email: String, password: String): Result<Unit> {
+    /** Le compte tel que le ViewModel l'a composé — c'est ce que l'inscription doit transmettre. */
+    var registeredAccount: UserAccount? = null
+        private set
+
+    override suspend fun login(email: String, password: String): Result<UserAccount> {
         delay(delayMillis)
         lastEmail = email
         lastPassword = password
-        return result
+        return loginFailure?.let { Result.failure(it) }
+            ?: Result.success(UserAccount(email, companyName = "", siret = ""))
+    }
+
+    override suspend fun register(account: UserAccount, password: String): Result<UserAccount> {
+        delay(delayMillis)
+        lastEmail = account.email
+        lastPassword = password
+        registerFailure?.let { return Result.failure(it) }
+        registeredAccount = account
+        return Result.success(account)
     }
 }
 
@@ -76,7 +100,7 @@ class AuthViewModelTest {
         sirene: SireneLookupService,
         dispatcher: TestDispatcher,
     ) = AuthViewModel(
-        authRepository = FakeAuthRepository(Result.success(Unit)),
+        authRepository = FakeAuthRepository(),
         sireneLookupService = sirene,
         dispatcher = dispatcher,
     )
@@ -85,21 +109,21 @@ class AuthViewModelTest {
 
     @Test
     fun initialState_hasSubmitDisabled() {
-        val viewModel = AuthViewModel(authRepository = FakeAuthRepository(Result.success(Unit)))
+        val viewModel = AuthViewModel(authRepository = FakeAuthRepository())
         assertFalse(viewModel.uiState.value.isSubmitEnabled)
         assertFalse(viewModel.uiState.value.isRegistering)
     }
 
     @Test
     fun blankPassword_keepsSubmitDisabled() {
-        val viewModel = AuthViewModel(authRepository = FakeAuthRepository(Result.success(Unit)))
+        val viewModel = AuthViewModel(authRepository = FakeAuthRepository())
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         assertFalse(viewModel.uiState.value.isSubmitEnabled)
     }
 
     @Test
     fun filledEmailAndPassword_enablesSubmit() {
-        val viewModel = AuthViewModel(authRepository = FakeAuthRepository(Result.success(Unit)))
+        val viewModel = AuthViewModel(authRepository = FakeAuthRepository())
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
         assertTrue(viewModel.uiState.value.isSubmitEnabled)
@@ -108,7 +132,7 @@ class AuthViewModelTest {
     @Test
     fun submit_withValidCredentials_transitionsThroughLoadingToSuccess() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val repository = FakeAuthRepository(Result.success(Unit), delayMillis = 500L)
+        val repository = FakeAuthRepository(delayMillis = 500L)
         val viewModel = AuthViewModel(authRepository = repository, dispatcher = dispatcher)
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
@@ -128,7 +152,7 @@ class AuthViewModelTest {
     @Test
     fun submit_whenRepositoryFails_surfacesErrorMessage() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val repository = FakeAuthRepository(Result.failure(IllegalStateException("Identifiants invalides")))
+        val repository = FakeAuthRepository(loginFailure = InvalidCredentialsException())
         val viewModel = AuthViewModel(authRepository = repository, dispatcher = dispatcher)
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
@@ -144,7 +168,7 @@ class AuthViewModelTest {
 
     @Test
     fun submit_withBlankFields_isNoOp() = runTest {
-        val repository = FakeAuthRepository(Result.success(Unit))
+        val repository = FakeAuthRepository()
         val viewModel = AuthViewModel(authRepository = repository)
 
         viewModel.processIntent(AuthIntent.Submit)
@@ -317,20 +341,72 @@ class AuthViewModelTest {
     @Test
     fun submittingAnUnverifiedRegistration_isNoOp() = runTest {
         val sirene = FakeSireneLookupService()
-        val viewModel = viewModel(sirene, StandardTestDispatcher(testScheduler))
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(
+            authRepository = repository,
+            sireneLookupService = sirene,
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
 
         viewModel.processIntent(AuthIntent.Submit)
+        advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.registrationSucceeded)
+        // Rien n'a été écrit : une entreprise non vérifiée ne doit pas ouvrir de compte.
+        assertNull(repository.registeredAccount)
     }
 
+    /**
+     * L'inscription **écrit** le compte (US-26) : elle transmet au dépôt l'adresse, le mot de passe
+     * et l'entreprise confirmée par le répertoire. Le SIRET part normalisé — la frappe pouvait
+     * porter des espaces, la base n'en veut pas.
+     */
     @Test
-    fun submittingAVerifiedRegistration_succeeds() = runTest {
+    fun submittingAVerifiedRegistration_persistsTheAccount() = runTest {
         val sirene = FakeSireneLookupService()
-        val viewModel = viewModel(sirene, StandardTestDispatcher(testScheduler))
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(
+            authRepository = repository,
+            sireneLookupService = sirene,
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
+        viewModel.processIntent(AuthIntent.ModeChanged(true))
+        viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
+        viewModel.processIntent(AuthIntent.SiretChanged("901 234 567 00013"))
+        advanceUntilIdle()
+
+        viewModel.processIntent(AuthIntent.Submit)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.registrationSucceeded)
+        assertFalse(state.isLoading)
+        assertEquals(expectedCompany, state.companyName)
+        assertEquals(
+            UserAccount(
+                email = "vous@cabinet.fr",
+                companyName = expectedCompany,
+                siret = validSiret,
+            ),
+            repository.registeredAccount,
+        )
+        assertEquals("motdepasse", repository.lastPassword)
+    }
+
+    /** Adresse déjà ouverte : le message du dépôt part à l'écran, la porte reste fermée. */
+    @Test
+    fun registeringAnAlreadyOpenEmail_surfacesTheError() = runTest {
+        val sirene = FakeSireneLookupService()
+        val failure = EmailAlreadyRegisteredException()
+        val viewModel = AuthViewModel(
+            authRepository = FakeAuthRepository(registerFailure = failure),
+            sireneLookupService = sirene,
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
@@ -338,9 +414,12 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         viewModel.processIntent(AuthIntent.Submit)
+        advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.registrationSucceeded)
-        assertEquals(expectedCompany, viewModel.uiState.value.companyName)
+        val state = viewModel.uiState.value
+        assertFalse(state.registrationSucceeded)
+        assertFalse(state.isLoading)
+        assertEquals(failure.message, state.errorMessage)
     }
 
     @Test

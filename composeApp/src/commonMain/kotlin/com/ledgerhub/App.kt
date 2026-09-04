@@ -68,6 +68,7 @@ import com.ledgerhub.data.reconciliation.MockBankTransactionRepository
 import com.ledgerhub.data.reconciliation.SqlDelightReconciliationRepository
 import com.ledgerhub.data.directory.SqlDelightDirectoryRepository
 import com.ledgerhub.data.audit.SqlDelightAuditRepository
+import com.ledgerhub.data.auth.SqlDelightAuthRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
 import com.ledgerhub.data.settings.SqlDelightTaxSettingsRepository
@@ -381,7 +382,7 @@ fun App(
     if (!authenticated) {
         LedgerHubTheme(mode = themeState.mode) {
             CompositionLocalProvider(LocalAppLanguage provides language) {
-                AuthGate(onAuthenticated = { authenticated = true })
+                AuthGate(database = database, onAuthenticated = { authenticated = true })
             }
         }
         // Sortie anticipée plutôt qu'un `else` enveloppant tout le shell : la composition du shell
@@ -554,30 +555,35 @@ fun App(
 }
 
 /**
- * Porte d'authentification (US-26) — l'écran de connexion/inscription, enfin relié au shell.
+ * Porte d'authentification (US-26) — l'écran de connexion/inscription, relié au shell et à la base.
  *
  * Développé et testé en US-21, il n'était référencé nulle part : la recette manuelle l'avait
  * relevé comme dette de navigation (voir `qa/MASTER_TEST_PLAN_MOBILE.md`). Le voici branché.
  *
- * ## Le service SIRENE injecté ici, et nulle part ailleurs
+ * ## Les dépendances injectées ici, et nulle part ailleurs
  *
  * [AuthViewModel] retombe par défaut sur [com.ledgerhub.data.sirene.MockSireneLookupService] —
  * pratique pour un aperçu isolé ou un test, mais ce n'est pas ce que l'application doit servir.
  * L'implémentation réelle est donc fournie explicitement ici, au seul endroit où l'application
- * compose l'écran pour de bon.
+ * compose l'écran pour de bon. Le dépôt d'authentification, lui, n'a aucune valeur par défaut :
+ * il lui faut la [database], que seule cette fonction reçoit.
  *
  * ## Les deux chemins d'entrée
  *
- * Connexion **et** inscription ouvrent la porte. Ce n'est pas une facilité : l'inscription est le
- * seul chemin qui aboutisse sans backend d'authentification (voir `AuthViewModel.register`), et
- * l'écran annonce lui-même que l'authentification est fictive. Exiger la connexion seule
- * rendrait l'application inaccessible dès que le serveur de développement n'est pas démarré.
+ * Connexion **et** inscription ouvrent la porte, mais aucune des deux ne l'ouvre gratuitement
+ * depuis l'US-26 : l'inscription écrit un compte dans la base locale, la connexion le retrouve.
+ * Il n'y a plus de serveur à démarrer pour entrer — l'application est autonome — et plus de porte
+ * qui s'ouvre sur un simple formulaire rempli.
  */
 @Composable
-private fun AuthGate(onAuthenticated: () -> Unit) {
+private fun AuthGate(database: LedgerHubDatabase, onAuthenticated: () -> Unit) {
     val sireneLookupService = remember { KtorSireneLookupService() }
-    val authViewModel = remember(sireneLookupService) {
-        AuthViewModel(sireneLookupService = sireneLookupService)
+    val authRepository = remember(database) { SqlDelightAuthRepository(database) }
+    val authViewModel = remember(sireneLookupService, authRepository) {
+        AuthViewModel(
+            authRepository = authRepository,
+            sireneLookupService = sireneLookupService,
+        )
     }
     DisposableEffect(authViewModel) { onDispose { authViewModel.onCleared() } }
 

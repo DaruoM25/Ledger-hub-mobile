@@ -284,7 +284,7 @@ object AppTranslations {
         StringKey.AUTH_LOGIN_SUBMIT to "Se connecter",
         StringKey.AUTH_NO_ACCOUNT_PROMPT to "Pas encore de compte ? ",
         StringKey.AUTH_REGISTER_LINK to "S'inscrire",
-        StringKey.AUTH_DISCLAIMER to "Authentification fictive — aucun identifiant réel n'est stocké",
+        StringKey.AUTH_DISCLAIMER to "Compte enregistré sur cet appareil — aucun identifiant n'est envoyé sur Internet",
 
         StringKey.AUTH_TAB_LOGIN to "Connexion",
         StringKey.AUTH_TAB_REGISTER to "Inscription",
@@ -641,7 +641,7 @@ object AppTranslations {
         StringKey.AUTH_LOGIN_SUBMIT to "Sign in",
         StringKey.AUTH_NO_ACCOUNT_PROMPT to "No account yet? ",
         StringKey.AUTH_REGISTER_LINK to "Sign up",
-        StringKey.AUTH_DISCLAIMER to "Mock authentication — no real credentials are stored",
+        StringKey.AUTH_DISCLAIMER to "Account stored on this device — no credentials are sent over the internet",
 
         StringKey.AUTH_TAB_LOGIN to "Sign in",
         StringKey.AUTH_TAB_REGISTER to "Sign up",

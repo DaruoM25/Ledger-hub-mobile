@@ -15,7 +15,8 @@ import io.ktor.http.isSuccess
 /**
  * Implémentation Ktor de [LedgerRepository] — cible le backend local de dev (voir
  * [ledgerApiBaseUrl]), jamais un service cloud (pivot 100% local, voir App.kt). Structure
- * symétrique à [com.ledgerhub.data.auth.KtorAuthRepository].
+ * symétrique aux dépôts SQLDelight : implémente le contrat côté domaine et garde le détail réseau
+ * (Ktor, JSON) entièrement privé à cette classe.
  */
 class LedgerRepositoryImpl(
     private val httpClient: HttpClient = createPlatformHttpClient(),

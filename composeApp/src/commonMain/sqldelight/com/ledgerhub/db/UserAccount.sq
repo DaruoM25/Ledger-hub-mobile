@@ -1,0 +1,37 @@
+-- Comptes utilisateurs de l'espace local (US-26, RC1) — l'application est autonome : il n'existe
+-- aucun serveur d'authentification, et le compte créé à l'inscription vit donc dans la même base
+-- SQLDelight que les factures, sur l'appareil.
+--
+-- Le mot de passe n'est **jamais** stocké en clair. `passwordSalt` est tiré au hasard à la création
+-- du compte et `passwordHash` porte le condensat SHA-256 itéré de (sel + mot de passe) — voir
+-- domain.auth.PasswordHash. Deux comptes ouverts avec le même mot de passe portent donc deux
+-- empreintes différentes, et l'empreinte lue en base ne permet pas de remonter à la saisie.
+--
+-- L'email est la clé primaire, sous sa forme normalisée (minuscules, sans espaces de bordure — voir
+-- domain.auth.normalizeEmail) : « Vous@Cabinet.fr » et « vous@cabinet.fr » sont un seul compte, et
+-- l'unicité est portée par le schéma plutôt que par une vérification applicative contournable.
+--
+-- siret et companyName sont ceux que le répertoire SIRENE a confirmés à l'inscription — l'espace
+-- créé a donc une identité d'entreprise, ce qui est tout l'objet de l'US-21.
+-- createdAt est un horodatage ISO 8601 UTC produit par une horloge réelle (voir domain.time.Clock).
+CREATE TABLE UserAccount (
+    email TEXT NOT NULL PRIMARY KEY,
+    passwordSalt TEXT NOT NULL,
+    passwordHash TEXT NOT NULL,
+    companyName TEXT NOT NULL DEFAULT '',
+    siret TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL
+);
+
+selectByEmail:
+SELECT * FROM UserAccount WHERE email = ?;
+
+countAccounts:
+SELECT COUNT(*) FROM UserAccount;
+
+insertAccount:
+INSERT INTO UserAccount(email, passwordSalt, passwordHash, companyName, siret, createdAt)
+VALUES (?, ?, ?, ?, ?, ?);
+
+deleteAccount:
+DELETE FROM UserAccount WHERE email = ?;

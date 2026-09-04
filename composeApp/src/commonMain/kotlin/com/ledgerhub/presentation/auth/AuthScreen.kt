@@ -31,7 +31,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -94,8 +93,13 @@ private const val SEARCH_GLYPH = "🔍"
  */
 private val LoaderSize = 18.dp
 
+/**
+ * [viewModel] est exigé — plus de valeur par défaut depuis l'US-26 : le dépôt d'authentification
+ * est adossé à la base SQLDelight de l'appareil, qu'un composable ne saurait fabriquer seul. Il est
+ * construit là où l'application dispose de la base (voir `AuthGate` dans `App.kt`).
+ */
 @Composable
-fun AuthScreen(viewModel: AuthViewModel = remember { AuthViewModel() }) {
+fun AuthScreen(viewModel: AuthViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     AuthContent(uiState = uiState, onIntent = viewModel::processIntent)
 }

@@ -9,13 +9,13 @@ import io.ktor.client.HttpClient
  * - Émulateur Android : `10.0.2.2` est l'alias historique de la boucle locale de l'hôte.
  * - Simulateur iOS : partage la pile réseau de son hôte, `127.0.0.1` suffit directement.
  *
- * Un seul client HTTP est partagé par tous les repositories réseau (auth, Ledger API, …) — voir
+ * Un seul client HTTP est partagé par tous les repositories réseau (Ledger API, SIRENE, …) — voir
  * [com.ledgerhub.db.DatabaseDriverFactory] pour le même principe côté SQLDelight.
+ *
+ * L'authentification n'y figure plus : depuis l'US-26 elle est entièrement locale et ne passe par
+ * aucune URL (voir [com.ledgerhub.data.auth.SqlDelightAuthRepository]).
  */
 expect fun createPlatformHttpClient(): HttpClient
-
-/** Backend local d'authentification — voir [com.ledgerhub.data.auth.KtorAuthRepository]. */
-expect val authBaseUrl: String
 
 /** Backend local de l'API métier (factures) — voir [com.ledgerhub.data.repository.LedgerRepositoryImpl]. */
 expect val ledgerApiBaseUrl: String

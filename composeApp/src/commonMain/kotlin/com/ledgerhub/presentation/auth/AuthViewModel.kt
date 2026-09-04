@@ -1,8 +1,8 @@
 package com.ledgerhub.presentation.auth
 
-import com.ledgerhub.data.auth.KtorAuthRepository
 import com.ledgerhub.data.sirene.MockSireneLookupService
 import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.auth.UserAccount
 import com.ledgerhub.domain.sirene.SireneLookupResult
 import com.ledgerhub.domain.sirene.SireneLookupService
 import com.ledgerhub.domain.sirene.SiretInput
@@ -20,8 +20,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel de l'écran d'authentification — connexion au backend local via [AuthRepository], et
- * inscription intelligente par SIRET via [SireneLookupService] (US-21).
+ * ViewModel de l'écran d'authentification — connexion et inscription sur le compte **local** tenu
+ * par [AuthRepository] (US-26), l'inscription restant pilotée par le SIRET via
+ * [SireneLookupService] (US-21).
  *
  * La vérification SIRENE est déclenchée **ici**, à la frappe, dès que la saisie porte 14 chiffres :
  * l'utilisateur n'a aucun bouton à chercher, ce qui est tout l'intérêt d'une inscription par SIRET.
@@ -31,7 +32,7 @@ import kotlinx.coroutines.launch
  * @param dispatcher injecté pour des tests sans dépendance au thread réel (cf. `DirectoryViewModel`).
  */
 class AuthViewModel(
-    private val authRepository: AuthRepository = KtorAuthRepository(),
+    private val authRepository: AuthRepository,
     private val sireneLookupService: SireneLookupService = MockSireneLookupService(),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
@@ -150,15 +151,43 @@ class AuthViewModel(
     }
 
     /**
-     * Inscription : aucun backend ne la reçoit à ce stade — l'écran l'annonce lui-même
-     * (« authentification fictive »). Le succès est donc local, et l'US-21 s'arrête à ce que
-     * l'entreprise ait été identifiée.
+     * Inscription : le compte est **écrit en base** (US-26), avec l'entreprise que le répertoire
+     * SIRENE vient de confirmer. C'est ce qui rend l'application autonome — l'espace créé ici est
+     * celui que [login] retrouvera au prochain démarrage, sans serveur.
+     *
+     * L'échec le plus courant est une adresse déjà ouverte : le dépôt le dit
+     * ([com.ledgerhub.domain.auth.EmailAlreadyRegisteredException]) et le message part à l'écran
+     * comme celui d'une connexion refusée.
      */
     private fun register(state: AuthUiState) {
         if (!state.isRegisterEnabled) return
-        _uiState.update { it.copy(registrationSucceeded = true, errorMessage = null) }
+
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        scope.launch {
+            val account = UserAccount(
+                email = state.email,
+                companyName = state.companyName,
+                siret = SiretInput.sanitize(state.siret),
+            )
+            val result = authRepository.register(account, state.password)
+            _uiState.update { current ->
+                result.fold(
+                    onSuccess = { current.copy(isLoading = false, registrationSucceeded = true) },
+                    onFailure = { throwable ->
+                        current.copy(
+                            isLoading = false,
+                            errorMessage = throwable.message ?: "Création du compte impossible",
+                        )
+                    },
+                )
+            }
+        }
     }
 
+    /**
+     * Connexion : les identifiants sont confrontés au compte local. Adresse inconnue et mot de
+     * passe faux rendent le **même** message — c'est le dépôt qui porte cette règle, pas cet écran.
+     */
     private fun login(state: AuthUiState) {
         if (!state.isSubmitEnabled) return
 
