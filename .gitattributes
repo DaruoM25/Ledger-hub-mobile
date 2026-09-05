@@ -1,0 +1,4 @@
+# Les scripts shell doivent rester en LF meme checkoutes sous Windows :
+# un CRLF sur le shebang casse l'execution en WSL, Git Bash et CI Linux.
+*.sh text eol=lf
+gradlew text eol=lf
