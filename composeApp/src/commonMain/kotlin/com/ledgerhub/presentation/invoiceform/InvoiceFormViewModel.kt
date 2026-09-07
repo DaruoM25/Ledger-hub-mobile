@@ -20,6 +20,7 @@ import com.ledgerhub.domain.settings.TaxSettings
 import com.ledgerhub.domain.invoice.totalHtOf
 import com.ledgerhub.domain.invoice.totalTtcOf
 import com.ledgerhub.domain.invoice.totalVatOf
+import com.ledgerhub.domain.quote.Quote
 import com.ledgerhub.presentation.components.QuickClientDraft
 import com.ledgerhub.presentation.components.QuickClientField
 import com.ledgerhub.presentation.components.validateQuickClient
@@ -39,6 +40,10 @@ private const val SIREN_LENGTH = 9
 
 private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
 private val EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
+
+private fun formatUnitPrice(cents: Long): String =
+    if (cents % 100L == 0L) (cents / 100L).toString()
+    else "${cents / 100L}.${(cents % 100L).toString().padStart(2, '0')}"
 
 /**
  * ViewModel du formulaire de facture — PATTERN UDF/MVVM.
@@ -70,6 +75,8 @@ class InvoiceFormViewModel(
      * ni création rapide (utile aux tests qui n'ont que faire du sélecteur).
      */
     private val clientRepository: ClientRepository? = null,
+    /** Devis d'origine en cas de conversion — pré-remplit les coordonnées et les lignes. */
+    sourceQuote: Quote? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -77,11 +84,31 @@ class InvoiceFormViewModel(
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
     private val _uiState = MutableStateFlow(
         revalidate(
-            InvoiceFormUiState(
-                issuer = issuer,
-                lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
-                isClientDirectoryAvailable = clientRepository != null,
-            ),
+            if (sourceQuote != null) {
+                InvoiceFormUiState(
+                    clientName = sourceQuote.recipient.name,
+                    clientSiret = sourceQuote.recipient.siret,
+                    clientEmail = sourceQuote.recipient.email,
+                    clientQuery = sourceQuote.recipient.name,
+                    issuer = sourceQuote.issuer.takeIf { it.name.isNotBlank() } ?: issuer,
+                    lines = sourceQuote.lines.map {
+                        InvoiceLineFormState(
+                            label = it.label,
+                            quantity = it.quantity.toString(),
+                            unitPriceHt = formatUnitPrice(it.unitPriceHt.cents),
+                            vatRate = it.vatRate,
+                        )
+                    }.ifEmpty { listOf(InvoiceLineFormState(vatRate = defaultVatRate)) },
+                    sourceQuoteId = sourceQuote.number,
+                    isClientDirectoryAvailable = clientRepository != null,
+                )
+            } else {
+                InvoiceFormUiState(
+                    issuer = issuer,
+                    lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
+                    isClientDirectoryAvailable = clientRepository != null,
+                )
+            }
         ),
     )
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
@@ -473,6 +500,7 @@ class InvoiceFormViewModel(
         dueDate = state.dueDate,
         facturX = state.generateFacturX,
         applyB2bPenalties = state.applyB2bPenalties,
+        sourceQuoteId = state.sourceQuoteId,
     )
 
     /**

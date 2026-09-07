@@ -128,11 +128,23 @@ import com.ledgerhub.presentation.ereporting.EReportingScreen
 import com.ledgerhub.presentation.ereporting.EReportingViewModel
 import com.ledgerhub.presentation.auth.AuthScreen
 import com.ledgerhub.presentation.auth.AuthViewModel
+import com.ledgerhub.domain.quote.Quote
+import com.ledgerhub.domain.quote.QuoteLine
+import com.ledgerhub.domain.quote.QuoteStatus
+import com.ledgerhub.domain.quote.SubmitQuoteUseCase
+import com.ledgerhub.presentation.quotes.QuotesIntent
+import com.ledgerhub.presentation.quotes.QuoteStatusFilter
+import com.ledgerhub.presentation.quotes.QuotesView
+import com.ledgerhub.presentation.quotes.QuotesViewModel
+import com.ledgerhub.presentation.quoteform.QuoteFormScreen
+import com.ledgerhub.presentation.quoteform.QuoteFormViewModel
 import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubTheme
 import com.ledgerhub.presentation.theme.ThemeIntent
 import com.ledgerhub.presentation.theme.ThemeViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Compte utilisateur courant, en dur tant qu'il n'y a pas de flux d'authentification (v1). */
 private const val CURRENT_USER_EMAIL_PLACEHOLDER = "demo@ledgerhub.app"
@@ -143,6 +155,7 @@ private val ExpandedWidthThreshold = 840.dp
 /** Destinations du shell de navigation — parité Web (sidebar / barre du bas). Libellés traduits via [titleKey]. */
 private enum class Destination(val titleKey: StringKey, val glyph: String) {
     OVERVIEW(StringKey.NAV_OVERVIEW, "▦"),
+    QUOTES(StringKey.NAV_QUOTES, "📝"),
     INVOICES(StringKey.NAV_INVOICES, "🧾"),
     CLIENTS(StringKey.NAV_CLIENTS, "👥"),
     DIRECTORY(StringKey.NAV_DIRECTORY, "📇"),
@@ -154,6 +167,9 @@ private enum class Destination(val titleKey: StringKey, val glyph: String) {
 private sealed interface Overlay {
     data object None : Overlay
     data object CreateInvoice : Overlay
+    data object CreateQuote : Overlay
+    data class EditQuote(val quote: Quote) : Overlay
+    data class CreateInvoiceFromQuote(val quote: Quote) : Overlay
 
     /** Hub d'intégrations (US-20) — vitrine des connecteurs, tous verrouillés à ce stade. */
     data object Integrations : Overlay
@@ -247,6 +263,12 @@ fun App(
         )
     }
     val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository, creditNoteRepository) }
+    val quotesViewModel = remember {
+        QuotesViewModel(
+            quoteRepository = quoteRepository,
+            submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
+        )
+    }
     val clientsViewModel = remember { ClientsViewModel(clientRepository) }
     val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
     val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
@@ -262,10 +284,16 @@ fun App(
     // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
     // encore vide au tout premier lancement. On relance explicitement la lecture s'il a semé —
     // sans quoi le tableau de bord et la liste restent à zéro jusqu'au redémarrage suivant.
-    LaunchedEffect(invoiceRepository) {
-        if (seedDemoDataIfEmpty(invoiceRepository)) {
+    LaunchedEffect(invoiceRepository, quoteRepository) {
+        val seeded = withContext(Dispatchers.Default) {
+            val invoicesSeeded = seedDemoDataIfEmpty(invoiceRepository)
+            val quotesSeeded = seedDemoQuotesIfEmpty(quoteRepository)
+            invoicesSeeded || quotesSeeded
+        }
+        if (seeded) {
             dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
             invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
+            quotesViewModel.processIntent(QuotesIntent.LoadQuotes)
         }
     }
 
@@ -275,8 +303,11 @@ fun App(
     // Relus à chaque changement d'onglet : quitter l'écran Paramètres suffit à les propager, sans
     // couplage entre les deux ViewModels. La table ne compte qu'une ligne, la lecture est triviale.
     var taxSettings by remember { mutableStateOf(TaxSettings.Default) }
+    // Hors thread principal pour la même raison que le semis ci-dessus : lecture SQLite synchrone.
     LaunchedEffect(taxSettingsRepository, destination) {
-        taxSettings = taxSettingsRepository.loadSettings().getOrDefault(TaxSettings.Default)
+        taxSettings = withContext(Dispatchers.Default) {
+            taxSettingsRepository.loadSettings().getOrDefault(TaxSettings.Default)
+        }
     }
     var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
@@ -288,6 +319,14 @@ fun App(
     LaunchedEffect(themeViewModel) { themeViewModel.processIntent(ThemeIntent.Load) }
 
     val onCreateInvoice = { overlay = Overlay.CreateInvoice }
+    val onCreateQuote = { overlay = Overlay.CreateQuote }
+    val onEditQuote = { quote: Quote -> overlay = Overlay.EditQuote(quote) }
+    val onConvertToInvoice = { quote: Quote -> overlay = Overlay.CreateInvoiceFromQuote(quote) }
+    val onNavigateToQuotesWithFilter = { filter: QuoteStatusFilter ->
+        destination = Destination.QUOTES
+        overlay = Overlay.None
+        quotesViewModel.processIntent(QuotesIntent.FilterSelected(filter))
+    }
     val onOpenIntegrations = { overlay = Overlay.Integrations }
     val onOpenExportModal = { overlay = Overlay.ExportModal }
     val onOpenEReporting = { overlay = Overlay.EReporting }
@@ -335,6 +374,7 @@ fun App(
         overlay = Overlay.None
         // La liste et le tableau de bord peuvent avoir de nouvelles données après une émission.
         invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
+        quotesViewModel.processIntent(QuotesIntent.LoadQuotes)
         dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
     }
 
@@ -447,13 +487,19 @@ fun App(
                                         invoiceRepository = invoiceRepository,
                                         ledgerRepository = ledgerRepository,
                                         creditNoteRepository = creditNoteRepository,
+                                        quoteRepository = quoteRepository,
                                         auditRepository = auditRepository,
                                         changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
                                         onCreateCreditNote = onCreateCreditNote,
+                                        onCreateQuote = onCreateQuote,
+                                        onEditQuote = onEditQuote,
+                                        onConvertToInvoice = onConvertToInvoice,
+                                        onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
                                         onExportInvoiceXml = onExportInvoiceXml,
                                         onExportCreditNoteXml = onExportCreditNoteXml,
                                         dashboardViewModel = dashboardViewModel,
                                         invoiceListViewModel = invoiceListViewModel,
+                                        quotesViewModel = quotesViewModel,
                                         clientsViewModel = clientsViewModel,
                                         clientRepository = clientRepository,
                                         directoryViewModel = directoryViewModel,
@@ -502,13 +548,19 @@ fun App(
                                     invoiceRepository = invoiceRepository,
                                     ledgerRepository = ledgerRepository,
                                     creditNoteRepository = creditNoteRepository,
+                                    quoteRepository = quoteRepository,
                                     auditRepository = auditRepository,
                                     changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
                                     onCreateCreditNote = onCreateCreditNote,
+                                    onCreateQuote = onCreateQuote,
+                                    onEditQuote = onEditQuote,
+                                    onConvertToInvoice = onConvertToInvoice,
+                                    onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
                                     onExportInvoiceXml = onExportInvoiceXml,
                                     onExportCreditNoteXml = onExportCreditNoteXml,
                                     dashboardViewModel = dashboardViewModel,
                                     invoiceListViewModel = invoiceListViewModel,
+                                    quotesViewModel = quotesViewModel,
                                     clientsViewModel = clientsViewModel,
                                     clientRepository = clientRepository,
                                     directoryViewModel = directoryViewModel,
@@ -710,13 +762,19 @@ private fun ShellContent(
     invoiceRepository: SqlDelightInvoiceRepository,
     ledgerRepository: LocalLedgerRepository,
     creditNoteRepository: SqlDelightCreditNoteRepository,
+    quoteRepository: SqlDelightQuoteRepository,
     auditRepository: SqlDelightAuditRepository,
     changeInvoiceStatusUseCase: ChangeInvoiceStatusUseCase,
     onCreateCreditNote: (Invoice) -> Unit,
+    onCreateQuote: () -> Unit,
+    onEditQuote: (Quote) -> Unit,
+    onConvertToInvoice: (Quote) -> Unit,
+    onNavigateToQuotesWithFilter: (QuoteStatusFilter) -> Unit,
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
+    quotesViewModel: QuotesViewModel,
     clientsViewModel: ClientsViewModel,
     clientRepository: SqlDelightClientRepository,
     directoryViewModel: DirectoryViewModel,
@@ -765,6 +823,49 @@ private fun ShellContent(
             }
         }
 
+        Overlay.CreateQuote -> {
+            val quoteFormViewModel = remember {
+                QuoteFormViewModel(
+                    submitQuoteUseCase = SubmitQuoteUseCase(quoteRepository),
+                    clientRepository = clientRepository,
+                )
+            }
+            DisposableEffect(Unit) { onDispose { quoteFormViewModel.onCleared() } }
+            OverlayScaffold(title = "Retour aux devis", onBack = onBack) {
+                QuoteFormScreen(viewModel = quoteFormViewModel)
+            }
+        }
+
+        is Overlay.EditQuote -> {
+            val quoteFormViewModel = remember(overlay.quote.number) {
+                QuoteFormViewModel(
+                    submitQuoteUseCase = SubmitQuoteUseCase(quoteRepository),
+                    clientRepository = clientRepository,
+                    initialQuote = overlay.quote,
+                )
+            }
+            DisposableEffect(overlay.quote.number) { onDispose { quoteFormViewModel.onCleared() } }
+            OverlayScaffold(title = "Retour aux devis", onBack = onBack) {
+                QuoteFormScreen(viewModel = quoteFormViewModel)
+            }
+        }
+
+        is Overlay.CreateInvoiceFromQuote -> {
+            val formViewModel = remember(overlay.quote.number, taxSettings) {
+                InvoiceFormViewModel(
+                    submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
+                    issuer = taxSettings.issuerParty,
+                    defaultVatRate = taxSettings.defaultVatRate,
+                    clientRepository = clientRepository,
+                    sourceQuote = overlay.quote,
+                )
+            }
+            DisposableEffect(overlay.quote.number) { onDispose { formViewModel.onCleared() } }
+            OverlayScaffold(title = "Retour aux devis", onBack = onBack) {
+                InvoiceFormScreen(viewModel = formViewModel)
+            }
+        }
+
         is Overlay.InvoiceDetail -> {
             val detailViewModel = remember(overlay.number) {
                 InvoiceDetailViewModel(
@@ -809,6 +910,11 @@ private fun ShellContent(
             onCreateCreditNote = onCreateCreditNote,
             dashboardViewModel = dashboardViewModel,
             invoiceListViewModel = invoiceListViewModel,
+            quotesViewModel = quotesViewModel,
+            onCreateQuote = onCreateQuote,
+            onEditQuote = onEditQuote,
+            onConvertToInvoice = onConvertToInvoice,
+            onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
             clientsViewModel = clientsViewModel,
             directoryViewModel = directoryViewModel,
             reconciliationViewModel = reconciliationViewModel,
@@ -827,6 +933,11 @@ private fun TabsContent(
     onCreateCreditNote: (Invoice) -> Unit,
     dashboardViewModel: DashboardViewModel,
     invoiceListViewModel: InvoiceListViewModel,
+    quotesViewModel: QuotesViewModel,
+    onCreateQuote: () -> Unit,
+    onEditQuote: (Quote) -> Unit,
+    onConvertToInvoice: (Quote) -> Unit,
+    onNavigateToQuotesWithFilter: (QuoteStatusFilter) -> Unit,
     clientsViewModel: ClientsViewModel,
     directoryViewModel: DirectoryViewModel,
     reconciliationViewModel: ReconciliationViewModel,
@@ -836,8 +947,19 @@ private fun TabsContent(
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
             CreateInvoiceAction(onCreateInvoice)
-            DashboardScreen(viewModel = dashboardViewModel)
+            DashboardScreen(
+                viewModel = dashboardViewModel,
+                onQuotesPendingClick = { onNavigateToQuotesWithFilter(QuoteStatusFilter.SENT) },
+                onQuotesFollowUpClick = { onNavigateToQuotesWithFilter(QuoteStatusFilter.SENT) },
+            )
         }
+
+        Destination.QUOTES -> QuotesView(
+            viewModel = quotesViewModel,
+            onCreateQuote = onCreateQuote,
+            onEditQuote = onEditQuote,
+            onConvertToInvoice = onConvertToInvoice,
+        )
 
         Destination.INVOICES -> Column(modifier = Modifier.fillMaxSize()) {
             CreateInvoiceAction(onCreateInvoice)
@@ -1043,5 +1165,32 @@ private fun demoInvoices(): List<Invoice> {
         demo("FAC-2026-0138", InvoiceStatus.PAID, "2026-06-15", "2026-07-15", 618_800, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0137", InvoiceStatus.DEPOSITED, "2026-07-12", "2026-08-12", 220_000, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0136", InvoiceStatus.DRAFT, "2026-07-28", "2026-08-28", 73_400, VatRate.TAUX_NORMAL),
+    )
+}
+
+private suspend fun seedDemoQuotesIfEmpty(repository: SqlDelightQuoteRepository): Boolean {
+    val existing = repository.fetchQuotes().getOrNull() ?: return false
+    if (existing.isNotEmpty()) return false
+    demoQuotes().forEach { repository.submitQuote(it) }
+    return true
+}
+
+private fun demoQuotes(): List<Quote> {
+    val client = Party("Boulangerie Moreau SARL", "784102336", "78410233600021", "compta@boulangerie-moreau.fr")
+    val issuer = Party("Cabinet LedgerHub", "820329331", "82032933100027", "facturation@ledgerhub.app")
+    fun demo(number: String, status: QuoteStatus, issueDate: String, validityDate: String, unitPriceHtCents: Long, rate: VatRate) = Quote(
+        number = number,
+        issueDate = issueDate,
+        validityDate = validityDate,
+        issuer = issuer,
+        recipient = client,
+        lines = listOf(QuoteLine("Prestation d'accompagnement devis", quantity = 1, unitPriceHt = Money(unitPriceHtCents), vatRate = rate)),
+        status = status,
+    )
+    return listOf(
+        demo("DEV-2026-001", QuoteStatus.DRAFT, "2026-08-01", "2026-09-01", 50_000, VatRate.TAUX_NORMAL),
+        demo("DEV-2026-002", QuoteStatus.SENT, "2026-08-02", "2026-09-01", 100_000, VatRate.TAUX_NORMAL),
+        demo("DEV-2026-003", QuoteStatus.ACCEPTED, "2026-08-03", "2026-09-01", 150_000, VatRate.TAUX_NORMAL),
+        demo("DEV-2026-004", QuoteStatus.REJECTED, "2026-08-04", "2026-09-01", 200_000, VatRate.TAUX_NORMAL),
     )
 }

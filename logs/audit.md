@@ -2000,3 +2000,108 @@ worker en isolation processus, hors de portée de `org.sqlite.tmpdir`).
 l'appareil et ne protège aucun service distant, l'écart est acceptable. Il cesserait de l'être le
 jour où ces comptes seraient synchronisés — le remplacement se ferait dans ce seul objet, seul
 endroit qui connaisse la forme de l'empreinte.
+
+
+## HOTFIX RC1 — Écran blanc au démarrage sur appareil physique
+
+**Contexte.** L'APK `1.0.0-RC1` (`ledgerhub-1.0.0-rc1.apk`, variante *debug*, `com.ledgerhub.app.debug`)
+s'installe sur téléphone physique mais reste sur une page blanche. Trois causes systématiques ont été
+inspectées, deux confirmées, une écartée ; trois causes *effectives* de page blanche ont été trouvées
+en plus et corrigées.
+
+### 1. Réseau & permissions — partiellement en défaut
+
+| Point | État avant | Action |
+|---|---|---|
+| `android.permission.INTERNET` | **Présente** | Aucune |
+| Trafic en clair | `network_security_config.xml` n'autorisait que `10.0.2.2`, `localhost`, `127.0.0.1` | `130.61.25.71` ajouté à la liste blanche |
+| `usesCleartextTraffic` | Absent | Ajouté sur `<application>` (l'intention devient lisible dans le manifeste ; sur API 24+ c'est la config XML qui tranche) |
+
+### 2. Point de terminaison API — en défaut
+
+`ledgerApiBaseUrl` (androidMain) était figé à `http://10.0.2.2:3000`, alias de la boucle locale de la
+machine hôte **propre à l'émulateur** : sur un appareil physique il ne désigne rien. La valeur est
+désormais injectée à la compilation (`buildConfigField LEDGER_API_BASE_URL`), défaut `http://130.61.25.71`,
+surchargeable sans toucher au code : `-Pledgerhub.apiBaseUrl=…`. `buildFeatures.buildConfig = true`
+requis (AGP 8 ne génère plus `BuildConfig` par défaut). Parité iOS alignée sur le même hôte.
+
+### 3. Écran d'initialisation — cause réelle la plus probable
+
+L'authentification étant **locale** depuis l'US-26 (`SqlDelightAuthRepository`), l'écran de connexion
+n'attend **aucune** réponse réseau ni aucun jeton distant : aucun `isLoading` ne peut y rester bloqué
+par le réseau. Le blanc venait donc d'ailleurs, et trois défauts cumulés l'expliquent :
+
+| Défaut | Effet | Correction |
+|---|---|---|
+| `windowBackground` hérité de `Theme.Material.Light` | Fond de fenêtre **blanc** peint avant la 1re image Compose — c'est littéralement l'« écran blanc » | Thème `Theme.LedgerHub`, `windowBackground` = slate-950 (`LedgerHubPalette.Dark.Background`) |
+| `MainActivity` ouvrait la base **sans filet** | Une base illisible fait lever `onCreate` avant `setContent` : la fenêtre reste nue, aucun message | `runCatching` + trace Logcat (tag `LedgerHub`) + écran d'erreur lisible sur l'appareil |
+| Semis de démo et lecture des réglages fiscaux dans un `LaunchedEffect` | Les dépôts SQLDelight sont **synchrones** : création du schéma + 8 migrations + 7 factures s'exécutaient sur le **thread principal**, où l'émulateur écrit en mémoire mais l'appareil physique impose un vrai `fsync` — première image retardée de plusieurs secondes | `withContext(Dispatchers.Default)` autour des deux blocs |
+
+**Délais réseau explicites** ajoutés au client Ktor des deux plateformes (connexion 5 s, socket 10 s,
+requête 15 s) : le seul appel réseau restant (répertoire SIRENE, à l'inscription) ne peut plus pendre
+sur le défaut système. Son échec retombait déjà sur `SireneVerificationStatus.UNAVAILABLE`, l'écran
+de connexion restant utilisable — comportement inchangé, désormais borné dans le temps.
+
+### Commandes de validation
+
+| Commande | Résultat |
+|---|---|
+| `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** |
+| `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** — aucune régression |
+| `aapt2 dump badging` | `INTERNET` présente, `versionName 1.0.0-RC1`, `minSdk 26`, `targetSdk 35` |
+
+Artefact : `release/ledgerhub-1.0.0-rc1-hotfix1.apk` (`versionCode` 2 inchangé — réinstallation à
+version égale acceptée, signature de debug identique).
+
+### Limite assumée
+
+Aucun appareil n'était connecté à `adb` au moment du correctif : la cause racine n'est donc pas
+**prouvée** par un Logcat, elle est déduite du code. Le filet posé dans `MainActivity` rend la
+prochaine occurrence auto-diagnostiquable — `adb logcat -s LedgerHub` affichera la trace, et
+l'appareil un message au lieu d'une page blanche.
+
+---
+
+## Sprint 2 — US-07, US-08, US-09, US-12 : Raccordement Complet du Module Devis (Quotes Integration)
+- **Date :** 2026-09-07
+- **Branche d'isolation :** `feature/US-quotes-integration`
+- **Statut :** ✅ Clos — pyramide 100% verte (N1: 57/57, N2: 1080/1080, N3a: 3/3 sur Samsung S23+ physique, N3b captures visuelles conformes, APK assembleDebug OK)
+
+### 1. Décisions d'Architecture & Raccordement
+1. **Gouvernance & Isolation Git :** Développement et recette exécutés exclusivement sur la branche dédiée `feature/US-quotes-integration`.
+2. **Internationalisation (i18n) :** Ajout de la clé `NAV_QUOTES` dans `StringKey.kt` et traductions associées dans `AppTranslations.kt` ("Devis" en FR, "Quotes" en EN).
+3. **Câblage Navigation & Coquille applicative :**
+   - Intégration de `Destination.QUOTES` dans `App.kt` positionnée entre `OVERVIEW` et `INVOICES`.
+   - Prise en charge des overlays `CreateQuote`, `EditQuote`, et `CreateInvoiceFromQuote`.
+   - Seeding de démo des devis (`seedDemoQuotesIfEmpty`) sécurisé hors du thread UI via `withContext(Dispatchers.Default)` pour prévenir tout écran noir.
+4. **Cycle de vie & Ergonomie des Devis [MOB-QUO-04] :**
+   - Transitions d'état complètes : `DRAFT` (Brouillon) -> `SENT` (Envoyé) -> `ACCEPTED` (Accepté) / `REJECTED` (Refusé).
+   - Badges colorés sémantiques conformes à la charte : Gris (`#9E9E9E`), Bleu (`#2196F3`), Vert (`#4CAF50`), Rouge (`#F44336`).
+   - Rangée de filtres dynamiques `QuoteStatusFilter` avec compteurs en temps réel (Tous, Brouillons, Envoyés, Acceptés, Refusés).
+   - Bouton d'édition disponible exclusivement sur les devis au statut `DRAFT`.
+5. **Conversion Devis en Facture & PAF [MOB-QUO-05] :**
+   - Bouton « Convertir en facture » strictement réservé aux devis au statut `ACCEPTED`.
+   - Pré-remplissage complet du formulaire de facturation avec injection obligatoire du `sourceQuoteId` pour conformité Piste d'Audit Fiable (PAF - CGI art. 289-VII-1°).
+6. **Étanchéité Réglementaire Factur-X :**
+   - Contrôle strict : Zéro composant ou mention Factur-X dans `QuoteFormScreen.kt` (le devis n'est pas une facture électronique fiscale).
+7. **Parité & Continuité Dashboard US-12 :**
+   - Préservation stricte du 4e KPI (« Devis en attente ») et de la section « Devis à relancer » avec redirection au clic vers `Destination.QUOTES` pré-filtré sur `QuoteStatusFilter.SENT`.
+
+### 2. Matrice RCA — Timeout Robolectric sur les éléments hors viewport virtuel
+| Champ | Détail |
+|---|---|
+| **Symptôme** | `ComposeTimeoutException` dans `QuotesViewRobolectricTest.kt` lors de l'attente sur `DEV-2026-003` (devis Accepté). |
+| **Cause racine** | L'ajout de la barre d'en-tête (titre + bouton Nouveau) et des puces de filtrage par statut a augmenté la hauteur au-dessus de `LazyColumn`. Sous Robolectric (fenêtre virtuelle compacte), le 3e élément (`DEV-2026-003`) s'est retrouvé au-delà du seuil de composition initial. Le test attendait `fetchSemanticsNodes().isNotEmpty()` sur `DEV-2026-003` *avant* d'exécuter `performScrollToNode`. |
+| **Détection** | Étape 2 — Exécution des tests N1 (`testDebugUnitTest`). |
+| **Correctif** | 1. Ajustement de la condition d'attente dans les tests Robolectric : attendre la composition de la liste (`QuotesTags.LIST`) avant d'ordonner le défilement vers `DEV-2026-003`.<br>2. Optimisation des espacements et paddings de `QuotesView.kt`. |
+| **Action préventive** | Dans les tests Compose de `LazyColumn`, toujours synchroniser l'attente sur le conteneur de liste avant de scroller vers un élément de rang > 2. |
+| **Impact** | Localisé au harness de test, aucun impact en production. |
+
+### 3. Pyramide de Recette & Résultats de Validation
+| Niveau | Périmètre | Commande / Outil | Résultat |
+|---|---|---|---|
+| **N1** | Tests unitaires purs & domaine quotes | `./gradlew :composeApp:testDebugUnitTest --tests "*domain.quote*" --tests "*presentation.quote*"` | **57 / 57 passés (100%)** |
+| **N2** | Intégration SQLite, Repositories, Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **1080 / 1080 passés (100%)** |
+| **N3a** | Tests instrumentés terminal physique (Samsung S23+ `SM-S916B` Android 14) | `./gradlew :composeApp:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.class=com.ledgerhub.presentation.quotes.QuotesInstrumentedTest"` | **3 / 3 passés (100%)** |
+| **N3b** | Audit visuel & captures d'écran | `screenshots/US07_quotes_view_nominal.png`<br>`screenshots/US09_quote_form_nominal.png` | **Validé & vérifié** (badges colorés, bouton convertir, formulaire) |
+| **APK** | Compilation binaire de débogage | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** |

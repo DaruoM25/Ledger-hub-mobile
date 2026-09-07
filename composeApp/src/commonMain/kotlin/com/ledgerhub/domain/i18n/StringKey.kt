@@ -27,6 +27,7 @@ enum class StringKey {
 
     // ── Navigation ──────────────────────────────────────────────────────────
     NAV_OVERVIEW,
+    NAV_QUOTES,
     NAV_INVOICES,
     NAV_CLIENTS,
     NAV_SETTINGS,

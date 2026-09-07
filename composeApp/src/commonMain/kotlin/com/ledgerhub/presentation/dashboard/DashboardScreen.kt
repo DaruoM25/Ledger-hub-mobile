@@ -2,6 +2,7 @@ package com.ledgerhub.presentation.dashboard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,14 +79,24 @@ object DashboardTags {
 
 @Composable
 fun DashboardScreen(
-    viewModel: DashboardViewModel = remember { DashboardViewModel() }
+    viewModel: DashboardViewModel = remember { DashboardViewModel() },
+    onQuotesPendingClick: (() -> Unit)? = null,
+    onQuotesFollowUpClick: (() -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    DashboardContent(uiState = uiState)
+    DashboardContent(
+        uiState = uiState,
+        onQuotesPendingClick = onQuotesPendingClick,
+        onQuotesFollowUpClick = onQuotesFollowUpClick,
+    )
 }
 
 @Composable
-internal fun DashboardContent(uiState: DashboardUiState) {
+internal fun DashboardContent(
+    uiState: DashboardUiState,
+    onQuotesPendingClick: (() -> Unit)? = null,
+    onQuotesFollowUpClick: (() -> Unit)? = null,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -120,10 +131,10 @@ internal fun DashboardContent(uiState: DashboardUiState) {
             )
 
             else -> {
-                KpiGrid(uiState)
+                KpiGrid(uiState, onQuotesPendingClick = onQuotesPendingClick)
                 RevenueSection(uiState)
                 RecentInvoicesSection(documents = uiState.recentDocuments)
-                QuotesToFollowUpSection(items = uiState.quotesToFollowUp)
+                QuotesToFollowUpSection(items = uiState.quotesToFollowUp, onSectionClick = onQuotesFollowUpClick)
             }
         }
     }
@@ -144,7 +155,10 @@ private fun LoadingRow() {
 // ── KPI ──────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun KpiGrid(uiState: DashboardUiState) {
+private fun KpiGrid(
+    uiState: DashboardUiState,
+    onQuotesPendingClick: (() -> Unit)? = null,
+) {
     val lang = LocalAppLanguage.current
     // Grille 2×2 (US-12) : quatre indicateurs tiennent à l'écran sans défilement, là où quatre
     // cartes pleine largeur repoussaient le graphique sous la ligne de flottaison.
@@ -197,6 +211,7 @@ private fun KpiGrid(uiState: DashboardUiState) {
                 glyph = "📝",
                 accent = LedgerHubTheme.palette.QuotePendingBg,
                 valueColor = LedgerHubTheme.palette.QuotePendingFg,
+                onClick = onQuotesPendingClick,
             )
         }
     }
@@ -216,8 +231,14 @@ private fun KpiCard(
     glyph: String,
     accent: Color,
     valueColor: Color = Color.Unspecified,
+    onClick: (() -> Unit)? = null,
 ) {
-    OutlinedSurfaceCard(modifier = modifier.semantics { testTag = tag }) {
+    val cardModifier = if (onClick != null) {
+        modifier.clickable(onClick = onClick)
+    } else {
+        modifier
+    }
+    OutlinedSurfaceCard(modifier = cardModifier.semantics { testTag = tag }) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -422,10 +443,17 @@ private data class RowData(
  * de l'activité facturée.
  */
 @Composable
-private fun QuotesToFollowUpSection(items: List<QuoteFollowUpItem>) {
+private fun QuotesToFollowUpSection(
+    items: List<QuoteFollowUpItem>,
+    onSectionClick: (() -> Unit)? = null,
+) {
+    val cardModifier = if (onSectionClick != null) {
+        Modifier.fillMaxWidth().clickable(onClick = onSectionClick)
+    } else {
+        Modifier.fillMaxWidth()
+    }
     OutlinedSurfaceCard(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = cardModifier
             .semantics { testTag = DashboardTags.QUOTES_TO_FOLLOWUP_SECTION },
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -461,7 +489,7 @@ private fun QuotesToFollowUpSection(items: List<QuoteFollowUpItem>) {
                         .semantics { testTag = DashboardTags.QUOTES_TO_FOLLOWUP_LIST },
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items.forEach { QuoteFollowUpRow(it) }
+                    items.forEach { QuoteFollowUpRow(it, onClick = onSectionClick) }
                 }
             }
         }
@@ -469,7 +497,10 @@ private fun QuotesToFollowUpSection(items: List<QuoteFollowUpItem>) {
 }
 
 @Composable
-private fun QuoteFollowUpRow(item: QuoteFollowUpItem) {
+private fun QuoteFollowUpRow(
+    item: QuoteFollowUpItem,
+    onClick: (() -> Unit)? = null,
+) {
     val lang = LocalAppLanguage.current
     // Expiré = rouge, expire aujourd'hui ou demain = ambre, au-delà = neutre. Le délai est
     // l'information qui décide de l'action, il porte donc la couleur.
@@ -484,10 +515,19 @@ private fun QuoteFollowUpRow(item: QuoteFollowUpItem) {
         else -> "${tr(StringKey.QUOTE_DAYS_LEFT)}${item.daysRemaining}"
     }
 
-    Row(
-        modifier = Modifier
+    val rowModifier = if (onClick != null) {
+        Modifier
             .fillMaxWidth()
-            .semantics { testTag = DashboardTags.quoteFollowUpTag(item.number) },
+            .clickable(onClick = onClick)
+            .semantics { testTag = DashboardTags.quoteFollowUpTag(item.number) }
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .semantics { testTag = DashboardTags.quoteFollowUpTag(item.number) }
+    }
+
+    Row(
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

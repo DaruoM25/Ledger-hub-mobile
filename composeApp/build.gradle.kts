@@ -166,6 +166,21 @@ sqldelight {
     }
 }
 
+// ── Point de terminaison de l'API metier ──────────────────────────────────────
+// Parametrable sans toucher au code : -Pledgerhub.apiBaseUrl=... en ligne de commande, ou une
+// ligne `ledgerhub.apiBaseUrl=...` dans gradle.properties / ~/.gradle/gradle.properties.
+//
+// Le defaut vise le serveur joignable depuis un APPAREIL PHYSIQUE. L'ancien defaut (10.0.2.2,
+// alias de la boucle locale de l'hote vu par l'emulateur) n'existe pas sur un telephone : tout
+// appel y echouait en "connexion refusee", ce qu'aucun ecran ne rattrapait.
+//
+// Tout hote en clair (http://) doit AUSSI figurer dans
+// composeApp/src/androidMain/res/xml/network_security_config.xml, sans quoi Android refuse la
+// connexion avant meme de l'ouvrir.
+val ledgerApiBaseUrl: String =
+    (findProperty("ledgerhub.apiBaseUrl") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: "http://130.61.25.71"
+
 // ── Configuration Android ─────────────────────────────────────────────────────
 android {
     namespace   = "com.ledgerhub.app"
@@ -180,6 +195,14 @@ android {
         versionCode    = 2
         versionName    = "1.0.0-RC1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Lu par com.ledgerhub.data.remote.ledgerApiBaseUrl (androidMain).
+        buildConfigField("String", "LEDGER_API_BASE_URL", "\"$ledgerApiBaseUrl\"")
+    }
+
+    buildFeatures {
+        // Requis par le buildConfigField ci-dessus : AGP 8 ne genere plus BuildConfig par defaut.
+        buildConfig = true
     }
 
     packaging {

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Thème de fenêtre de l'application.
+
+  Seule raison d'être : le `windowBackground`. Android peint ce fond dès la création de la
+  fenêtre, avant que Compose n'ait composé puis dessiné sa première image. Avec le thème
+  `Theme.Material.Light` d'origine, ce fond est BLANC — c'est lui, et non l'interface, qu'on voit
+  au démarrage tant que la première image n'est pas prête, et c'est lui qui reste seul à l'écran
+  si l'initialisation échoue. Le poser sur le fond de l'application (slate-950, identique à
+  `LedgerHubPalette.Dark.Background` et à l'écran d'authentification) supprime le flash blanc et
+  rend un éventuel blocage visuellement cohérent avec l'application.
+-->
+<resources>
+    <style name="Theme.LedgerHub" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ledgerhub_window_background</item>
+    </style>
+</resources>
