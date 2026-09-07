@@ -7,7 +7,7 @@
     pour la résoudre (voir https://github.com/robolectric/robolectric/pull/4736).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
+    <application android:usesCleartextTraffic="true">
         <activity
             android:name="androidx.activity.ComponentActivity"
             android:exported="true">
