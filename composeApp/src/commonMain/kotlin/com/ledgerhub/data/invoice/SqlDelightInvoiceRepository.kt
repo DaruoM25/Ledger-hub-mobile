@@ -52,6 +52,7 @@ class SqlDelightInvoiceRepository(
             database.auditLogQueries.insert(
                 id = newAuditId(invoiceNumber, to),
                 invoiceNumber = invoiceNumber,
+                userId = userEmail,
                 fromStatus = from.name,
                 toStatus = to.name,
                 reason = reason,

@@ -1,10 +1,12 @@
 package com.ledgerhub.presentation.settings
 
+import com.ledgerhub.domain.auth.DeleteAccountUseCase
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.settings.TaxSettings
 import com.ledgerhub.domain.settings.TaxSettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +45,11 @@ data class TaxSettingsUiState(
     /** Message de confirmation à présenter en Snackbar, consommé par [TaxSettingsIntent.FeedbackShown]. */
     val savedMessage: String? = null,
     val errorMessage: String? = null,
+    // ── Zone de danger (US-26) ──────────────────────────────────────────────
+    val showDeleteAccountDialog: Boolean = false,
+    val deleteConfirmationInput: String = "",
+    val isDeletingAccount: Boolean = false,
+    val accountDeleted: Boolean = false,
 ) {
     val availableVatRates: List<VatRate> get() = VatRate.entries
 
@@ -53,6 +60,10 @@ data class TaxSettingsUiState(
 
     val visibleErrors: Map<TaxSettingsField, String>
         get() = if (saveAttempted) errors else errors.filterKeys { it in touchedFields }
+
+    /** Le déverrouillage de suppression exige la saisie stricte du mot « SUPPRIMER ». */
+    val isDeleteUnlocked: Boolean
+        get() = deleteConfirmationInput == "SUPPRIMER" && !isDeletingAccount
 }
 
 sealed interface TaxSettingsIntent {
@@ -64,6 +75,11 @@ sealed interface TaxSettingsIntent {
     data class FacturXToggled(val enabled: Boolean) : TaxSettingsIntent
     data object Save : TaxSettingsIntent
     data object FeedbackShown : TaxSettingsIntent
+    // ── Zone de danger (US-26) ──────────────────────────────────────────────
+    data object OpenDeleteAccountDialog : TaxSettingsIntent
+    data object DismissDeleteAccountDialog : TaxSettingsIntent
+    data class DeleteConfirmationInputChanged(val value: String) : TaxSettingsIntent
+    data object ConfirmDeleteAccount : TaxSettingsIntent
 }
 
 /**
@@ -72,8 +88,15 @@ sealed interface TaxSettingsIntent {
  */
 class TaxSettingsViewModel(
     private val repository: TaxSettingsRepository,
+    private val deleteAccountUseCase: DeleteAccountUseCase? = null,
+    private val currentUserEmail: String = "",
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
+    constructor(
+        repository: TaxSettingsRepository,
+        dispatcher: CoroutineDispatcher,
+    ) : this(repository, null, "", dispatcher)
+
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     private val _uiState = MutableStateFlow(TaxSettingsUiState())
@@ -107,8 +130,23 @@ class TaxSettingsViewModel(
 
             TaxSettingsIntent.Save -> save()
 
-            TaxSettingsIntent.FeedbackShown ->
-                _uiState.update { it.copy(savedMessage = null, errorMessage = null) }
+            TaxSettingsIntent.FeedbackShown -> _uiState.update {
+                it.copy(savedMessage = null, errorMessage = null)
+            }
+
+            TaxSettingsIntent.OpenDeleteAccountDialog -> _uiState.update {
+                it.copy(showDeleteAccountDialog = true, deleteConfirmationInput = "")
+            }
+
+            TaxSettingsIntent.DismissDeleteAccountDialog -> _uiState.update {
+                it.copy(showDeleteAccountDialog = false, deleteConfirmationInput = "")
+            }
+
+            is TaxSettingsIntent.DeleteConfirmationInputChanged -> _uiState.update {
+                it.copy(deleteConfirmationInput = intent.value)
+            }
+
+            TaxSettingsIntent.ConfirmDeleteAccount -> confirmDeleteAccount()
         }
     }
 
@@ -185,6 +223,58 @@ class TaxSettingsViewModel(
                     }
                 },
             )
+        }
+    }
+
+    private fun confirmDeleteAccount() {
+        val state = _uiState.value
+        if (!state.isDeleteUnlocked) return
+
+        _uiState.update { it.copy(isDeletingAccount = true, errorMessage = null) }
+        scope.launch {
+            try {
+                val useCase = deleteAccountUseCase
+                if (useCase != null) {
+                    val result = useCase.execute(
+                        email = currentUserEmail,
+                        confirmation = state.deleteConfirmationInput,
+                    )
+                    _uiState.update { current ->
+                        result.fold(
+                            onSuccess = {
+                                current.copy(
+                                    isDeletingAccount = false,
+                                    showDeleteAccountDialog = false,
+                                    accountDeleted = true,
+                                )
+                            },
+                            onFailure = { error ->
+                                current.copy(
+                                    isDeletingAccount = false,
+                                    errorMessage = error.message ?: "Échec de la suppression du compte.",
+                                )
+                            },
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isDeletingAccount = false,
+                            showDeleteAccountDialog = false,
+                            accountDeleted = true,
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isDeletingAccount = false,
+                        errorMessage = e.message ?: "Échec de la suppression du compte.",
+                    )
+                }
+            }
         }
     }
 

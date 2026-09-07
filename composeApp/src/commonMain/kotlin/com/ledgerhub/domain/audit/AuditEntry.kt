@@ -15,11 +15,12 @@ import com.ledgerhub.domain.invoice.InvoiceStatus
  */
 data class AuditEntry(
     val id: String,
-    val invoiceNumber: String,
+    val invoiceNumber: String? = null,
     val fromStatus: InvoiceStatus?,
     val toStatus: InvoiceStatus,
     val reason: String?,
     val createdAt: String,
+    val userId: String? = null,
 )
 
 /** Historique des transitions — lecture seule par construction. */

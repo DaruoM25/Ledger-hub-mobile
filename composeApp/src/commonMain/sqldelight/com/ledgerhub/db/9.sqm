@@ -1,0 +1,23 @@
+-- Migration 9 → 10 — US-26, Piste d'audit événementielle et alignement backend Web.
+--
+-- Rendre invoiceNumber nullable et ajouter userId pour tracer les événements de cycle de vie utilisateur (ACCOUNT_DELETED, etc.).
+
+CREATE TABLE AuditLog_new (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceNumber TEXT,
+    userId TEXT,
+    fromStatus TEXT,
+    toStatus TEXT NOT NULL,
+    reason TEXT,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+INSERT INTO AuditLog_new(id, invoiceNumber, userId, fromStatus, toStatus, reason, createdAt)
+SELECT id, invoiceNumber, NULL, fromStatus, toStatus, reason, createdAt FROM AuditLog;
+
+DROP TABLE AuditLog;
+
+ALTER TABLE AuditLog_new RENAME TO AuditLog;
+
+CREATE INDEX AuditLog_invoice_created ON AuditLog(invoiceNumber, createdAt);

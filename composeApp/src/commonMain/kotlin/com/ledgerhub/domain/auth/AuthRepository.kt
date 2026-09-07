@@ -22,4 +22,21 @@ interface AuthRepository {
      * @return l'échec [EmailAlreadyRegisteredException] si l'adresse porte déjà un compte.
      */
     suspend fun register(account: UserAccount, password: String): Result<UserAccount>
+
+    /**
+     * Initie une demande de réinitialisation de mot de passe pour [email].
+     *
+     * Pour prévenir les attaques par énumération d'utilisateurs, l'opération renvoie un succès
+     * même si l'adresse n'est associée à aucun compte connu.
+     */
+    suspend fun requestPasswordReset(email: String): Result<Unit>
+
+    /**
+     * Supprime définitivement le compte utilisateur associé à [email] (RGPD Art. 17).
+     *
+     * Purge les identifiants d'accès (`UserAccount`) tout en maintenant l'intégrité
+     * des pièces comptables décennales (LPF Art. L.102 B).
+     */
+    suspend fun deleteAccount(email: String): Result<Unit>
 }
+

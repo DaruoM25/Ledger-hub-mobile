@@ -1,25 +1,34 @@
 package com.ledgerhub.presentation.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,13 +62,31 @@ object TaxSettingsTags {
     const val SAVE_BUTTON = "settings_save_button"
     const val SNACKBAR_HOST = "settings_snackbar_host"
 
+    // ── Zone de danger (US-26) ──────────────────────────────────────────────
+    const val DANGER_ZONE_CARD = "settings_danger_zone_card"
+    const val DELETE_ACCOUNT_BUTTON = "settings_delete_account_button"
+    const val DELETE_DIALOG = "settings_delete_dialog"
+    const val DELETE_CONFIRMATION_INPUT = "settings_delete_confirmation_input"
+    const val DELETE_CONFIRM_BUTTON = "settings_delete_confirm_button"
+    const val DELETE_CANCEL_BUTTON = "settings_delete_cancel_button"
+
     fun defaultRateChip(rate: VatRate) = "settings_default_rate_${rate.name}"
     fun errorTag(field: TaxSettingsField) = "settings_error_${field.name}"
 }
 
 @Composable
-fun TaxSettingsScreen(viewModel: TaxSettingsViewModel) {
+fun TaxSettingsScreen(
+    viewModel: TaxSettingsViewModel,
+    onAccountDeleted: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.accountDeleted) {
+        if (uiState.accountDeleted) {
+            onAccountDeleted()
+        }
+    }
+
     TaxSettingsView(uiState = uiState, onIntent = viewModel::processIntent)
 }
 
@@ -202,6 +229,18 @@ internal fun TaxSettingsView(
             ) {
                 Text(tr(StringKey.SETTINGS_SAVE))
             }
+
+            // ── Zone de danger (US-26) ──────────────────────────────────────
+            DangerZoneCard(
+                onDeleteAccountClick = { onIntent(TaxSettingsIntent.OpenDeleteAccountDialog) },
+            )
+        }
+
+        if (uiState.showDeleteAccountDialog) {
+            DeleteAccountConfirmationDialog(
+                uiState = uiState,
+                onIntent = onIntent,
+            )
         }
 
         SnackbarHost(
@@ -265,3 +304,129 @@ private fun RateChip(rate: VatRate, selected: Boolean, onSelect: () -> Unit) {
         )
     }
 }
+
+@Composable
+private fun DangerZoneCard(onDeleteAccountClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { testTag = TaxSettingsTags.DANGER_ZONE_CARD },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("⚠️", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    tr(StringKey.SETTINGS_SECTION_DANGER_ZONE),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Text(
+                text = tr(StringKey.SETTINGS_DANGER_ZONE_DESC),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Button(
+                onClick = onDeleteAccountClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { testTag = TaxSettingsTags.DELETE_ACCOUNT_BUTTON },
+            ) {
+                Text(tr(StringKey.SETTINGS_DELETE_ACCOUNT_BUTTON))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteAccountConfirmationDialog(
+    uiState: TaxSettingsUiState,
+    onIntent: (TaxSettingsIntent) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!uiState.isDeletingAccount) {
+                onIntent(TaxSettingsIntent.DismissDeleteAccountDialog)
+            }
+        },
+        title = {
+            Text(
+                text = tr(StringKey.SETTINGS_DELETE_DIALOG_TITLE),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = tr(StringKey.SETTINGS_DELETE_DIALOG_WARNING),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = uiState.deleteConfirmationInput,
+                    onValueChange = { onIntent(TaxSettingsIntent.DeleteConfirmationInputChanged(it)) },
+                    placeholder = { Text(tr(StringKey.SETTINGS_DELETE_DIALOG_INPUT_PLACEHOLDER)) },
+                    singleLine = true,
+                    enabled = !uiState.isDeletingAccount,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.error,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { testTag = TaxSettingsTags.DELETE_CONFIRMATION_INPUT },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onIntent(TaxSettingsIntent.ConfirmDeleteAccount) },
+                enabled = uiState.isDeleteUnlocked,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier.semantics { testTag = TaxSettingsTags.DELETE_CONFIRM_BUTTON },
+            ) {
+                if (uiState.isDeletingAccount) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = MaterialTheme.colorScheme.onError,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text(tr(StringKey.SETTINGS_DELETE_DIALOG_CONFIRM_BUTTON))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { onIntent(TaxSettingsIntent.DismissDeleteAccountDialog) },
+                enabled = !uiState.isDeletingAccount,
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .semantics { testTag = TaxSettingsTags.DELETE_CANCEL_BUTTON },
+            ) {
+                Text(tr(StringKey.SETTINGS_DELETE_DIALOG_CANCEL_BUTTON))
+            }
+        },
+        modifier = Modifier.semantics { testTag = TaxSettingsTags.DELETE_DIALOG },
+    )
+}
+

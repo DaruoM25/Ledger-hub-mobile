@@ -70,6 +70,12 @@ class AuthScreenRobolectricTest {
             account: UserAccount,
             password: String,
         ): Result<UserAccount> = Result.success(account)
+
+        override suspend fun requestPasswordReset(email: String): Result<Unit> =
+            Result.success(Unit)
+
+        override suspend fun deleteAccount(email: String): Result<Unit> =
+            Result.success(Unit)
     }
 
     /**
