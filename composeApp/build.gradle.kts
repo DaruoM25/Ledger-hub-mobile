@@ -215,6 +215,36 @@ android {
         unitTests.isIncludeAndroidResources = true // requis par Robolectric
     }
 
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = true
+        warningsAsErrors = false
+        ignoreTestSources = true
+        // Règles SAST sécurité réseau et dépendances
+        enable += setOf(
+            "InsecureBaseConfiguration",
+            "NetworkSecurityConfig",
+            "HardcodedDebugMode",
+            "TrustAllX509TrustManager",
+            "BadHostnameVerifier",
+            "AuthLeak",
+            "SecureRandom",
+            "SetJavaScriptEnabled",
+            "UnsafeDynamicallyLoadedCode",
+            "ExportedContentProvider",
+            "ExportedReceiver",
+            "ExportedService"
+        )
+        disable += setOf(
+            "GradleDependency",
+            "MissingApplicationIcon",
+            "RememberReturnType"
+        )
+        textReport = true
+        htmlReport = true
+        xmlReport = true
+    }
+
     buildTypes {
         getByName("debug") {
             isDebuggable          = true
@@ -222,10 +252,13 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signature de débogage pour validation sur appareil sans keystore de prod dans le repo
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

@@ -16,13 +16,19 @@ build/
 .settings/
 out/
 
-# Android
+# Android & Sécurité (Anti-leaks)
 local.properties
 .navigation/
 captures/
 output-metadata.json
 *.apk
 *.aab
+*.jks
+*.keystore
+*.pem
+*.key
+google-services.json
+.env*
 
 # iOS & Xcode
 iosApp/.build/
