@@ -50,7 +50,7 @@ class QuotesViewRobolectricTest {
     fun acceptedQuote_showsConvertButton_draftQuote_doesNot() = runComposeUiTest {
         setContent { QuotesView(viewModel = viewModel()) }
         waitUntil(timeoutMillis = 5_000) {
-            onAllNodesWithTag(QuotesTags.rowTag("DEV-2026-003")).fetchSemanticsNodes().isNotEmpty()
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
         }
 
         onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-003")))
@@ -64,7 +64,7 @@ class QuotesViewRobolectricTest {
     fun clickingConvert_onAcceptedQuote_endsWithConvertedInvoiceLabel() = runComposeUiTest {
         setContent { QuotesView(viewModel = viewModel()) }
         waitUntil(timeoutMillis = 5_000) {
-            onAllNodesWithTag(QuotesTags.rowTag("DEV-2026-003")).fetchSemanticsNodes().isNotEmpty()
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
         }
 
         onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-003")))
@@ -74,5 +74,74 @@ class QuotesViewRobolectricTest {
             onAllNodesWithTag(QuotesTags.convertedInvoiceTag("DEV-2026-003")).fetchSemanticsNodes().isNotEmpty()
         }
         onNodeWithTag(QuotesTags.convertedInvoiceTag("DEV-2026-003")).assertIsDisplayed()
+    }
+
+    @Test
+    fun filterChip_filtersQuotesByStatus() = runComposeUiTest {
+        setContent { QuotesView(viewModel = viewModel()) }
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Filtre par Brouillon
+        onNodeWithTag(QuotesTags.filterChipTag(QuoteStatusFilter.DRAFT)).performClick()
+        onNodeWithTag(QuotesTags.rowTag("DEV-2026-001")).assertIsDisplayed()
+        onNodeWithTag(QuotesTags.rowTag("DEV-2026-002")).assertDoesNotExist()
+        onNodeWithTag(QuotesTags.rowTag("DEV-2026-003")).assertDoesNotExist()
+
+        // Filtre par Accepté
+        onNodeWithTag(QuotesTags.filterChipTag(QuoteStatusFilter.ACCEPTED)).performClick()
+        onNodeWithTag(QuotesTags.rowTag("DEV-2026-003")).assertIsDisplayed()
+        onNodeWithTag(QuotesTags.rowTag("DEV-2026-001")).assertDoesNotExist()
+
+        // Revenir à Tous
+        onNodeWithTag(QuotesTags.filterChipTag(QuoteStatusFilter.TOUS)).performClick()
+        onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-001")))
+        onNodeWithTag(QuotesTags.rowTag("DEV-2026-001")).assertIsDisplayed()
+    }
+
+    @Test
+    fun editButton_displayedOnlyForDraft() = runComposeUiTest {
+        setContent { QuotesView(viewModel = viewModel()) }
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-001")))
+        onNodeWithTag(QuotesTags.editButtonTag("DEV-2026-001")).assertIsDisplayed()
+
+        onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-002")))
+        onNodeWithTag(QuotesTags.editButtonTag("DEV-2026-002")).assertDoesNotExist()
+    }
+
+    @Test
+    fun clickCreateButton_triggersCallback() = runComposeUiTest {
+        var createClicked = false
+        setContent {
+            QuotesView(
+                viewModel = viewModel(),
+                onCreateQuote = { createClicked = true }
+            )
+        }
+        onNodeWithTag(QuotesTags.CREATE_BUTTON).performClick()
+        assert(createClicked)
+    }
+
+    @Test
+    fun customConvertToInvoiceCallback_triggersWithQuote() = runComposeUiTest {
+        var convertedQuoteNumber: String? = null
+        setContent {
+            QuotesView(
+                viewModel = viewModel(),
+                onConvertToInvoice = { quote -> convertedQuoteNumber = quote.number }
+            )
+        }
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-003")))
+        onNodeWithTag(QuotesTags.convertButtonTag("DEV-2026-003")).performClick()
+        assert(convertedQuoteNumber == "DEV-2026-003")
     }
 }

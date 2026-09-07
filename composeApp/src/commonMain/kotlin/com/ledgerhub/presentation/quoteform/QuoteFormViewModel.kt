@@ -31,6 +31,10 @@ import kotlinx.coroutines.launch
 
 private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
 
+private fun formatUnitPrice(cents: Long): String =
+    if (cents % 100L == 0L) (cents / 100L).toString()
+    else "${cents / 100L}.${(cents % 100L).toString().padStart(2, '0')}"
+
 /**
  * ViewModel du formulaire de devis — PATTERN UDF/MVVM, symétrique à InvoiceFormViewModel.
  * La validation reste synchrone (locale) ; seule la soumission via [SubmitQuoteUseCase]
@@ -40,6 +44,7 @@ private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
  *   (succès/échec) — le défaut construit un [MockQuoteRepository] tant qu'aucun backend
  *   réel (Ktor) n'est branché.
  * @param dispatcher injecté pour permettre les tests sans dépendance au thread réel.
+ * @param initialQuote devis existant à charger dans le formulaire (mode modification).
  */
 class QuoteFormViewModel(
     private val submitQuoteUseCase: SubmitQuoteUseCase = SubmitQuoteUseCase(MockQuoteRepository()),
@@ -50,13 +55,40 @@ class QuoteFormViewModel(
      * sans suggestion ni création rapide.
      */
     private val clientRepository: ClientRepository? = null,
+    initialQuote: Quote? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     // L'état initial doit lui aussi refléter les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
     private val _uiState = MutableStateFlow(
-        revalidate(QuoteFormUiState(isClientDirectoryAvailable = clientRepository != null)),
+        revalidate(
+            if (initialQuote != null) {
+                QuoteFormUiState(
+                    quoteNumber = initialQuote.number,
+                    issueDate = initialQuote.issueDate,
+                    validityDate = initialQuote.validityDate,
+                    issuerName = initialQuote.issuer.name,
+                    issuerSiren = initialQuote.issuer.siren,
+                    issuerSiret = initialQuote.issuer.siret,
+                    recipientName = initialQuote.recipient.name,
+                    recipientSiren = initialQuote.recipient.siren,
+                    recipientSiret = initialQuote.recipient.siret,
+                    clientQuery = initialQuote.recipient.name,
+                    lines = initialQuote.lines.map {
+                        QuoteLineFormState(
+                            label = it.label,
+                            quantity = it.quantity.toString(),
+                            unitPriceHt = formatUnitPrice(it.unitPriceHt.cents),
+                            vatRate = it.vatRate,
+                        )
+                    }.ifEmpty { listOf(QuoteLineFormState()) },
+                    isClientDirectoryAvailable = clientRepository != null,
+                )
+            } else {
+                QuoteFormUiState(isClientDirectoryAvailable = clientRepository != null)
+            }
+        ),
     )
     val uiState: StateFlow<QuoteFormUiState> = _uiState.asStateFlow()
 

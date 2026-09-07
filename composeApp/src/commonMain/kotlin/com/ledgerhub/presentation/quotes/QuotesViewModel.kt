@@ -46,6 +46,7 @@ class QuotesViewModel(
     fun processIntent(intent: QuotesIntent) {
         when (intent) {
             QuotesIntent.LoadQuotes -> loadQuotes()
+            is QuotesIntent.FilterSelected -> _uiState.update { it.copy(statusFilter = intent.filter) }
             is QuotesIntent.ConvertToInvoice -> convert(intent.quoteNumber)
         }
     }

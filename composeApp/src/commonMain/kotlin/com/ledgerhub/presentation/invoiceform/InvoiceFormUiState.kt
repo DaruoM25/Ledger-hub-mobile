@@ -63,6 +63,8 @@ data class InvoiceFormUiState(
      * décocher reste possible au cas par cas (facture à un particulier).
      */
     val applyB2bPenalties: Boolean = true,
+    /** Identifiant du devis d'origine en cas de conversion — piste d'audit fiscale (PAF CGI art. 289-VII-1°). */
+    val sourceQuoteId: String? = null,
     val submittedInvoice: Invoice? = null,
     val submissionStatus: SubmissionStatus = SubmissionStatus.Idle,
     /**

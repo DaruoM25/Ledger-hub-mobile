@@ -25,6 +25,7 @@ object AppTranslations {
         StringKey.THEME_TOGGLE_TO_DARK to "Passer en thème sombre",
 
         StringKey.NAV_OVERVIEW to "Vue d'ensemble",
+        StringKey.NAV_QUOTES to "Devis",
         StringKey.NAV_INVOICES to "Factures",
         StringKey.NAV_CLIENTS to "Clients",
         StringKey.NAV_SETTINGS to "Paramètres",
@@ -384,6 +385,7 @@ object AppTranslations {
         StringKey.THEME_TOGGLE_TO_DARK to "Switch to dark theme",
 
         StringKey.NAV_OVERVIEW to "Dashboard",
+        StringKey.NAV_QUOTES to "Quotes",
         StringKey.NAV_INVOICES to "Invoices",
         StringKey.NAV_CLIENTS to "Clients",
         StringKey.NAV_SETTINGS to "Settings",
