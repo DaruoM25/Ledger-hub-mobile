@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.dashboard
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
@@ -67,13 +69,20 @@ fun RevenueChart(
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = labelColor, fontSize = 11.sp)
 
-    // Une seule valeur d'animation pilote la "montée" de la courbe depuis la ligne de base ; se
-    // rejoue proprement à chaque nouveau jeu de données (rechargement du tableau de bord).
-    val revealProgress = remember { Animatable(0f) }
+    // Animation de tracé progressif (MOB-DASH-03) :
+    // Une valeur [0f -> 1f] en 650 ms anime le dévoilement horizontal de gauche à droite
+    // de la courbe et de son aire dégradée. Se réinitialise proprement à chaque affichage/rechargement.
+    val pathProgress = remember { Animatable(0f) }
     LaunchedEffect(data) {
-        revealProgress.snapTo(0f)
+        pathProgress.snapTo(0f)
         if (data.isNotEmpty()) {
-            revealProgress.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 600))
+            pathProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 650,
+                    easing = LinearOutSlowInEasing,
+                ),
+            )
         }
     }
 
@@ -123,31 +132,40 @@ fun RevenueChart(
                 fun pointFor(index: Int, cents: Long): Offset {
                     val x = if (data.size <= 1) size.width / 2f else padX + index * stepX
                     val norm = (cents - minCents).toFloat() / span.toFloat()
-                    val y = plotHeight - plotHeight * norm * revealProgress.value
+                    val y = plotHeight - plotHeight * norm
                     return Offset(x, y)
                 }
 
                 val points = data.mapIndexed { index, monthly -> pointFor(index, monthly.amount.cents) }
 
-                // Aire sous la courbe.
-                val areaPath = Path().apply {
-                    moveTo(points.first().x, plotHeight)
-                    points.forEach { lineTo(it.x, it.y) }
-                    lineTo(points.last().x, plotHeight)
-                    close()
-                }
-                drawPath(path = areaPath, brush = areaBrush)
+                // Révélation progressive horizontale (MOB-DASH-03) :
+                // Dévoilement de gauche à droite sur les 480 dp du canvas au rythme de pathProgress.
+                val pointRadiusPx = PointRadius.toPx()
+                val startX = padX - pointRadiusPx
+                val endX = padX + availableWidth + pointRadiusPx
+                val currentRevealX = startX + (endX - startX) * pathProgress.value
 
-                // Polyligne.
-                val linePath = Path().apply {
-                    moveTo(points.first().x, points.first().y)
-                    points.drop(1).forEach { lineTo(it.x, it.y) }
-                }
-                drawPath(path = linePath, color = lineColor, style = Stroke(width = 2.5.dp.toPx()))
+                clipRect(left = 0f, top = 0f, right = currentRevealX, bottom = size.height) {
+                    // Aire sous la courbe.
+                    val areaPath = Path().apply {
+                        moveTo(points.first().x, plotHeight)
+                        points.forEach { lineTo(it.x, it.y) }
+                        lineTo(points.last().x, plotHeight)
+                        close()
+                    }
+                    drawPath(path = areaPath, brush = areaBrush)
 
-                // Points ronds.
-                points.forEach { p ->
-                    drawCircle(color = lineColor, radius = PointRadius.toPx(), center = p)
+                    // Polyligne.
+                    val linePath = Path().apply {
+                        moveTo(points.first().x, points.first().y)
+                        points.drop(1).forEach { lineTo(it.x, it.y) }
+                    }
+                    drawPath(path = linePath, color = lineColor, style = Stroke(width = 2.5.dp.toPx()))
+
+                    // Points ronds.
+                    points.forEach { p ->
+                        drawCircle(color = lineColor, radius = pointRadiusPx, center = p)
+                    }
                 }
 
                 // Libellés de mois sous l'axe.

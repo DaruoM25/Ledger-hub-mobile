@@ -2408,3 +2408,34 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N2** | `DashboardScreenRobolectricTest` (Composant graphique, tags sémantiques, défilement) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardScreenRobolectricTest*"` | **PASS (100% vert)** |
 | **N3 (Physique)** | Déploiement `installDebug` sur Samsung Galaxy S23+ (`SM-S916B`) | `./gradlew :composeApp:installDebug` | **PASS (Build & Install OK)** |
 | **Recette visuelle** | Capture d'écran sur terminal réel S23+ (`screenshots/s23_revenue_chart_6_months.png`) | Inspection visuelle | **Conforme à 100%** (Courbe 6 points, total 28 263,60 €, min/max corrects, scroll fluide) |
+
+---
+
+## Sprint Motion : Révélation Progressive & Perceptible de la Courbe CA (MOB-DASH-03)
+- **Date :** 2026-09-08
+- **Branche :** `main`
+- **Statut :** ✅ Clos — Suite de tests unitaires et Robolectric 100% verte (BUILD SUCCESSFUL en 2m35s), APK debug assemblé
+
+### 1. Analyse & Décisions Techniques
+- **Symptôme initial** :
+  * L'animation précédente de la courbe CA était quasi invisible ou trop rapide sur terminal physique.
+  * Les points subissaient une translation verticale simultanée (`norm * revealProgress.value`) au lieu d'un déroulement horizontal fluide (« progressive unrolling »), ne satisfaisant pas l'exigence `[MOB-DASH-03]` du cahier de recette.
+- **Actions & Solutions appliquées** :
+  * **Motion Spec** : Mise en place d'un `pathProgress = remember { Animatable(0f) }` dans `RevenueChart.kt`.
+  * **Déclenchement réactif** : `LaunchedEffect(data)` assure la réinitialisation `snapTo(0f)` et le rejeu de l'animation vers `targetValue = 1f` avec un `tween(durationMillis = 650, easing = LinearOutSlowInEasing)` à chaque navigation ou rechargement.
+  * **Découpe dynamique (`clipRect`)** : Calcul de `currentRevealX = startX + (endX - startX) * pathProgress.value` balayant horizontalement la largeur de 480 dp du canvas.
+  * **Synchronisation visuelle** : L'aire dégradée, la polyligne et les pastilles de données mensuelles apparaissent de manière synchronisée au passage de la tête de tracé, sans déformation verticale résiduelle.
+
+### 2. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/RevenueChart.kt` | Remplacement de la translation verticale par `pathProgress` (650 ms, `LinearOutSlowInEasing`) et révélation progressive `clipRect`. |
+| `logs/audit.md` | Documentation de l'intervention, RCA et qualification. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | `DashboardAnalyticsTest` (Agrégations et calculs domaine) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardAnalyticsTest*"` | **PASS (100% vert)** |
+| **N2** | `DashboardScreenRobolectricTest` (Composant graphique, tags sémantiques, défilement) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardScreenRobolectricTest*"` | **PASS (100% vert)** |
+| **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (APK prêt pour déploiement)** |
+
