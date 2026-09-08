@@ -2357,6 +2357,23 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N2** | `SqlDelightAuthRepositoryLogoutTest`, `AuthFormValidationRobolectricTest`, `SettingsLogoutRobolectricTest` | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (100% vert)** |
 | **N3a/N3b** | `AuthAndLogoutInstrumentedTest` | `./gradlew :composeApp:compileDebugAndroidTestKotlin` | **Compilation OK, prêt pour le S23+** |
 
+---
+
+## Patch Correctif : Déblocage du Rendu au Boot sur Terminal Physique
+- **Date :** 2026-09-08
+- **Branche :** `fix/mobile-auth-validation-and-logout`
+- **Statut :** ✅ Clos — Déployé et validé visuellement sur Samsung Galaxy S23+ autonome (`192.168.1.161:35411`)
+
+### 1. Analyse & Correctif
+- **Symptôme** : Affichage d'un fond d'écran sans crash au démarrage sur terminal physique autonome (blank screen).
+- **Cause Racine** : L'état d'authentification initial n'était pas résolu de manière synchrone et locale à partir de SQLite (`UserAccount`).
+- **Solution Appliquée** :
+  * Introduction de `isAuthResolved` dans `App.kt` garantissant un déblocage sous bloc `finally`.
+  * Résolution locale et immédiate via `authRepository.getCurrentAccount()` sur `Dispatchers.Default` (zéro appel Ktor).
+  * Affichage d'un `CircularProgressIndicator` explicite sous `LedgerHubTheme` tant que `!isAuthResolved`.
+  * Validation directe sur terminal Samsung Galaxy S23+ : application opérationnelle, affichage immédiat de l'écran d'authentification (`AuthScreen`). Capture de recette : `screenshots/s23_boot_screen.png`.
+
+
 
 
 
