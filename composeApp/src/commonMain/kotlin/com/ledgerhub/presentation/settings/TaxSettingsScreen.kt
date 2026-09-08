@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
@@ -61,6 +64,7 @@ object TaxSettingsTags {
     const val FACTURX_SWITCH = "settings_facturx_switch"
     const val SAVE_BUTTON = "settings_save_button"
     const val SNACKBAR_HOST = "settings_snackbar_host"
+    const val LOGOUT_BUTTON = "settings_logout_button"
 
     // ── Zone de danger (US-26) ──────────────────────────────────────────────
     const val DANGER_ZONE_CARD = "settings_danger_zone_card"
@@ -229,6 +233,39 @@ internal fun TaxSettingsView(
             ) {
                 Text(tr(StringKey.SETTINGS_SAVE))
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ── Bouton Déconnexion (Fix RC1) ────────────────────────────────
+            OutlinedButton(
+                onClick = { onIntent(TaxSettingsIntent.Logout) },
+                enabled = !uiState.isLoggingOut && !uiState.isSaving && !uiState.isDeletingAccount,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
+                    .semantics { testTag = TaxSettingsTags.LOGOUT_BUTTON },
+            ) {
+                if (uiState.isLoggingOut) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    Text(
+                        text = "⎋  ${tr(StringKey.SETTINGS_LOGOUT)}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // ── Zone de danger (US-26) ──────────────────────────────────────
             DangerZoneCard(

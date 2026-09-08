@@ -1,5 +1,7 @@
 package com.ledgerhub.presentation.settings
 
+import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.auth.UserAccount
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.settings.TaxSettings
 import com.ledgerhub.domain.settings.TaxSettingsRepository
@@ -26,13 +28,39 @@ private class FakeTaxSettingsRepository(var stored: TaxSettings? = null) : TaxSe
     }
 }
 
+private class FakeAuthRepository : AuthRepository {
+    var logoutCalled = false
+
+    override suspend fun login(email: String, password: String): Result<UserAccount> =
+        Result.success(UserAccount(email, "", ""))
+
+    override suspend fun register(account: UserAccount, password: String): Result<UserAccount> =
+        Result.success(account)
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteAccount(email: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun logout(): Result<Unit> {
+        logoutCalled = true
+        return Result.success(Unit)
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class TaxSettingsViewModelTest {
 
     private fun viewModel(
         repository: TaxSettingsRepository,
         scheduler: kotlinx.coroutines.test.TestCoroutineScheduler,
-    ) = TaxSettingsViewModel(repository, StandardTestDispatcher(scheduler))
+        authRepository: AuthRepository? = null,
+    ) = TaxSettingsViewModel(
+        repository = repository,
+        deleteAccountUseCase = null,
+        authRepository = authRepository,
+        currentUserEmail = "",
+        dispatcher = StandardTestDispatcher(scheduler),
+    )
 
     // ── Chargement ───────────────────────────────────────────────────────────────────────────
 
@@ -201,5 +229,24 @@ class TaxSettingsViewModelTest {
         assertEquals("Atelier Dupont", issuer.name)
         assertEquals("11111111100011", issuer.siret)
         assertEquals("111111111", issuer.siren)
+    }
+
+    // ── Déconnexion (Fix RC1) ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun logout_invokesAuthRepository_andSetsLoggedOutFlag() = runTest {
+        val authRepo = FakeAuthRepository()
+        val vm = viewModel(FakeTaxSettingsRepository(), testScheduler, authRepo)
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.loggedOut)
+        assertFalse(vm.uiState.value.isLoggingOut)
+
+        vm.processIntent(TaxSettingsIntent.Logout)
+        advanceUntilIdle()
+
+        assertTrue(authRepo.logoutCalled)
+        assertFalse(vm.uiState.value.isLoggingOut)
+        assertTrue(vm.uiState.value.loggedOut)
     }
 }

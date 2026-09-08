@@ -38,5 +38,10 @@ interface AuthRepository {
      * des pièces comptables décennales (LPF Art. L.102 B).
      */
     suspend fun deleteAccount(email: String): Result<Unit>
+
+    /**
+     * Déconnecte l'utilisateur courant et réinitialise l'état de session local.
+     */
+    suspend fun logout(): Result<Unit> = Result.success(Unit)
 }
 

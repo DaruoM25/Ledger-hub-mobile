@@ -281,10 +281,11 @@ fun App(
     val deleteAccountUseCase = remember(authRepository, authApiClient) {
         DeleteAccountUseCase(authRepository, authApiClient)
     }
-    val taxSettingsViewModel = remember(taxSettingsRepository, deleteAccountUseCase) {
+    val taxSettingsViewModel = remember(taxSettingsRepository, deleteAccountUseCase, authRepository) {
         TaxSettingsViewModel(
             repository = taxSettingsRepository,
             deleteAccountUseCase = deleteAccountUseCase,
+            authRepository = authRepository,
             currentUserEmail = CURRENT_USER_EMAIL_PLACEHOLDER,
         )
     }
@@ -436,10 +437,10 @@ fun App(
     // prétendre le contraire supposerait un stockage sécurisé qui n'existe pas encore ici.
     var authenticated by rememberSaveable { mutableStateOf(startAuthenticated) }
 
-    // Déconnexion réactive dès la confirmation de la suppression de compte (RGPD Art. 17)
+    // Déconnexion réactive dès la confirmation de la suppression de compte (RGPD Art. 17) ou déconnexion explicite
     val taxSettingsUiState by taxSettingsViewModel.uiState.collectAsState()
-    LaunchedEffect(taxSettingsUiState.accountDeleted) {
-        if (taxSettingsUiState.accountDeleted) {
+    LaunchedEffect(taxSettingsUiState.accountDeleted, taxSettingsUiState.loggedOut) {
+        if (taxSettingsUiState.accountDeleted || taxSettingsUiState.loggedOut) {
             authenticated = false
             destination = Destination.OVERVIEW
         }
