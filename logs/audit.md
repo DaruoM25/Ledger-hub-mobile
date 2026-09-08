@@ -2239,7 +2239,7 @@ l'appareil un message au lieu d'une page blanche.
 | `composeApp/.../domain/i18n/StringKey.kt` & `AppTranslations.kt` | Ajout de l'ensemble des clés bilingues FR/EN (écran Forgot Password & Danger Zone). |
 | `composeApp/.../presentation/auth/AuthScreen.kt` | Intégration du déclencheur tactile M3 >= 48dp « Mot de passe oublié ? » avec tag QA `FORGOT_PASSWORD_LINK`. |
 | `composeApp/.../presentation/settings/TaxSettingsViewModel.kt` | Intégration de la zone de danger, transmission du mot-clé "SUPPRIMER" et du token actif, déconnexion réactive. |
-| `composeApp/.../presentation/settings/TaxSettingsScreen.kt` | Composants Compose `DangerZoneCard` et `DeleteAccountConfirmationDialog` avec tags QA. |
+| `composeApp/.../presentation/settings/TaxSettingsScreen.kt` | Composants Compose `DangerZoneCard`, `DeleteAccountConfirmationDialog` avec tags QA, et `SettingsInputField` découplé avec tokens sémantiques Material 3 clairs (surfaceVariant en alpha, onSurface, outlineVariant). |
 | `composeApp/.../App.kt` | Instanciation de `KtorAuthApiClient` et injection dans les UseCases ; gestion de déconnexion globale. |
 | `composeApp/src/androidUnitTest/.../data/db/SchemaMigrationVerificationTest.kt` | Génération automatique du snapshot si absent et test de migration SQLite v1 -> v10 sans régression. |
 | `composeApp/src/commonTest/.../presentation/auth/AuthViewModelTest.kt` | Mise à jour du mock `FakeAuthRepository`. |
@@ -2253,6 +2253,7 @@ l'appareil un message au lieu d'une page blanche.
 | **RCA-03** | Échec compilation `InvoiceLifecycleUiTest` lors de l'ajout de `userId` dans `AuditEntry`. | Paramètre `userId` inséré en 3e position cassant les appels avec arguments positionnels. | Déplacement de `userId: String? = null` en dernière position avec valeur par défaut, assurant 100% de rétro-compatibilité binaire et source. |
 | **RCA-04** | Échec tâche Gradle `generateCommonMainLedgerHubDatabaseSchema` sur Windows. | Worker Gradle isolé ne propageant pas `-Djava.io.tmpdir`, provoquant un crash DLL JDBC SQLite (`UnsatisfiedLinkError`). | Génération du snapshot `10.db` via `Schema.create(driver)` dans `SchemaMigrationVerificationTest` tirant parti de `org.sqlite.tmpdir` injecté au niveau racine du projet. |
 | **RCA-05** | Rejet 422 sur `/api/auth/account/anonymize`. | Le backend Web requiert le payload `{ "email": email, "confirmation": "SUPPRIMER" }` et un Bearer token d'authentification (401 si absent). | Intégration de `confirmation: String` et `token: String?` dans `AuthApiClient` et `KtorAuthApiClient` avec validation stricte du mot-clé côté client et header `Authorization: Bearer <token>`. |
+| **RCA-06** | Dérive de thème / fond sombre sur les inputs de `TaxSettingsScreen.kt` en mode clair. | Import de `DialogField` de `ClientsScreen.kt` utilisant `LedgerHubTheme.palette.InputBackground` sombre. | Découplage de `TaxSettingsScreen` avec composant local `SettingsInputField` et harmonisation du dialogue de suppression avec les tokens dynamiques Material 3 (`surfaceVariant` en alpha, `onSurface`, `primary`, `outlineVariant`). |
 
 ### 4. Matrice de Validation
 | Composant / Test | Commande d'exécution | Statut |
@@ -2263,8 +2264,10 @@ l'appareil un message au lieu d'une page blanche.
 | **Vérification Migration Schéma SQLite (v1 -> v10)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.data.db.SchemaMigrationVerificationTest"` | **PASS (2 tests, 0 échec)** |
 | **MVI ForgotPasswordViewModel** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.presentation.auth.ForgotPasswordViewModelTest"` | **PASS (5 tests, 0 échec)** |
 | **MVI DangerZone Settings** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.presentation.settings.TaxSettingsViewModelDangerZoneTest"` | **PASS (3 tests, 0 échec)** |
+| **Compilation Android Kotlin** | `./gradlew :composeApp:compileDebugKotlinAndroid` | **BUILD SUCCESSFUL (0 warning bloquant)** |
 | **Total Suite Tests US-26** | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (47/47 tests verts)** |
 | **Tests Robolectric UI** | Présents dans `composeApp/src/androidUnitTest/...` | **Rédigés sans exécution (Consigne PO)** |
+
 
 
 
