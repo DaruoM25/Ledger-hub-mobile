@@ -1,5 +1,6 @@
 package com.ledgerhub.presentation.settings
 
+import com.ledgerhub.domain.auth.AuthRepository
 import com.ledgerhub.domain.auth.DeleteAccountUseCase
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.ValidationResult
@@ -45,6 +46,9 @@ data class TaxSettingsUiState(
     /** Message de confirmation à présenter en Snackbar, consommé par [TaxSettingsIntent.FeedbackShown]. */
     val savedMessage: String? = null,
     val errorMessage: String? = null,
+    // ── Déconnexion (Fix RC1) ───────────────────────────────────────────────
+    val isLoggingOut: Boolean = false,
+    val loggedOut: Boolean = false,
     // ── Zone de danger (US-26) ──────────────────────────────────────────────
     val showDeleteAccountDialog: Boolean = false,
     val deleteConfirmationInput: String = "",
@@ -75,6 +79,8 @@ sealed interface TaxSettingsIntent {
     data class FacturXToggled(val enabled: Boolean) : TaxSettingsIntent
     data object Save : TaxSettingsIntent
     data object FeedbackShown : TaxSettingsIntent
+    // ── Déconnexion (Fix RC1) ───────────────────────────────────────────────
+    data object Logout : TaxSettingsIntent
     // ── Zone de danger (US-26) ──────────────────────────────────────────────
     data object OpenDeleteAccountDialog : TaxSettingsIntent
     data object DismissDeleteAccountDialog : TaxSettingsIntent
@@ -89,13 +95,21 @@ sealed interface TaxSettingsIntent {
 class TaxSettingsViewModel(
     private val repository: TaxSettingsRepository,
     private val deleteAccountUseCase: DeleteAccountUseCase? = null,
+    private val authRepository: AuthRepository? = null,
     private val currentUserEmail: String = "",
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     constructor(
         repository: TaxSettingsRepository,
         dispatcher: CoroutineDispatcher,
-    ) : this(repository, null, "", dispatcher)
+    ) : this(repository, null, null, "", dispatcher)
+
+    constructor(
+        repository: TaxSettingsRepository,
+        deleteAccountUseCase: DeleteAccountUseCase?,
+        currentUserEmail: String,
+        dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    ) : this(repository, deleteAccountUseCase, null, currentUserEmail, dispatcher)
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -129,6 +143,8 @@ class TaxSettingsViewModel(
                 _uiState.update { revalidate(it.copy(facturXEnabled = intent.enabled)) }
 
             TaxSettingsIntent.Save -> save()
+
+            TaxSettingsIntent.Logout -> logout()
 
             TaxSettingsIntent.FeedbackShown -> _uiState.update {
                 it.copy(savedMessage = null, errorMessage = null)
@@ -272,6 +288,33 @@ class TaxSettingsViewModel(
                     it.copy(
                         isDeletingAccount = false,
                         errorMessage = e.message ?: "Échec de la suppression du compte.",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun logout() {
+        val state = _uiState.value
+        if (state.isLoggingOut) return
+
+        _uiState.update { it.copy(isLoggingOut = true, errorMessage = null) }
+        scope.launch {
+            try {
+                authRepository?.logout()
+                _uiState.update {
+                    it.copy(
+                        isLoggingOut = false,
+                        loggedOut = true,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoggingOut = false,
+                        errorMessage = e.message ?: "Échec de la déconnexion.",
                     )
                 }
             }

@@ -2268,6 +2268,46 @@ l'appareil un message au lieu d'une page blanche.
 | **Total Suite Tests US-26** | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (47/47 tests verts)** |
 | **Tests Robolectric UI** | Présents dans `composeApp/src/androidUnitTest/...` | **Rédigés sans exécution (Consigne PO)** |
 
+---
+
+## Patch RC1 — Correctif : Ajout du bouton et flux de Déconnexion (Logout)
+- **Date :** 2026-09-08
+- **Branche :** `fix/mobile-logout-button`
+- **Statut :** ✅ Clos — suite ciblée `TaxSettings*` verte, compilation validée
+
+### 1. Contexte & Décision d'Architecture
+Lors de la recette sur terminal physique de la RC1, un bug bloquant a été relevé : absence de mécanisme permettant à l'utilisateur de se déconnecter de l'application sans détruire son compte.
+
+**Arbitrages & Directives PO :**
+1. **Palette neutre/primaire stricte pour le bouton Déconnexion** : Interdiction formelle d'utiliser `MaterialTheme.colorScheme.error` ou la couleur rouge, réservée exclusivement à la Zone de Danger située en dessous. Utilisation d'un `OutlinedButton` avec `MaterialTheme.colorScheme.outline` et libellé en `onSurface`.
+2. **Accessibilité & Ergonomie tactile** : Cible tactile conforme aux directives Material 3 (>= 48 dp via `defaultMinSize(minHeight = 48.dp)`), espacement physique (`Spacer(16.dp)`) au-dessus de la `DangerZoneCard` pour prévenir tout tap accidentel.
+3. **Contrat MVI & Multithreading** :
+   - Intention `TaxSettingsIntent.Logout`.
+   - Traitement asynchrone non-bloquant sur `Dispatchers.Default`.
+   - Flags d'état `isLoggingOut` et `loggedOut` dans `TaxSettingsUiState`.
+   - `AuthRepository.logout()` avec implémentation par défaut `Result.success(Unit)` pour garantir la rétro-compatibilité 100% avec les mocks existants.
+4. **Câblage Réactif** :
+   - Injection d'`authRepository` dans `TaxSettingsViewModel` au sein de `App.kt`.
+   - Réaction dans le `LaunchedEffect(taxSettingsUiState.accountDeleted, taxSettingsUiState.loggedOut)` pour fermer la porte (`authenticated = false`) et réinitialiser l'onglet vers `Destination.OVERVIEW`.
+
+### 2. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `domain/auth/AuthRepository.kt` | Ajout de la méthode `suspend fun logout(): Result<Unit> = Result.success(Unit)`. |
+| `data/auth/SqlDelightAuthRepository.kt` | Implémentation de `logout()` sur le dispatcher injecté (`Dispatchers.Default`). |
+| `domain/i18n/{StringKey.kt, AppTranslations.kt}` | Ajout de la clé `SETTINGS_LOGOUT` ("Se déconnecter" / "Log out"). |
+| `presentation/settings/TaxSettingsViewModel.kt` | Intention `Logout`, flags `isLoggingOut` et `loggedOut`, injection optionnelle d'`AuthRepository`, gestion `logout()`. |
+| `presentation/settings/TaxSettingsScreen.kt` | Tag `TaxSettingsTags.LOGOUT_BUTTON`, composant `OutlinedButton` neutre avec 48 dp minHeight et espacement avant DangerZoneCard. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Injection d'`authRepository` dans `TaxSettingsViewModel` et écoute de `loggedOut` dans `LaunchedEffect`. |
+| `presentation/settings/TaxSettingsViewModelTest.kt` | Test unitaire `logout_invokesAuthRepository_andSetsLoggedOutFlag` validant le déclenchement et la transition d'état. |
+
+### 3. Matrice de Validation
+| Composant / Test | Commande d'exécution | Statut |
+|---|---|---|
+| **MVI Settings & Déconnexion** | `./gradlew :composeApp:testDebugUnitTest --tests "*TaxSettings*"` | **PASS (BUILD SUCCESSFUL, 0 échec)** |
+| **Compilation Android Kotlin** | `./gradlew :composeApp:compileDebugKotlinAndroid` | **BUILD SUCCESSFUL** |
+
+
 
 
 

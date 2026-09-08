@@ -141,5 +141,10 @@ class SqlDelightAuthRepository(
             Result.failure(e)
         }
     }
+
+    override suspend fun logout(): Result<Unit> = withContext(dispatcher) {
+        // En RC1 autonome locale, les jetons de session sont réinitialisés au niveau de l'orchestrateur d'état.
+        Result.success(Unit)
+    }
 }
 
