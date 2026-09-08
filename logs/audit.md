@@ -2373,10 +2373,38 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
   * Affichage d'un `CircularProgressIndicator` explicite sous `LedgerHubTheme` tant que `!isAuthResolved`.
   * Validation directe sur terminal Samsung Galaxy S23+ : application opérationnelle, affichage immédiat de l'écran d'authentification (`AuthScreen`). Capture de recette : `screenshots/s23_boot_screen.png`.
 
+---
 
+## Sprint Correctif : Alignement du Chiffre d'Affaires sur 6 Mois & Défilement Horizontal
+- **Date :** 2026-09-08
+- **Branche :** `main`
+- **Statut :** ✅ Clos — Déployé via `installDebug` et validé visuellement sur Samsung Galaxy S23+ physique (`192.168.1.161:35411`)
 
+### 1. Analyse & Décisions Techniques
+- **Symptôme initial** :
+  * Le graphique de chiffre d'affaires mobile n'affichait que 5 points de données (février à juin) au lieu des 6 mois annoncés et visibles sur la version Web.
+  * Absence de défilement horizontal permettant une lecture aérée des points et libellés sur les écrans étroits.
+- **Cause racine** :
+  * La graine de données de démo (`demoInvoices()`) dans `App.kt` débutait à `FAC-2026-0142` (février 2026). La facture de janvier `FAC-2026-0143` était omise.
+  * `RevenueChart.kt` dessinait le `Canvas` contraint à la largeur de l'écran sans conteneur scrollable.
+- **Actions & Solutions appliquées** :
+  * **Alignement des données** : Ajout dans `App.kt` de la facture `FAC-2026-0143` (2026-01-20, 2 500,00 € HT / 3 000,00 € TTC encaissée, TVA 20%). Mise à jour de `seedDemoDataIfEmpty()` avec migration douce si 7 factures étaient déjà présentes.
+  * **Chiffre d'Affaires total** : Le CA encaissé sur 6 mois passe rigoureusement à 28 263,60 € TTC (min 1 248,00 € en février, max 9 600,00 € en avril).
+  * **Défilement horizontal** : Ajout d'un conteneur `Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()))` encapsulant le `Canvas` configuré avec une largeur minimale de `480.dp` et hauteur de `180.dp`.
+  * **Disposition graphique** : Introduction d'un padding horizontal `padX = 16.dp.toPx()` et calcul de `availableWidth` garantissant que les points extrêmes (janvier et juin) ainsi que leurs libellés ne sont pas tronqués par les bords du canvas.
+  * **Accessibilité & Testabilité** : Déplacement du `DashboardTags.REVENUE_CHART` sur le conteneur englobant `Column` pour assurer la compatibilité avec les assertions Robolectric (`performScrollTo`, `assertIsDisplayed`).
 
+### 2. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Ajout de `FAC-2026-0143` dans `demoInvoices()`, logique de seeding/migration dans `seedDemoDataIfEmpty()`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/RevenueChart.kt` | Intégration de `rememberScrollState()`, `horizontalScroll`, canvas `480.dp`, padding `padX`, et positionnement sémantique. |
+| `logs/audit.md` | Documentation de l'intervention, RCA et validation. |
 
-
-
-
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | `DashboardAnalyticsTest` (Agrégations CA, calculs des montants min/max et série mensuelle) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardAnalyticsTest*"` | **PASS (100% vert)** |
+| **N2** | `DashboardScreenRobolectricTest` (Composant graphique, tags sémantiques, défilement) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardScreenRobolectricTest*"` | **PASS (100% vert)** |
+| **N3 (Physique)** | Déploiement `installDebug` sur Samsung Galaxy S23+ (`SM-S916B`) | `./gradlew :composeApp:installDebug` | **PASS (Build & Install OK)** |
+| **Recette visuelle** | Capture d'écran sur terminal réel S23+ (`screenshots/s23_revenue_chart_6_months.png`) | Inspection visuelle | **Conforme à 100%** (Courbe 6 points, total 28 263,60 €, min/max corrects, scroll fluide) |

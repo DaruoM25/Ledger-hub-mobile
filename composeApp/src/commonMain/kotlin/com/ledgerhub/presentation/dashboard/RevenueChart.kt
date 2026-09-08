@@ -3,12 +3,16 @@ package com.ledgerhub.presentation.dashboard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,7 +40,7 @@ import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.formatMoney
 
 /** Hauteur fixe du tracé — lisible sur mobile sans dominer l'écran. */
-private val ChartHeight = 168.dp
+private val ChartHeight = 180.dp
 private val PointRadius = 3.5.dp
 private const val GRID_LINES = 3
 
@@ -73,78 +77,92 @@ fun RevenueChart(
         }
     }
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Canvas(
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { testTag = DashboardTags.REVENUE_CHART },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(ChartHeight)
-                .semantics {
-                    testTag = DashboardTags.REVENUE_CHART
-                    contentDescription = "Graphique du chiffre d'affaires des ${data.size} derniers mois"
-                },
+                .horizontalScroll(scrollState),
         ) {
-            if (data.isEmpty()) return@Canvas
+            Canvas(
+                modifier = Modifier
+                    .width(480.dp)
+                    .height(ChartHeight)
+                    .semantics {
+                        contentDescription = "Graphique du chiffre d'affaires des ${data.size} derniers mois"
+                    },
+            ) {
+                if (data.isEmpty()) return@Canvas
 
-            val labelReservedHeight = 20.dp.toPx()
-            val plotHeight = size.height - labelReservedHeight
-            val maxCents = data.maxOf { it.amount.cents }.coerceAtLeast(1L)
-            val minCents = data.minOf { it.amount.cents }.coerceAtLeast(0L)
-            val span = (maxCents - minCents).coerceAtLeast(1L)
+                val padX = 16.dp.toPx()
+                val availableWidth = (size.width - 2 * padX).coerceAtLeast(1f)
+                val labelReservedHeight = 20.dp.toPx()
+                val plotHeight = size.height - labelReservedHeight
+                val maxCents = data.maxOf { it.amount.cents }.coerceAtLeast(1L)
+                val minCents = data.minOf { it.amount.cents }.coerceAtLeast(0L)
+                val span = (maxCents - minCents).coerceAtLeast(1L)
 
-            // Lignes de repère horizontales — repères de lecture discrets, comme sur le Web.
-            repeat(GRID_LINES + 1) { i ->
-                val y = plotHeight * i / GRID_LINES
-                drawLine(
-                    color = gridColor.copy(alpha = 0.4f),
-                    start = Offset(0f, y),
-                    end = Offset(size.width, y),
-                    strokeWidth = Stroke.HairlineWidth,
-                )
-            }
+                // Lignes de repère horizontales — repères de lecture discrets, comme sur le Web.
+                repeat(GRID_LINES + 1) { i ->
+                    val y = plotHeight * i / GRID_LINES
+                    drawLine(
+                        color = gridColor.copy(alpha = 0.4f),
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = Stroke.HairlineWidth,
+                    )
+                }
 
-            val stepX = if (data.size == 1) 0f else size.width / (data.size - 1)
-            fun pointFor(index: Int, cents: Long): Offset {
-                val x = if (data.size == 1) size.width / 2f else index * stepX
-                val norm = (cents - minCents).toFloat() / span.toFloat()
-                val y = plotHeight - plotHeight * norm * revealProgress.value
-                return Offset(x, y)
-            }
+                val stepX = if (data.size <= 1) 0f else availableWidth / (data.size - 1)
+                fun pointFor(index: Int, cents: Long): Offset {
+                    val x = if (data.size <= 1) size.width / 2f else padX + index * stepX
+                    val norm = (cents - minCents).toFloat() / span.toFloat()
+                    val y = plotHeight - plotHeight * norm * revealProgress.value
+                    return Offset(x, y)
+                }
 
-            val points = data.mapIndexed { index, monthly -> pointFor(index, monthly.amount.cents) }
+                val points = data.mapIndexed { index, monthly -> pointFor(index, monthly.amount.cents) }
 
-            // Aire sous la courbe.
-            val areaPath = Path().apply {
-                moveTo(points.first().x, plotHeight)
-                points.forEach { lineTo(it.x, it.y) }
-                lineTo(points.last().x, plotHeight)
-                close()
-            }
-            drawPath(path = areaPath, brush = areaBrush)
+                // Aire sous la courbe.
+                val areaPath = Path().apply {
+                    moveTo(points.first().x, plotHeight)
+                    points.forEach { lineTo(it.x, it.y) }
+                    lineTo(points.last().x, plotHeight)
+                    close()
+                }
+                drawPath(path = areaPath, brush = areaBrush)
 
-            // Polyligne.
-            val linePath = Path().apply {
-                moveTo(points.first().x, points.first().y)
-                points.drop(1).forEach { lineTo(it.x, it.y) }
-            }
-            drawPath(path = linePath, color = lineColor, style = Stroke(width = 2.5.dp.toPx()))
+                // Polyligne.
+                val linePath = Path().apply {
+                    moveTo(points.first().x, points.first().y)
+                    points.drop(1).forEach { lineTo(it.x, it.y) }
+                }
+                drawPath(path = linePath, color = lineColor, style = Stroke(width = 2.5.dp.toPx()))
 
-            // Points ronds.
-            points.forEach { p ->
-                drawCircle(color = lineColor, radius = PointRadius.toPx(), center = p)
-            }
+                // Points ronds.
+                points.forEach { p ->
+                    drawCircle(color = lineColor, radius = PointRadius.toPx(), center = p)
+                }
 
-            // Libellés de mois sous l'axe.
-            data.forEachIndexed { index, monthly ->
-                val monthLabel = monthly.month.takeLast(2) // "AAAA-MM" -> "MM"
-                val layout = textMeasurer.measure(monthLabel, style = labelStyle)
-                val cx = if (data.size == 1) size.width / 2f else index * stepX
-                drawText(
-                    textLayoutResult = layout,
-                    topLeft = Offset(
-                        x = (cx - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width),
-                        y = plotHeight + (labelReservedHeight - layout.size.height) / 2f,
-                    ),
-                )
+                // Libellés de mois sous l'axe.
+                data.forEachIndexed { index, monthly ->
+                    val monthLabel = monthly.month.takeLast(2) // "AAAA-MM" -> "MM"
+                    val layout = textMeasurer.measure(monthLabel, style = labelStyle)
+                    val cx = if (data.size <= 1) size.width / 2f else padX + index * stepX
+                    drawText(
+                        textLayoutResult = layout,
+                        topLeft = Offset(
+                            x = (cx - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width),
+                            y = plotHeight + (labelReservedHeight - layout.size.height) / 2f,
+                        ),
+                    )
+                }
             }
         }
 

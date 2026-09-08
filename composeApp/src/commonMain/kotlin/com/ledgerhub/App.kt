@@ -1226,9 +1226,21 @@ private suspend fun seedDemoDataIfEmpty(repository: SqlDelightInvoiceRepository)
     // En cas d'échec malgré tout (base inaccessible), on s'abstient : ne rien semer laisse un
     // écran vide, semer à tort détruit des données.
     val existingCount = repository.countInvoices().getOrElse { return false }
-    if (existingCount > 0) return false
-    demoInvoices().forEach { repository.submitInvoice(it) }
-    return true
+    if (existingCount == 0L) {
+        demoInvoices().forEach { repository.submitInvoice(it) }
+        return true
+    }
+    // Migration du jeu de démo (alignement 6 mois glissants Janvier-Juin) :
+    // Si l'application avait déjà semé les 7 factures d'origine (Fév à Juil), on insère
+    // la facture de Janvier FAC-2026-0143 manquante pour compléter la série temporelle.
+    if (existingCount == 7L) {
+        val janInvoice = demoInvoices().firstOrNull { it.number == "FAC-2026-0143" }
+        if (janInvoice != null) {
+            repository.submitInvoice(janInvoice)
+            return true
+        }
+    }
+    return false
 }
 
 private fun demoInvoices(): List<Invoice> {
@@ -1243,6 +1255,7 @@ private fun demoInvoices(): List<Invoice> {
         dueDate = dueDate,
     )
     return listOf(
+        demo("FAC-2026-0143", InvoiceStatus.PAID, "2026-01-20", "2026-02-20", 250_000, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0142", InvoiceStatus.PAID, "2026-02-24", "2026-03-24", 104_000, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0141", InvoiceStatus.PAID, "2026-03-22", "2026-04-22", 390_000, VatRate.TAUX_NORMAL),
         demo("FAC-2026-0140", InvoiceStatus.PAID, "2026-04-20", "2026-05-20", 800_000, VatRate.TAUX_NORMAL),
