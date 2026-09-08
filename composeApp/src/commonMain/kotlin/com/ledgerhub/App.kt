@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -437,6 +438,22 @@ fun App(
     // survit en revanche pas à la fermeture du processus — aucun jeton n'est persisté, et
     // prétendre le contraire supposerait un stockage sécurisé qui n'existe pas encore ici.
     var authenticated by rememberSaveable { mutableStateOf(startAuthenticated) }
+    var isAuthResolved by remember { mutableStateOf(startAuthenticated) }
+
+    LaunchedEffect(authRepository) {
+        if (!startAuthenticated) {
+            try {
+                val account = authRepository.getCurrentAccount()
+                authenticated = (account != null)
+            } catch (e: Throwable) {
+                authenticated = false
+            } finally {
+                isAuthResolved = true
+            }
+        } else {
+            isAuthResolved = true
+        }
+    }
 
     // Déconnexion réactive dès la confirmation de la suppression de compte (RGPD Art. 17) ou déconnexion explicite
     val taxSettingsUiState by taxSettingsViewModel.uiState.collectAsState()
@@ -446,6 +463,20 @@ fun App(
             destination = Destination.OVERVIEW
             overlay = Overlay.None
         }
+    }
+
+    if (!isAuthResolved) {
+        LedgerHubTheme(mode = themeState.mode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(LedgerHubTheme.palette.Background),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = LedgerHubTheme.palette.Accent)
+            }
+        }
+        return
     }
 
     if (!authenticated) {
