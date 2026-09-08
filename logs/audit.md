@@ -2307,6 +2307,57 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **MVI Settings & Déconnexion** | `./gradlew :composeApp:testDebugUnitTest --tests "*TaxSettings*"` | **PASS (BUILD SUCCESSFUL, 0 échec)** |
 | **Compilation Android Kotlin** | `./gradlew :composeApp:compileDebugKotlinAndroid` | **BUILD SUCCESSFUL** |
 
+---
+
+## Correctif Sécurité Auth, Robustesse Déconnexion & Qualification N1-N3b
+- **Date :** 2026-09-08
+- **Branche :** `fix/mobile-auth-validation-and-logout`
+- **Statut :** ✅ Clos — suites N1 et N2 vertes à 100%, prêt pour exécution N3a/N3b (Samsung S23+)
+
+### 1. Contexte & Décisions d'Architecture
+- **Sécurisation du formulaire d'inscription** :
+  * Création de `PasswordValidator.kt` (pur Kotlin, zéro dépendance plateforme) : vérification de longueur >= 8, majuscule (`[A-Z]`), chiffre (`[0-9]`), caractère spécial (`[^A-Za-z0-9]`), et restitution du libellé réglementaire : *« Le mot de passe doit comporter au moins 8 caractères, une majuscule, un chiffre et un caractère spécial. »*.
+  * Câblage systématique de `EmailValidator.isValid(email)` et de la confirmation stricte du mot de passe dans `AuthViewModel`.
+  * Exposition des erreurs réactives dans `AuthUiState` (`emailError`, `passwordError`, `passwordConfirmationError`) et rendu sous les champs respectifs en `MaterialTheme.colorScheme.error`.
+- **Stabilisation de la Déconnexion** :
+  * Dans `SqlDelightAuthRepository.kt` : gestion d'un `_currentAccount` StateFlow, méthode `observeCurrentAccount()` et `getCurrentAccount()`.
+  * Purge atomique de la table `UserAccount` via `queries.deleteAllAccounts()` en transaction SQLite sur `Dispatchers.Default` lors de `logout()`.
+  * Dans `App.kt` : partage de la même instance `authRepository` entre `App` et `AuthGate` ; réaction stricte dans `LaunchedEffect(taxSettingsUiState.accountDeleted, taxSettingsUiState.loggedOut)` pour refermer la porte d'authentification (`authenticated = false`), réinitialiser la destination (`OVERVIEW`) et effacer tout overlay actif (`Overlay.None`).
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Nature | Rôle |
+|---|---|---|
+| `domain/auth/PasswordValidator.kt` | [NEW] | Validateur de complexité de mot de passe pur Kotlin avec `PasswordValidationResult`. |
+| `domain/auth/AuthRepository.kt` | [MODIFY] | Exposition de `observeCurrentAccount(): Flow<UserAccount?>` et `getCurrentAccount()`. |
+| `data/auth/SqlDelightAuthRepository.kt` | [MODIFY] | Implémentation réactive du compte courant et purge atomique `deleteAllAccounts()` dans `logout()`. |
+| `sqldelight/.../UserAccount.sq` | [MODIFY] | Ajout des requêtes `selectCurrentAccount` et `deleteAllAccounts`. |
+| `presentation/auth/AuthUiState.kt` | [MODIFY] | Ajout de `emailError`, `passwordError`, `passwordConfirmation`, et prédicats durcis. |
+| `presentation/auth/AuthIntent.kt` | [MODIFY] | Ajout de l'intention `PasswordConfirmationChanged`. |
+| `presentation/auth/AuthViewModel.kt` | [MODIFY] | Calcul réactif des erreurs de validation et blocage de `submit()`. |
+| `presentation/auth/AuthScreen.kt` | [MODIFY] | Tags QA d'erreurs, affichage des bandeaux rouges et champ de confirmation en inscription. |
+| `composeApp/.../App.kt` | [MODIFY] | Partage de l'instance d'`AuthRepository` et réinitialisation de session. |
+| `commonTest/.../PasswordValidatorTest.kt` | [NEW] | 5 tests unitaires N1 couvrant tous les cas de rejet et le succès. |
+| `commonTest/.../AuthViewModelTest.kt` | [MODIFY] | Tests unitaires N1 de blocage d'inscription et d'exposition des erreurs. |
+| `androidUnitTest/.../SqlDelightAuthRepositoryLogoutTest.kt` | [NEW] | Test d'intégration N2 en SQLite in-memory : purge et émission de `null`. |
+| `androidUnitTest/.../AuthFormValidationRobolectricTest.kt` | [NEW] | Test Robolectric N2 : affichage du message réglementaire et blocage du bouton. |
+| `androidUnitTest/.../SettingsLogoutRobolectricTest.kt` | [NEW] | Test Robolectric N2 : ergonomie tactile 48dp et transition `loggedOut`. |
+| `androidInstrumentedTest/.../AuthAndLogoutInstrumentedTest.kt` | [NEW] | Suite instrumentée N3a/N3b (Scénarios 1, 2, 3 et export des captures d'écran). |
+
+### 3. Matrice RCA (Root Cause Analysis)
+| Incident | Symptôme | Cause Racine | Correctif Appliqué |
+|---|---|---|---|
+| **RCA-01** | Permissivité à l'inscription (mot de passe faible et email invalide acceptés). | Absence de validateur de complexité et non-vérification de syntaxe d'email dans `AuthViewModel`. | Création de `PasswordValidator` et validation obligatoire dans `AuthViewModel` avant toute écriture en base. |
+| **RCA-02** | Déconnexion instable / résiduelle. | `SqlDelightAuthRepository` ne purgeait pas la base locale et `App.kt` instanciait un second repository indépendant dans `AuthGate`. | Unification du repository en instance partagée, implémentation de `deleteAllAccounts()` et émission de `null` sur `observeCurrentAccount()`. |
+| **RCA-03** | Erreur de test dans `AuthViewModelTest`. | Les anciens tests utilisaient le mot de passe faible `"motdepasse"`. | Mise à jour des tests d'inscription vers `"SecurePass2026!"` conforme aux exigences. |
+
+### 4. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | `PasswordValidatorTest`, `EmailValidatorTest`, `AuthViewModelTest`, `TaxSettingsViewModelTest` | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (100% vert)** |
+| **N2** | `SqlDelightAuthRepositoryLogoutTest`, `AuthFormValidationRobolectricTest`, `SettingsLogoutRobolectricTest` | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (100% vert)** |
+| **N3a/N3b** | `AuthAndLogoutInstrumentedTest` | `./gradlew :composeApp:compileDebugAndroidTestKotlin` | **Compilation OK, prêt pour le S23+** |
+
+
 
 
 

@@ -35,3 +35,10 @@ VALUES (?, ?, ?, ?, ?, ?);
 
 deleteAccount:
 DELETE FROM UserAccount WHERE email = ?;
+
+selectCurrentAccount:
+SELECT * FROM UserAccount LIMIT 1;
+
+deleteAllAccounts:
+DELETE FROM UserAccount;
+

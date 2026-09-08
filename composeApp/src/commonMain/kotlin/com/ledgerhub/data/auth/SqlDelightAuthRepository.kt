@@ -12,6 +12,9 @@ import com.ledgerhub.domain.time.SystemClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import kotlin.uuid.ExperimentalUuidApi
@@ -41,6 +44,19 @@ class SqlDelightAuthRepository(
 ) : AuthRepository {
 
     private val queries get() = database.userAccountQueries
+    private val _currentAccount = MutableStateFlow<UserAccount?>(null)
+
+    override fun observeCurrentAccount(): Flow<UserAccount?> = _currentAccount.asStateFlow()
+
+    override suspend fun getCurrentAccount(): UserAccount? = withContext(dispatcher) {
+        _currentAccount.value ?: queries.selectCurrentAccount().executeAsOneOrNull()?.let {
+            UserAccount(
+                email = it.email,
+                companyName = it.companyName,
+                siret = it.siret,
+            ).also { account -> _currentAccount.value = account }
+        }
+    }
 
     override suspend fun login(email: String, password: String): Result<UserAccount> = withContext(dispatcher) {
         try {
@@ -54,13 +70,13 @@ class SqlDelightAuthRepository(
                 throw InvalidCredentialsException()
             }
 
-            Result.success(
-                UserAccount(
-                    email = stored.email,
-                    companyName = stored.companyName,
-                    siret = stored.siret,
-                )
+            val user = UserAccount(
+                email = stored.email,
+                companyName = stored.companyName,
+                siret = stored.siret,
             )
+            _currentAccount.value = user
+            Result.success(user)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -97,7 +113,9 @@ class SqlDelightAuthRepository(
                 )
             }
 
-            Result.success(account.copy(email = email))
+            val created = account.copy(email = email)
+            _currentAccount.value = created
+            Result.success(created)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -134,6 +152,7 @@ class SqlDelightAuthRepository(
                 )
                 queries.deleteAccount(normalized)
             }
+            _currentAccount.value = null
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -143,8 +162,17 @@ class SqlDelightAuthRepository(
     }
 
     override suspend fun logout(): Result<Unit> = withContext(dispatcher) {
-        // En RC1 autonome locale, les jetons de session sont réinitialisés au niveau de l'orchestrateur d'état.
-        Result.success(Unit)
+        try {
+            database.transaction {
+                queries.deleteAllAccounts()
+            }
+            _currentAccount.value = null
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }
 

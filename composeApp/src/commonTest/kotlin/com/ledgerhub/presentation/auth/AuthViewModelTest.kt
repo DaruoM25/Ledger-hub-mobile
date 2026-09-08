@@ -340,7 +340,7 @@ class AuthViewModelTest {
         val viewModel = viewModel(sirene, StandardTestDispatcher(testScheduler))
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
-        viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
 
         assertFalse(viewModel.uiState.value.isRegisterEnabled)
 
@@ -361,7 +361,7 @@ class AuthViewModelTest {
         )
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
-        viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
 
         viewModel.processIntent(AuthIntent.Submit)
         advanceUntilIdle()
@@ -387,7 +387,8 @@ class AuthViewModelTest {
         )
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
-        viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
+        viewModel.processIntent(AuthIntent.PasswordConfirmationChanged("SecurePass2026!"))
         viewModel.processIntent(AuthIntent.SiretChanged("901 234 567 00013"))
         advanceUntilIdle()
 
@@ -406,7 +407,7 @@ class AuthViewModelTest {
             ),
             repository.registeredAccount,
         )
-        assertEquals("motdepasse", repository.lastPassword)
+        assertEquals("SecurePass2026!", repository.lastPassword)
     }
 
     /** Adresse déjà ouverte : le message du dépôt part à l'écran, la porte reste fermée. */
@@ -421,7 +422,8 @@ class AuthViewModelTest {
         )
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
-        viewModel.processIntent(AuthIntent.PasswordChanged("motdepasse"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
+        viewModel.processIntent(AuthIntent.PasswordConfirmationChanged("SecurePass2026!"))
         viewModel.processIntent(AuthIntent.SiretChanged(validSiret))
         advanceUntilIdle()
 
@@ -432,6 +434,76 @@ class AuthViewModelTest {
         assertFalse(state.registrationSucceeded)
         assertFalse(state.isLoading)
         assertEquals(failure.message, state.errorMessage)
+    }
+
+    // ── Validation de sécurité (Fix RC1) ────────────────────────────────────
+
+    @Test
+    fun invalidEmail_exposesEmailError_andKeepsSubmitDisabled() {
+        val viewModel = AuthViewModel(authRepository = FakeAuthRepository())
+        viewModel.processIntent(AuthIntent.EmailChanged("invalid-email"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
+
+        val state = viewModel.uiState.value
+        assertEquals("Format d'adresse e-mail invalide", state.emailError)
+        assertFalse(state.isSubmitEnabled)
+    }
+
+    @Test
+    fun weakPassword_inRegistration_exposesPasswordError_andBlocksRegistration() = runTest {
+        val sirene = FakeSireneLookupService()
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(
+            authRepository = repository,
+            sireneLookupService = sirene,
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
+        viewModel.processIntent(AuthIntent.ModeChanged(true))
+        viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("weakpass")) // < 8 car, pas maj, pas digit, pas spécial
+        viewModel.processIntent(AuthIntent.SiretChanged(validSiret))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(
+            "Le mot de passe doit comporter au moins 8 caractères, une majuscule, un chiffre et un caractère spécial.",
+            state.passwordError,
+        )
+        assertFalse(state.isRegisterEnabled)
+
+        // Tentative de soumission malgré tout : l'émission doit être bloquée
+        viewModel.processIntent(AuthIntent.Submit)
+        advanceUntilIdle()
+
+        assertNull(repository.registeredAccount)
+        assertFalse(viewModel.uiState.value.registrationSucceeded)
+    }
+
+    @Test
+    fun mismatchedPasswordConfirmation_exposesError_andBlocksRegistration() = runTest {
+        val sirene = FakeSireneLookupService()
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(
+            authRepository = repository,
+            sireneLookupService = sirene,
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
+        viewModel.processIntent(AuthIntent.ModeChanged(true))
+        viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
+        viewModel.processIntent(AuthIntent.PasswordConfirmationChanged("DifferentPass2026!"))
+        viewModel.processIntent(AuthIntent.SiretChanged(validSiret))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Les mots de passe ne correspondent pas", state.passwordConfirmationError)
+        assertFalse(state.isRegisterEnabled)
+
+        viewModel.processIntent(AuthIntent.Submit)
+        advanceUntilIdle()
+
+        assertNull(repository.registeredAccount)
+        assertFalse(viewModel.uiState.value.registrationSucceeded)
     }
 
     @Test

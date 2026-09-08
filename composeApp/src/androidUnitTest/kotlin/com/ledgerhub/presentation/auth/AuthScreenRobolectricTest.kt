@@ -238,7 +238,8 @@ class AuthScreenRobolectricTest {
         onNodeWithTag(AuthTags.SUBMIT_BUTTON).performScrollTo().assertIsNotEnabled()
 
         onNodeWithTag(AuthTags.EMAIL_FIELD).performScrollTo().performTextInput("vous@cabinet.fr")
-        onNodeWithTag(AuthTags.PASSWORD_FIELD).performScrollTo().performTextInput("motdepasse")
+        onNodeWithTag(AuthTags.PASSWORD_FIELD).performScrollTo().performTextInput("SecurePass2026!")
+        onNodeWithTag(AuthTags.CONFIRM_PASSWORD_FIELD).performScrollTo().performTextInput("SecurePass2026!")
         onNodeWithTag(AuthTags.SUBMIT_BUTTON).performScrollTo().assertIsNotEnabled()
 
         onNodeWithTag(AuthTags.SIRET_INPUT).performScrollTo().performTextInput(validSiret)

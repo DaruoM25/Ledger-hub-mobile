@@ -69,6 +69,7 @@ import com.ledgerhub.data.reconciliation.SqlDelightReconciliationRepository
 import com.ledgerhub.data.directory.SqlDelightDirectoryRepository
 import com.ledgerhub.data.audit.SqlDelightAuditRepository
 import com.ledgerhub.data.auth.SqlDelightAuthRepository
+import com.ledgerhub.domain.auth.AuthRepository
 import com.ledgerhub.data.client.SqlDelightClientRepository
 import com.ledgerhub.data.repository.LocalLedgerRepository
 import com.ledgerhub.data.settings.SqlDelightTaxSettingsRepository
@@ -443,13 +444,18 @@ fun App(
         if (taxSettingsUiState.accountDeleted || taxSettingsUiState.loggedOut) {
             authenticated = false
             destination = Destination.OVERVIEW
+            overlay = Overlay.None
         }
     }
 
     if (!authenticated) {
         LedgerHubTheme(mode = themeState.mode) {
             CompositionLocalProvider(LocalAppLanguage provides language) {
-                AuthGate(database = database, onAuthenticated = { authenticated = true })
+                AuthGate(
+                    database = database,
+                    authRepository = authRepository,
+                    onAuthenticated = { authenticated = true },
+                )
             }
         }
         // Sortie anticipée plutôt qu'un `else` enveloppant tout le shell : la composition du shell
@@ -655,10 +661,13 @@ fun App(
  * qui s'ouvre sur un simple formulaire rempli.
  */
 @Composable
-private fun AuthGate(database: LedgerHubDatabase, onAuthenticated: () -> Unit) {
+private fun AuthGate(
+    database: LedgerHubDatabase,
+    authRepository: AuthRepository,
+    onAuthenticated: () -> Unit,
+) {
     var showForgotPassword by remember { mutableStateOf(false) }
     val sireneLookupService = remember { KtorSireneLookupService() }
-    val authRepository = remember(database) { SqlDelightAuthRepository(database) }
     val authViewModel = remember(sireneLookupService, authRepository) {
         AuthViewModel(
             authRepository = authRepository,

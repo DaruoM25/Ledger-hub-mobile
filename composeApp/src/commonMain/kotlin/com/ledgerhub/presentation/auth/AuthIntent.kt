@@ -8,6 +8,7 @@ sealed interface AuthIntent {
 
     data class EmailChanged(val value: String) : AuthIntent
     data class PasswordChanged(val value: String) : AuthIntent
+    data class PasswordConfirmationChanged(val value: String) : AuthIntent
 
     /**
      * Frappe dans le champ SIRET. C'est le **ViewModel** qui décide s'il y a lieu d'interroger le
