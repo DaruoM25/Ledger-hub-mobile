@@ -80,6 +80,14 @@ class SqlDelightAuthRepositoryLifecycleTest {
             dueDate = "2026-09-30",
             facturX = 1L,
             applyB2bPenalties = 1L,
+            clientSiren = "123456789",
+            natureOperation = "PRESTATION_SERVICES",
+            optionTvaDebit = 0L,
+            isEReporting = 0L,
+            deliveryStreet = "",
+            deliveryZip = "",
+            deliveryCity = "",
+            deliveryCountry = "",
         )
 
         // Vérification présence initiale

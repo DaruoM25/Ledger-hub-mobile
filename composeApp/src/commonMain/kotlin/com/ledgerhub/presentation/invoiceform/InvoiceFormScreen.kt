@@ -52,10 +52,13 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
+import com.ledgerhub.domain.invoice.NatureOperation
+import com.ledgerhub.domain.invoice.TransactionMode
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.presentation.compliance.CompliancePanel
 import com.ledgerhub.presentation.components.ClientPicker
@@ -95,6 +98,21 @@ object InvoiceFormTags {
     const val LOADING_INDICATOR = "invoice_form_loading_indicator"
     const val SUCCESS_MESSAGE = "invoice_form_success_message"
     const val ERROR_MESSAGE = "invoice_form_error_message"
+
+    // ── Tags Réforme 2026 (US-27) ──────────────────────────────────────────
+    const val TRANSACTION_MODE_SELECTOR = "invoice_form_transaction_mode_selector"
+    const val TRANSACTION_MODE_B2B = "invoice_form_transaction_mode_b2b"
+    const val TRANSACTION_MODE_EREPORTING = "invoice_form_transaction_mode_ereporting"
+    const val NATURE_OPERATION_SELECTOR = "invoice_form_nature_operation_selector"
+    fun natureOperationTag(nature: NatureOperation) = "invoice_form_nature_operation_${nature.name}"
+    const val OPTION_TVA_DEBIT_SWITCH = "invoice_form_option_tva_debit_switch"
+    const val DIFFERENT_DELIVERY_ADDRESS_CHECKBOX = "invoice_form_delivery_address_checkbox"
+    const val DELIVERY_ADDRESS_SECTION = "invoice_form_delivery_address_section"
+    const val DELIVERY_STREET = "invoice_form_delivery_street"
+    const val DELIVERY_ZIP = "invoice_form_delivery_zip"
+    const val DELIVERY_CITY = "invoice_form_delivery_city"
+    const val DELIVERY_COUNTRY = "invoice_form_delivery_country"
+
     /** Sélecteur de mode de saisie (US-15) — voir [InvoiceFormMode]. */
     const val MODE_SELECTOR = "invoice_form_mode_selector"
 
@@ -221,6 +239,31 @@ internal fun InvoiceFormContent(
             )
         }
 
+        // Commutateur de Transaction (US-27)
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { testTag = InvoiceFormTags.TRANSACTION_MODE_SELECTOR },
+        ) {
+            val isB2b = uiState.transactionMode == TransactionMode.E_INVOICING
+            SegmentedButton(
+                selected = isB2b,
+                onClick = { onIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_INVOICING)) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                modifier = Modifier.semantics { testTag = InvoiceFormTags.TRANSACTION_MODE_B2B },
+            ) {
+                Text(tr(StringKey.TRANSACTION_MODE_B2B))
+            }
+            SegmentedButton(
+                selected = !isB2b,
+                onClick = { onIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_REPORTING)) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                modifier = Modifier.semantics { testTag = InvoiceFormTags.TRANSACTION_MODE_EREPORTING },
+            ) {
+                Text(tr(StringKey.TRANSACTION_MODE_EREPORTING))
+            }
+        }
+
         SectionCard(title = tr(StringKey.FORM_SECTION_CLIENT), glyph = "🏢") {
             // Sélecteur dynamique (US-11) : la frappe filtre l'annuaire, la sélection remplit
             // SIRET et email, une saisie inconnue propose la création rapide.
@@ -237,8 +280,13 @@ internal fun InvoiceFormContent(
                 onClientSelected = { onIntent(InvoiceFormIntent.OnClientSelected(it)) },
                 onAddNewClient = { onIntent(InvoiceFormIntent.OnOpenQuickClientDialog) },
             )
+            val siretLabel = if (uiState.transactionMode == TransactionMode.E_INVOICING) {
+                "${tr(StringKey.FIELD_CLIENT_SIRET)} *"
+            } else {
+                tr(StringKey.FIELD_CLIENT_SIRET)
+            }
             FormField(
-                label = tr(StringKey.FIELD_CLIENT_SIRET),
+                label = siretLabel,
                 value = uiState.clientSiret,
                 tag = InvoiceFormTags.CLIENT_SIRET,
                 error = uiState.visibleErrors[InvoiceFormField.CLIENT_SIRET]?.let { tr(it.stringKey) },
@@ -347,6 +395,134 @@ internal fun InvoiceFormContent(
             LegalFooterText(applyB2bPenalties = uiState.applyB2bPenalties)
         }
 
+        // ── Fiscalité & Livraison Réforme 2026 (US-27) ─────────────────────────
+        SectionCard(title = "Conformité Fiscale 2026", glyph = "⚖️") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = tr(StringKey.NATURE_OPERATION_LABEL),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.NATURE_OPERATION_SELECTOR },
+                ) {
+                    val natures = NatureOperation.entries
+                    natures.forEachIndexed { index, nature ->
+                        val label = when (nature) {
+                            NatureOperation.LIVRAISON_BIENS -> tr(StringKey.NATURE_OPERATION_GOODS)
+                            NatureOperation.PRESTATION_SERVICES -> tr(StringKey.NATURE_OPERATION_SERVICES)
+                            NatureOperation.MIXTE -> tr(StringKey.NATURE_OPERATION_MIXED)
+                        }
+                        SegmentedButton(
+                            selected = uiState.natureOperation == nature,
+                            onClick = { onIntent(InvoiceFormIntent.NatureOperationChanged(nature)) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = natures.size),
+                            modifier = Modifier.semantics { testTag = InvoiceFormTags.natureOperationTag(nature) },
+                        ) {
+                            Text(label, maxLines = 1)
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(
+                        text = tr(StringKey.OPTION_TVA_DEBIT_LABEL),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = tr(StringKey.OPTION_TVA_DEBIT_DESC),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = uiState.optionTvaDebit,
+                    onCheckedChange = { onIntent(InvoiceFormIntent.ToggleOptionTvaDebit(it)) },
+                    enabled = enabled,
+                    modifier = Modifier.semantics { testTag = InvoiceFormTags.OPTION_TVA_DEBIT_SWITCH },
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = uiState.hasDifferentDeliveryAddress,
+                        enabled = enabled,
+                        role = Role.Checkbox,
+                        onValueChange = { onIntent(InvoiceFormIntent.ToggleDifferentDeliveryAddress(it)) },
+                    )
+                    .padding(vertical = 4.dp)
+                    .semantics { testTag = InvoiceFormTags.DIFFERENT_DELIVERY_ADDRESS_CHECKBOX },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = uiState.hasDifferentDeliveryAddress,
+                    onCheckedChange = null,
+                    enabled = enabled,
+                )
+                Text(
+                    text = tr(StringKey.DIFFERENT_DELIVERY_ADDRESS_CHECKBOX),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+            }
+
+            AnimatedVisibility(
+                visible = uiState.hasDifferentDeliveryAddress,
+                modifier = Modifier.semantics { testTag = InvoiceFormTags.DELIVERY_ADDRESS_SECTION },
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = tr(StringKey.DELIVERY_ADDRESS_SECTION_TITLE),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    FormField(
+                        label = tr(StringKey.FIELD_DELIVERY_STREET),
+                        value = uiState.deliveryStreet,
+                        tag = InvoiceFormTags.DELIVERY_STREET,
+                        enabled = enabled,
+                        onValueChange = { onIntent(InvoiceFormIntent.DeliveryStreetChanged(it)) },
+                    )
+                    FormField(
+                        label = tr(StringKey.FIELD_DELIVERY_ZIP),
+                        value = uiState.deliveryZip,
+                        tag = InvoiceFormTags.DELIVERY_ZIP,
+                        enabled = enabled,
+                        onValueChange = { onIntent(InvoiceFormIntent.DeliveryZipChanged(it)) },
+                        keyboardType = KeyboardType.Number,
+                    )
+                    FormField(
+                        label = tr(StringKey.FIELD_DELIVERY_CITY),
+                        value = uiState.deliveryCity,
+                        tag = InvoiceFormTags.DELIVERY_CITY,
+                        enabled = enabled,
+                        onValueChange = { onIntent(InvoiceFormIntent.DeliveryCityChanged(it)) },
+                    )
+                    FormField(
+                        label = tr(StringKey.FIELD_DELIVERY_COUNTRY),
+                        value = uiState.deliveryCountry,
+                        tag = InvoiceFormTags.DELIVERY_COUNTRY,
+                        enabled = enabled,
+                        onValueChange = { onIntent(InvoiceFormIntent.DeliveryCountryChanged(it)) },
+                    )
+                }
+            }
+        }
+
         // Panneau d'audit (US-24) — après les mentions légales et avant les actions : un contrôle
         // de conformité conclut la saisie, il ne l'ouvre pas. Absent du mode canvas à dessein : la
         // feuille A4 est un document, et y poser un panneau de contrôle casserait l'illusion
@@ -385,13 +561,19 @@ internal fun InvoiceFormContent(
             Text("💾  ${tr(StringKey.ACTION_SAVE_DRAFT)}")
         }
 
+        val submitButtonLabel = if (uiState.transactionMode == TransactionMode.E_INVOICING) {
+            tr(StringKey.ACTION_SUBMIT_INVOICE_B2B)
+        } else {
+            tr(StringKey.ACTION_SUBMIT_INVOICE_EREPORTING)
+        }
+
         Button(
             onClick = { onIntent(InvoiceFormIntent.ValidateAndIssue) },
             enabled = !uiState.isSubmitting,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.SUBMIT_BUTTON },
         ) {
-            Text("☁  ${tr(StringKey.ACTION_SUBMIT_INVOICE)}")
+            Text("☁  $submitButtonLabel")
         }
 
         Text(
@@ -619,8 +801,8 @@ private fun FormField(
     label: String,
     value: String,
     tag: String,
-    error: String?,
-    errorTag: String,
+    error: String? = null,
+    errorTag: String = "",
     enabled: Boolean,
     onValueChange: (String) -> Unit,
     keyboardType: KeyboardType = KeyboardType.Text,

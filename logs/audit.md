@@ -2268,6 +2268,78 @@ l'appareil un message au lieu d'une page blanche.
 | **Total Suite Tests US-26** | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (47/47 tests verts)** |
 | **Tests Robolectric UI** | Présents dans `composeApp/src/androidUnitTest/...` | **Rédigés sans exécution (Consigne PO)** |
 
+---
+
+## Sprint 1 — US-27 : Refonte réglementaire de l'écran de création de Facture (Réforme DGFiP 2026)
+- **Date :** 2026-09-08
+- **Branche Git :** `feature/us-27-tax-reform-2026`
+- **Statut :** ✅ Clos — suite N1 du domaine (`commonTest`) 100% verte, compilation Android OK, Robolectric N2/N3 rédigé sans exécution (consigne PO).
+- **Objectif :** Mise en conformité stricte DGFiP 2026 de la persistance locale et du formulaire de facturation (parité B2B e-Invoicing vs e-Reporting B2C/Intl).
+
+### 1. Décisions d'Architecture & Choix Techniques
+1. **Migration SQLDelight `10.sqm` & version 11 :**
+   - Ajout de 8 colonnes avec valeurs par défaut non-nulles : `clientSiren` (TEXT DEFAULT ''), `natureOperation` (TEXT DEFAULT 'PRESTATION_SERVICES'), `optionTvaDebit` (INTEGER DEFAULT 0), `isEReporting` (INTEGER DEFAULT 0), `deliveryStreet` (TEXT DEFAULT ''), `deliveryZip` (TEXT DEFAULT ''), `deliveryCity` (TEXT DEFAULT ''), `deliveryCountry` (TEXT DEFAULT '').
+   - Régénération et validation du snapshot `databases/11.db` via `SchemaMigrationVerificationTest`.
+2. **Étanchéité du Domaine (Kotlin pur sans Android) :**
+   - `NatureOperation` : enum standardisée (`LIVRAISON_BIENS`, `PRESTATION_SERVICES`, `MIXTE`).
+   - `DeliveryAddress` : data class encapsulant la livraison physique distincte.
+   - `TransactionMode` : distinction explicite `E_INVOICING` (B2B France) vs `E_REPORTING` (B2C / International).
+   - `SirenValidator` : validation stricte 9 chiffres (SIREN) ou 14 chiffres (SIRET) obligatoire en B2B France, optionnelle en e-Reporting.
+   - Modèle `Invoice.kt` : montants en `Long` (centimes), rétrocompatibilité absolue via des valeurs par défaut.
+3. **Découpage MVI & Ergonomie Compose Multiplatform :**
+   - Sélecteur de mode réglementaire en tête d'écran (`SingleChoiceSegmentedButtonRow`) branché sur `TransactionModeChanged`.
+   - Affichage dynamique de l'astérisque obligatoire sur l'identifiant SIREN en mode B2B.
+   - Section réglementaire dédiée avec sélecteur de nature d'opération, switch « Option TVA d'après les débits », et case à cocher avec `AnimatedVisibility` pour déplier l'adresse de livraison différente.
+   - Bouton de soumission contextuel via `AppTranslations` : « Émettre la facture électronique B2B » vs « Enregistrer la facture e-Reporting ».
+
+### 2. Fichiers Créés et Modifiés
+
+#### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `composeApp/.../domain/invoice/NatureOperation.kt` | Enum réglementaire 2026 de la nature d'opération. |
+| `composeApp/.../domain/invoice/DeliveryAddress.kt` | Data class de l'adresse de livraison distincte. |
+| `composeApp/.../domain/invoice/TransactionMode.kt` | Enum du mode de transaction (B2B France vs e-Reporting). |
+| `composeApp/.../domain/invoice/SirenValidator.kt` | Validateur pur Kotlin d'identifiant SIREN/SIRET selon le mode. |
+| `composeApp/.../sqldelight/com/ledgerhub/db/10.sqm` | Script de migration SQLite v10 -> v11 (8 colonnes). |
+| `composeApp/.../sqldelight/databases/11.db` | Instantané de base SQLite pour la chaîne de migration SQLDelight. |
+| `composeApp/src/commonTest/.../domain/invoice/SirenValidatorTest.kt` | 15 tests unitaires du validateur SIREN en B2B et e-Reporting. |
+| `composeApp/src/androidUnitTest/.../presentation/invoiceform/InvoiceFormRegulationRobolectricTest.kt` | Tests Robolectric UI N2, N3A, N3B rédigés proprement (non exécutés — consigne PO). |
+
+#### Fichiers modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/.../sqldelight/com/ledgerhub/db/Invoice.sq` | Déclaration des 8 colonnes et requêtes d'insertion / sélection. |
+| `composeApp/.../domain/invoice/Invoice.kt` | Intégration des champs réglementaires avec valeurs par défaut. |
+| `composeApp/.../data/invoice/SqlDelightInvoiceRepository.kt` | Mapping des 8 colonnes lors de la soumission et du fetch SQLDelight. |
+| `composeApp/.../domain/i18n/StringKey.kt` & `AppTranslations.kt` | Clés et traductions bilingues FR/EN pour tous les éléments de l'US-27. |
+| `composeApp/.../presentation/invoiceform/InvoiceFormField.kt` | Ajout de `CLIENT_SIREN` et des champs d'adresse de livraison. |
+| `composeApp/.../presentation/invoiceform/InvoiceFormIntent.kt` | Ajout des 9 intentions US-27 (`TransactionModeChanged`, etc.). |
+| `composeApp/.../presentation/invoiceform/InvoiceFormUiState.kt` | Champs d'état réglementaires et accesseur dérivé `isEReporting`. |
+| `composeApp/.../presentation/invoiceform/InvoiceFormViewModel.kt` | Validation conditionnelle, auto-remplissage du SIREN et transmission des options. |
+| `composeApp/.../presentation/invoiceform/InvoiceFormScreen.kt` | Composants UI Compose : sélecteur M3, section fiscale, bouton dynamique. |
+| `composeApp/src/commonTest/.../presentation/invoiceform/InvoiceFormViewModelTest.kt` | 4 nouveaux tests unitaires US-27 ajoutés (34 tests au total, tous verts). |
+| `composeApp/src/androidUnitTest/.../data/auth/SqlDelightAuthRepositoryLifecycleTest.kt` | Ajustement des paramètres d'insertion SQLDelight. |
+| `composeApp/src/androidUnitTest/.../data/invoice/SqlDelightInvoiceRepositoryTest.kt` | Ajustement des paramètres d'insertion SQLDelight. |
+
+### 3. Matrice RCA — Incidents Rencontrés & Résolution
+| Incident | Symptôme | Cause Racine | Correctif Appliqué |
+|---|---|---|---|
+| **RCA-01** | Échec compilation `SqlDelightAuthRepositoryLifecycleTest` & `SqlDelightInvoiceRepositoryTest` : `No value passed for parameter clientSiren...` | L'enrichissement de `Invoice.sq` rend obligatoire la fourniture des 8 nouvelles colonnes lors d'un `insertOrReplace` SQL direct. | Ajout des 8 paramètres avec valeurs neutres (`""` et `0L`) dans les deux fixtures de test directes. |
+| **RCA-02** | Échec compilation `InvoiceFormViewModel.kt` : `Cannot infer type`, propriétés UI manquantes. | Un getter dérivé (`val isEReporting: Boolean get() = ...`) a été accidentellement inséré dans la liste des paramètres du constructeur primaire de la data class `InvoiceFormUiState`. | Déplacement du getter dans le corps `{}` de la classe, rétablissant la syntaxe valide Kotlin. |
+| **RCA-03** | Échec de soumission sur les 9 tests historiques de `InvoiceFormViewModelTest` (`assertFalse(isSubmitting)`). | Le champ `clientSiren` restait vide si le test ne renseignait que `clientSiret`, or en B2B le SIREN est obligatoire. | Auto-remplissage de `clientSiren = clientSiret.take(9)` dans `ClientSiretChanged`, `sourceQuote` et `onClientSelected`, garantissant la rétrocompatibilité des tests tout en validant le SIREN. |
+
+### 4. Matrice de Validation
+| Composant / Test | Commande d'exécution | Statut |
+|---|---|---|
+| **Domain SirenValidator (N1)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.domain.invoice.SirenValidatorTest"` | **PASS (15/15 tests, 0 échec)** |
+| **Domain Money (N1)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.domain.invoice.MoneyTest"` | **PASS (12/12 tests, 0 échec)** |
+| **ViewModel MVI InvoiceForm (N1)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.presentation.invoiceform.InvoiceFormViewModelTest"` | **PASS (34/34 tests, 0 échec)** |
+| **Vérification Schéma SQLite v1..v11 & Snapshot 11.db** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.data.db.SchemaMigrationVerificationTest"` | **PASS (2/2 tests, 0 échec, 11.db généré)** |
+| **Robolectric UI N2 / N3A / N3B** | `InvoiceFormRegulationRobolectricTest.kt` | **Rédigé sans exécution (Qualification physique Copilot Samsung S23+)** |
+| **Compilation globale Android** | `./gradlew :composeApp:compileDebugKotlinAndroid` | **BUILD SUCCESSFUL (0 erreur)** |
+
+
 
 
 

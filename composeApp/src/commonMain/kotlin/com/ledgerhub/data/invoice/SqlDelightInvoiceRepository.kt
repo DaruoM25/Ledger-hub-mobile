@@ -12,7 +12,9 @@ import com.ledgerhub.domain.time.Clock
 import com.ledgerhub.domain.time.SystemClock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import com.ledgerhub.domain.invoice.DeliveryAddress
 import com.ledgerhub.domain.invoice.Money
+import com.ledgerhub.domain.invoice.NatureOperation
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.VatRate
 
@@ -95,6 +97,14 @@ class SqlDelightInvoiceRepository(
                 // SQLite n'a pas de type booléen — 1/0 en INTEGER, reconverti dans toDomain().
                 facturX = if (invoice.facturX) 1L else 0L,
                 applyB2bPenalties = if (invoice.applyB2bPenalties) 1L else 0L,
+                clientSiren = invoice.clientSiren,
+                natureOperation = invoice.natureOperation.name,
+                optionTvaDebit = if (invoice.optionTvaDebit) 1L else 0L,
+                isEReporting = if (invoice.isEReporting) 1L else 0L,
+                deliveryStreet = invoice.deliveryAddress.street,
+                deliveryZip = invoice.deliveryAddress.zip,
+                deliveryCity = invoice.deliveryAddress.city,
+                deliveryCountry = invoice.deliveryAddress.country,
             )
             // Remplacement intégral des lignes — plus simple et moins sujet aux bugs qu'un diff
             // ligne à ligne, pour un volume de lignes par facture qui reste faible en pratique.
@@ -156,6 +166,14 @@ class SqlDelightInvoiceRepository(
                 ?: Party(name = "", siren = "", siret = recipientSiret)
         }
         val lines = database.invoiceLineQueries.selectByInvoiceNumber(number).executeAsList().map { it.toDomain() }
+        val opNature = runCatching { NatureOperation.valueOf(natureOperation) }
+            .getOrDefault(NatureOperation.PRESTATION_SERVICES)
+        val delivery = DeliveryAddress(
+            street = deliveryStreet,
+            zip = deliveryZip,
+            city = deliveryCity,
+            country = deliveryCountry.ifEmpty { "France" },
+        )
         return Invoice(
             number = number,
             issueDate = issueDate,
@@ -167,6 +185,11 @@ class SqlDelightInvoiceRepository(
             dueDate = dueDate,
             facturX = facturX == 1L,
             applyB2bPenalties = applyB2bPenalties == 1L,
+            clientSiren = clientSiren,
+            natureOperation = opNature,
+            optionTvaDebit = optionTvaDebit == 1L,
+            isEReporting = isEReporting == 1L,
+            deliveryAddress = delivery,
         )
     }
 

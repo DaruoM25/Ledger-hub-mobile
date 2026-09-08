@@ -30,6 +30,16 @@ data class Invoice(
      * une facture déjà déposée sous d'autres mentions légales.
      */
     val applyB2bPenalties: Boolean = true,
+    /** Identifiant SIREN client spécifique (réforme 2026). Défaut tiré du destinataire ou vide. */
+    val clientSiren: String = "",
+    /** Nature de l'opération (biens, services, mixte) — mention obligatoire 2026. */
+    val natureOperation: NatureOperation = NatureOperation.PRESTATION_SERVICES,
+    /** Option de paiement de la TVA d'après les débits. */
+    val optionTvaDebit: Boolean = false,
+    /** Indicateur de transmission en flux e-Reporting (B2C / International). */
+    val isEReporting: Boolean = false,
+    /** Adresse de livraison spécifique si différente de l'adresse client. */
+    val deliveryAddress: DeliveryAddress = DeliveryAddress(),
 ) {
     init {
         require(lines.isNotEmpty()) { "Une facture doit contenir au moins une ligne de facturation" }

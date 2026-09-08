@@ -26,12 +26,28 @@ CREATE TABLE Invoice (
     -- DEFAULT 1 : la mention est obligatoire entre professionnels, y compris pour les factures
     -- héritées, dont l'aperçu imprimait déjà des pénalités de retard inconditionnellement.
     applyB2bPenalties INTEGER NOT NULL DEFAULT 1,
+    -- Réforme 2026 (US-27)
+    clientSiren TEXT NOT NULL DEFAULT '',
+    natureOperation TEXT NOT NULL DEFAULT 'PRESTATION_SERVICES',
+    optionTvaDebit INTEGER NOT NULL DEFAULT 0,
+    isEReporting INTEGER NOT NULL DEFAULT 0,
+    deliveryStreet TEXT NOT NULL DEFAULT '',
+    deliveryZip TEXT NOT NULL DEFAULT '',
+    deliveryCity TEXT NOT NULL DEFAULT '',
+    deliveryCountry TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
 );
 
 insertOrReplace:
-INSERT OR REPLACE INTO Invoice(number, issueDate, status, sourceQuoteId, userEmail, issuerName, issuerSiren, issuerSiret, recipientSiret, recipientName, recipientEmail, dueDate, facturX, applyB2bPenalties)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO Invoice(
+    number, issueDate, status, sourceQuoteId, userEmail,
+    issuerName, issuerSiren, issuerSiret,
+    recipientSiret, recipientName, recipientEmail,
+    dueDate, facturX, applyB2bPenalties,
+    clientSiren, natureOperation, optionTvaDebit, isEReporting,
+    deliveryStreet, deliveryZip, deliveryCity, deliveryCountry
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectAll:
 SELECT * FROM Invoice;

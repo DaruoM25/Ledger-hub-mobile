@@ -256,6 +256,14 @@ class SqlDelightInvoiceRepositoryTest {
             facturX = 1L,
             // Valeur que `5.sqm` (US-16) donne aux lignes déjà en base : mention L.441-10 active.
             applyB2bPenalties = 1L,
+            clientSiren = "987654321",
+            natureOperation = "PRESTATION_SERVICES",
+            optionTvaDebit = 0L,
+            isEReporting = 0L,
+            deliveryStreet = "",
+            deliveryZip = "",
+            deliveryCity = "",
+            deliveryCountry = "",
         )
         database.invoiceLineQueries.insert(
             invoiceNumber = "F-2025-900",

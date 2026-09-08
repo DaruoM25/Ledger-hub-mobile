@@ -52,6 +52,18 @@ sealed interface InvoiceFormIntent {
     /** Bascule « Générer au format légal Factur-X ». */
     data class ToggleFacturX(val enabled: Boolean) : InvoiceFormIntent
 
+    // ── Réforme fiscale 2026 (US-27) ──────────────────────────────────────────
+    /** Bascule du mode de transaction (B2B France vs e-Reporting B2C/Intl). */
+    data class TransactionModeChanged(val mode: com.ledgerhub.domain.invoice.TransactionMode) : InvoiceFormIntent
+    data class ClientSirenChanged(val value: String) : InvoiceFormIntent
+    data class NatureOperationChanged(val value: com.ledgerhub.domain.invoice.NatureOperation) : InvoiceFormIntent
+    data class ToggleOptionTvaDebit(val enabled: Boolean) : InvoiceFormIntent
+    data class ToggleDifferentDeliveryAddress(val enabled: Boolean) : InvoiceFormIntent
+    data class DeliveryStreetChanged(val value: String) : InvoiceFormIntent
+    data class DeliveryZipChanged(val value: String) : InvoiceFormIntent
+    data class DeliveryCityChanged(val value: String) : InvoiceFormIntent
+    data class DeliveryCountryChanged(val value: String) : InvoiceFormIntent
+
     /**
      * Bascule « Appliquer les pénalités de retard légales (B2B) » (US-16). Commande le pied de
      * page de la facture : mention de l'article L.441-10 quand elle est active, formule de

@@ -6,13 +6,17 @@ import com.ledgerhub.domain.compliance.ComplianceAuditor
 import com.ledgerhub.domain.compliance.ComplianceSubject
 import com.ledgerhub.domain.client.DuplicateClientException
 import com.ledgerhub.domain.i18n.ValidationErrorKey
+import com.ledgerhub.domain.invoice.DeliveryAddress
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.invoice.InvoiceLine
 import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.Money
+import com.ledgerhub.domain.invoice.NatureOperation
 import com.ledgerhub.domain.invoice.Party
+import com.ledgerhub.domain.invoice.SirenValidator
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
+import com.ledgerhub.domain.invoice.TransactionMode
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.domain.invoice.parseAmountToCents
@@ -88,6 +92,7 @@ class InvoiceFormViewModel(
                 InvoiceFormUiState(
                     clientName = sourceQuote.recipient.name,
                     clientSiret = sourceQuote.recipient.siret,
+                    clientSiren = sourceQuote.recipient.siren.ifBlank { sourceQuote.recipient.siret.take(9) },
                     clientEmail = sourceQuote.recipient.email,
                     clientQuery = sourceQuote.recipient.name,
                     issuer = sourceQuote.issuer.takeIf { it.name.isNotBlank() } ?: issuer,
@@ -206,6 +211,7 @@ class InvoiceFormViewModel(
                     clientQuery = client.name,
                     clientName = client.name,
                     clientSiret = client.siret,
+                    clientSiren = client.siren.ifBlank { client.siret.take(9) },
                     clientEmail = client.email,
                     isClientDropdownExpanded = false,
                     clientSuggestions = emptyList(),
@@ -300,6 +306,7 @@ class InvoiceFormViewModel(
             is InvoiceFormIntent.ClientSiretChanged ->
                 current.copy(
                     clientSiret = intent.value,
+                    clientSiren = if (current.clientSiren.isBlank()) intent.value.take(9) else current.clientSiren,
                     selectedClient = current.selectedClient?.takeIf { it.siret == intent.value },
                 ).touch(InvoiceFormField.CLIENT_SIRET)
 
@@ -310,6 +317,34 @@ class InvoiceFormViewModel(
                 ).touch(InvoiceFormField.CLIENT_EMAIL)
 
             is InvoiceFormIntent.ToggleFacturX -> current.copy(generateFacturX = intent.enabled)
+
+            // ── Réforme fiscale 2026 (US-27) ──────────────────────────────────────────
+            is InvoiceFormIntent.TransactionModeChanged ->
+                current.copy(transactionMode = intent.mode)
+
+            is InvoiceFormIntent.ClientSirenChanged ->
+                current.copy(clientSiren = intent.value).touch(InvoiceFormField.CLIENT_SIREN)
+
+            is InvoiceFormIntent.NatureOperationChanged ->
+                current.copy(natureOperation = intent.value)
+
+            is InvoiceFormIntent.ToggleOptionTvaDebit ->
+                current.copy(optionTvaDebit = intent.enabled)
+
+            is InvoiceFormIntent.ToggleDifferentDeliveryAddress ->
+                current.copy(hasDifferentDeliveryAddress = intent.enabled)
+
+            is InvoiceFormIntent.DeliveryStreetChanged ->
+                current.copy(deliveryStreet = intent.value).touch(InvoiceFormField.DELIVERY_STREET)
+
+            is InvoiceFormIntent.DeliveryZipChanged ->
+                current.copy(deliveryZip = intent.value).touch(InvoiceFormField.DELIVERY_ZIP)
+
+            is InvoiceFormIntent.DeliveryCityChanged ->
+                current.copy(deliveryCity = intent.value).touch(InvoiceFormField.DELIVERY_CITY)
+
+            is InvoiceFormIntent.DeliveryCountryChanged ->
+                current.copy(deliveryCountry = intent.value).touch(InvoiceFormField.DELIVERY_COUNTRY)
 
             // Mention légale, pas champ de saisie : aucune erreur à produire, aucun total à
             // recalculer — d'où l'absence de `touch(...)` ici.
@@ -424,9 +459,20 @@ class InvoiceFormViewModel(
         if (state.clientName.isBlank()) {
             errors[InvoiceFormField.CLIENT_NAME] = ValidationErrorKey.CLIENT_NAME_REQUIRED
         }
-        // Exigence explicite : SIRET valide = exactement 14 chiffres (voir FiscalValidation).
-        if (FiscalValidation.validateSiret(state.clientSiret) is ValidationResult.Invalid) {
-            errors[InvoiceFormField.CLIENT_SIRET] = ValidationErrorKey.CLIENT_SIRET_INVALID
+        // Validation SIRET
+        if (state.transactionMode == TransactionMode.E_INVOICING) {
+            if (FiscalValidation.validateSiret(state.clientSiret) is ValidationResult.Invalid) {
+                errors[InvoiceFormField.CLIENT_SIRET] = ValidationErrorKey.CLIENT_SIRET_INVALID
+            }
+        } else {
+            if (state.clientSiret.isNotBlank() && FiscalValidation.validateSiret(state.clientSiret) is ValidationResult.Invalid) {
+                errors[InvoiceFormField.CLIENT_SIRET] = ValidationErrorKey.CLIENT_SIRET_INVALID
+            }
+        }
+
+        // Validation conditionnelle SIREN (US-27, SirenValidator) selon le mode de transaction (B2B vs e-Reporting)
+        if (SirenValidator.validate(state.clientSiren, state.transactionMode) is ValidationResult.Invalid) {
+            errors[InvoiceFormField.CLIENT_SIREN] = ValidationErrorKey.CLIENT_SIRET_INVALID
         }
         if (!EMAIL_REGEX.matches(state.clientEmail.trim())) {
             errors[InvoiceFormField.CLIENT_EMAIL] = ValidationErrorKey.CLIENT_EMAIL_INVALID
@@ -477,31 +523,48 @@ class InvoiceFormViewModel(
         return InvoiceLine(label = label, quantity = quantity, unitPriceHt = Money(unitPriceCents), vatRate = vatRate)
     }
 
-    private fun buildInvoice(state: InvoiceFormUiState, status: InvoiceStatus): Invoice = Invoice(
-        number = state.invoiceNumber,
-        issueDate = state.issueDate,
-        status = status,
-        issuer = state.issuer,
-        recipient = Party(
-            name = state.clientName,
-            // Le SIREN est les 9 premiers chiffres du SIRET (règle INSEE) — déjà validé à 14 chiffres.
-            siren = state.clientSiret.take(9),
-            siret = state.clientSiret,
-            email = state.clientEmail.trim(),
-        ),
-        lines = state.lines.map { line ->
-            InvoiceLine(
-                label = line.label,
-                quantity = line.quantity.toInt(),
-                unitPriceHt = Money(parseAmountToCents(line.unitPriceHt)!!),
-                vatRate = line.vatRate,
-            )
-        },
-        dueDate = state.dueDate,
-        facturX = state.generateFacturX,
-        applyB2bPenalties = state.applyB2bPenalties,
-        sourceQuoteId = state.sourceQuoteId,
-    )
+    private fun buildInvoice(state: InvoiceFormUiState, status: InvoiceStatus): Invoice {
+        val siren = if (state.clientSiret.length >= 9) state.clientSiret.take(9) else state.clientSiren
+        return Invoice(
+            number = state.invoiceNumber,
+            issueDate = state.issueDate,
+            status = status,
+            issuer = state.issuer,
+            recipient = Party(
+                name = state.clientName,
+                // Le SIREN est les 9 premiers chiffres du SIRET (règle INSEE) si disponible
+                siren = siren,
+                siret = state.clientSiret,
+                email = state.clientEmail.trim(),
+            ),
+            lines = state.lines.map { line ->
+                InvoiceLine(
+                    label = line.label,
+                    quantity = line.quantity.toInt(),
+                    unitPriceHt = Money(parseAmountToCents(line.unitPriceHt)!!),
+                    vatRate = line.vatRate,
+                )
+            },
+            dueDate = state.dueDate,
+            facturX = state.generateFacturX,
+            applyB2bPenalties = state.applyB2bPenalties,
+            sourceQuoteId = state.sourceQuoteId,
+            clientSiren = siren,
+            natureOperation = state.natureOperation,
+            optionTvaDebit = state.optionTvaDebit,
+            isEReporting = state.transactionMode == TransactionMode.E_REPORTING,
+            deliveryAddress = if (state.hasDifferentDeliveryAddress) {
+                DeliveryAddress(
+                    street = state.deliveryStreet,
+                    zip = state.deliveryZip,
+                    city = state.deliveryCity,
+                    country = state.deliveryCountry.ifBlank { "France" },
+                )
+            } else {
+                DeliveryAddress()
+            },
+        )
+    }
 
     /**
      * Chemin d'écriture commun aux deux actions. [targetStatus] est la seule différence :
