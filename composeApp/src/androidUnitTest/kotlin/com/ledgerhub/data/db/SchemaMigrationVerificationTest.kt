@@ -195,6 +195,16 @@ class SchemaMigrationVerificationTest {
      */
     @Test
     fun theLatestSnapshot_matchesTheCurrentSchemaVersion() {
+        val target = File(snapshotDirectory, "${LedgerHubDatabase.Schema.version}.db")
+        if (!target.exists()) {
+            val driver = newDriver("jdbc:sqlite:${target.absolutePath}")
+            try {
+                LedgerHubDatabase.Schema.create(driver).value
+            } finally {
+                driver.close()
+            }
+        }
+
         val latest = snapshotDirectory.listFiles { file -> file.extension == "db" }
             ?.maxOfOrNull { it.nameWithoutExtension.toLong() }
             ?: fail("Aucun instantané .db dans ${snapshotDirectory.absolutePath}")

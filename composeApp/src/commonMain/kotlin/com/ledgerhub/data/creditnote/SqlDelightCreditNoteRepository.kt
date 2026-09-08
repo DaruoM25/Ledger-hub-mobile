@@ -86,6 +86,7 @@ class SqlDelightCreditNoteRepository(
             database.auditLogQueries.insert(
                 id = Uuid.random().toString(),
                 invoiceNumber = creditNote.invoiceId,
+                userId = userEmail,
                 fromStatus = previousStatus,
                 toStatus = InvoiceStatus.CANCELLED.name,
                 reason = "Annulée par l'avoir ${creditNote.number} — ${creditNote.reason}",

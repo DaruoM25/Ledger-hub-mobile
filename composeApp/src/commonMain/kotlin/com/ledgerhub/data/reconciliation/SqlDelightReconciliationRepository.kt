@@ -62,6 +62,7 @@ class SqlDelightReconciliationRepository(
                 database.auditLogQueries.insert(
                     id = Uuid.random().toString(),
                     invoiceNumber = match.invoiceNumber,
+                    userId = null,
                     fromStatus = fromStatus,
                     toStatus = InvoiceStatus.PAID.name,
                     // Le motif nomme l'écriture bancaire : en contrôle, c'est ce qui rattache la

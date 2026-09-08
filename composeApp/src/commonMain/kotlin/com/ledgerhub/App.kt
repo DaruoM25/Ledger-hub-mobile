@@ -128,6 +128,11 @@ import com.ledgerhub.presentation.ereporting.EReportingScreen
 import com.ledgerhub.presentation.ereporting.EReportingViewModel
 import com.ledgerhub.presentation.auth.AuthScreen
 import com.ledgerhub.presentation.auth.AuthViewModel
+import com.ledgerhub.data.auth.KtorAuthApiClient
+import com.ledgerhub.domain.auth.DeleteAccountUseCase
+import com.ledgerhub.domain.auth.RequestPasswordResetUseCase
+import com.ledgerhub.presentation.auth.forgotpassword.ForgotPasswordScreen
+import com.ledgerhub.presentation.auth.forgotpassword.ForgotPasswordViewModel
 import com.ledgerhub.domain.quote.Quote
 import com.ledgerhub.domain.quote.QuoteLine
 import com.ledgerhub.domain.quote.QuoteStatus
@@ -271,7 +276,18 @@ fun App(
     }
     val clientsViewModel = remember { ClientsViewModel(clientRepository) }
     val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
-    val taxSettingsViewModel = remember { TaxSettingsViewModel(taxSettingsRepository) }
+    val authApiClient = remember { KtorAuthApiClient() }
+    val authRepository = remember(database) { SqlDelightAuthRepository(database) }
+    val deleteAccountUseCase = remember(authRepository, authApiClient) {
+        DeleteAccountUseCase(authRepository, authApiClient)
+    }
+    val taxSettingsViewModel = remember(taxSettingsRepository, deleteAccountUseCase) {
+        TaxSettingsViewModel(
+            repository = taxSettingsRepository,
+            deleteAccountUseCase = deleteAccountUseCase,
+            currentUserEmail = CURRENT_USER_EMAIL_PLACEHOLDER,
+        )
+    }
     val themeViewModel = remember { ThemeViewModel(themePreferenceRepository) }
     val reconciliationViewModel = remember {
         ReconciliationViewModel(
@@ -419,6 +435,16 @@ fun App(
     // survit en revanche pas à la fermeture du processus — aucun jeton n'est persisté, et
     // prétendre le contraire supposerait un stockage sécurisé qui n'existe pas encore ici.
     var authenticated by rememberSaveable { mutableStateOf(startAuthenticated) }
+
+    // Déconnexion réactive dès la confirmation de la suppression de compte (RGPD Art. 17)
+    val taxSettingsUiState by taxSettingsViewModel.uiState.collectAsState()
+    LaunchedEffect(taxSettingsUiState.accountDeleted) {
+        if (taxSettingsUiState.accountDeleted) {
+            authenticated = false
+            destination = Destination.OVERVIEW
+        }
+    }
+
     if (!authenticated) {
         LedgerHubTheme(mode = themeState.mode) {
             CompositionLocalProvider(LocalAppLanguage provides language) {
@@ -629,6 +655,7 @@ fun App(
  */
 @Composable
 private fun AuthGate(database: LedgerHubDatabase, onAuthenticated: () -> Unit) {
+    var showForgotPassword by remember { mutableStateOf(false) }
     val sireneLookupService = remember { KtorSireneLookupService() }
     val authRepository = remember(database) { SqlDelightAuthRepository(database) }
     val authViewModel = remember(sireneLookupService, authRepository) {
@@ -644,7 +671,24 @@ private fun AuthGate(database: LedgerHubDatabase, onAuthenticated: () -> Unit) {
         if (uiState.loginSucceeded || uiState.registrationSucceeded) onAuthenticated()
     }
 
-    AuthScreen(viewModel = authViewModel)
+    if (showForgotPassword) {
+        val authApiClient = remember { KtorAuthApiClient() }
+        val forgotPasswordViewModel = remember(authRepository, authApiClient) {
+            ForgotPasswordViewModel(
+                requestPasswordResetUseCase = RequestPasswordResetUseCase(authRepository, authApiClient),
+            )
+        }
+        DisposableEffect(forgotPasswordViewModel) { onDispose { forgotPasswordViewModel.onCleared() } }
+        ForgotPasswordScreen(
+            viewModel = forgotPasswordViewModel,
+            onBackToLogin = { showForgotPassword = false },
+        )
+    } else {
+        AuthScreen(
+            viewModel = authViewModel,
+            onForgotPasswordClick = { showForgotPassword = true },
+        )
+    }
 }
 
 /**

@@ -20,3 +20,19 @@ class InvalidCredentialsException : Exception("Identifiants invalides")
 /** Inscription sur une adresse déjà ouverte — la clé primaire de `UserAccount` l'interdit. */
 class EmailAlreadyRegisteredException :
     Exception("Un compte existe déjà pour cette adresse — connectez-vous.")
+
+/** Adresse email syntaxiquement invalide selon les règles du domaine. */
+class InvalidEmailException : Exception("Format d'adresse email invalide.")
+
+/** Requête non authentifiée (HTTP 401). */
+class UnauthorizedException(message: String = "Non autorisé (401)") : Exception(message)
+
+/** Données de requête invalides ou rejetées par le backend (HTTP 422). */
+class ValidationException(message: String = "Données invalides (422)") : Exception(message)
+
+/** Erreur interne du serveur distant (HTTP 500..599). */
+class ServerException(message: String = "Erreur interne du serveur (500)") : Exception(message)
+
+/** Erreur réseau ou connectivité I/O. */
+class NetworkException(message: String, cause: Throwable? = null) : Exception(message, cause)
+

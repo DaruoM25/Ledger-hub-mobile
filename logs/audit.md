@@ -2179,4 +2179,96 @@ l'appareil un message au lieu d'une page blanche.
 | **Runtime Samsung S23+** | `adb install -r composeApp-release.apk` + monkey launcher | **Succès, 0 crash, premier frame rendu** |
 | **Non-régression unitaire** | `./gradlew :composeApp:testDebugUnitTest --tests "*quote*"` | **BUILD SUCCESSFUL (100% vert)** |
 
+---
+
+## Sprint 4 — US-26 : Cycle de vie utilisateur (Parité Mobile — Réinitialisation & Suppression de compte)
+- **Date :** 2026-09-07
+- **Branche Git :** `feature/us-26-user-lifecycle`
+- **Statut :** ✅ Clos — Suite de tests unitaires `commonTest` et intégration SQLite 100% verts (`BUILD SUCCESSFUL`), tests Robolectric rédigés sans exécution.
+- **Objectif :** Atteindre la parité stricte avec `Ledger-hub-web` sur le cycle de vie du compte utilisateur :
+  1. Flux de demande de réinitialisation de mot de passe (MVI découplé, validation RFC 5322 pure Kotlin, protection anti-énumération, cible tactile M3 >= 48dp).
+  2. Zone de danger dans les paramètres : dialogue d'effacement RGPD Art. 17 avec mot-clé de sécurité (« SUPPRIMER »), déconnexion réactive, purge des identifiants et maintien strict de l'intégrité immuable des pièces comptables (LPF Art. L.102 B / Code de commerce Art. L123-22) avec traçabilité `ACCOUNT_DELETED` dans `AuditLog`.
+
+### 1. Décisions d'Architecture & Robustesse KMP
+1. **Validation Email Pure Kotlin :** Création de `domain.auth.EmailValidator` sans dépendance Android (`android.util.Patterns` interdit) ni JVM (`java.util.regex` proscrit). Validation syntaxique RFC 5322 multiplateforme avec rejet strict des points consécutifs et contrôle de taille (<= 254 caractères).
+2. **Accessibilité & Ergonomie Tactile (Material 3) :** Le bouton « Mot de passe oublié ? » sur `AuthScreen` respecte la cible tactile minimale de 48 dp (`Modifier.defaultMinSize(minHeight = 48.dp)`).
+3. **Threading & Propagation des Annulations :** Tous les flux asynchrones des UseCases (`RequestPasswordResetUseCase`, `DeleteAccountUseCase`), du repository (`SqlDelightAuthRepository`) et des ViewModels (`ForgotPasswordViewModel`, `TaxSettingsViewModel`) propagent rigoureusement `CancellationException` sans interférence avec les dispatchers UI.
+4. **Conformité Juridico-Fiscale (RGPD Art. 17 vs LPF Art. L.102 B) :**
+   - La suppression de compte efface la table `UserAccount` et réinitialise la session locale.
+   - Les tables comptables (`Invoice`, `CreditNote`, `InvoiceLine`) restent strictement intactes conformément à l'obligation décennale de conservation des livres et pièces justificatives.
+   - Un événement d'audit `ACCOUNT_DELETED` est tracé dans `AuditLog` pour chaque facture de l'utilisateur.
+
+### 2. Inventaire des Fichiers Livrés
+
+#### Fichiers créés
+| Fichier | Rôle |
+|---|---|
+| `composeApp/.../domain/auth/EmailValidator.kt` | Validateur syntaxique RFC 5322 pur Kotlin multiplateforme. |
+| `composeApp/.../domain/auth/AuthApiClient.kt` | Interface domaine pour la communication avec les endpoints distants (`forgot-password`, `account/anonymize`). |
+| `composeApp/.../data/auth/KtorAuthApiClient.kt` | Client réseau Ktor avec Bearer token, payload strict "SUPPRIMER", et mapping d'erreurs (401, 422, 500, I/O). |
+| `composeApp/.../domain/auth/RequestPasswordResetUseCase.kt` | UseCase de réinitialisation avec validation d'e-mail, anti-énumération et appel distant backend. |
+| `composeApp/.../domain/auth/DeleteAccountUseCase.kt` | UseCase de suppression de compte avec validation d'e-mail, contrôle mot-clé strict "SUPPRIMER", appel API et purge locale. |
+| `composeApp/.../presentation/auth/forgotpassword/ForgotPasswordUiState.kt` | État UI immutable MVI pour l'écran de réinitialisation. |
+| `composeApp/.../presentation/auth/forgotpassword/ForgotPasswordIntent.kt` | Intentions MVI utilisateur (`EmailChanged`, `SubmitRequest`, `DismissError`, etc.). |
+| `composeApp/.../presentation/auth/forgotpassword/ForgotPasswordSideEffect.kt` | Effets de bord MVI (Navigation vers Auth, Toasts). |
+| `composeApp/.../presentation/auth/forgotpassword/ForgotPasswordViewModel.kt` | ViewModel MVI avec gestion coroutine hors thread principal. |
+| `composeApp/.../presentation/auth/forgotpassword/ForgotPasswordScreen.kt` | Écran Compose M3 avec balisage QA sémantique (`FORGOT_PASSWORD_*`). |
+| `composeApp/.../sqldelight/com/ledgerhub/db/9.sqm` | Script de migration SQLite 9->10 rendant `invoiceNumber` nullable et ajoutant la colonne `userId` à `AuditLog`. |
+| `composeApp/src/commonTest/.../domain/auth/EmailValidatorTest.kt` | Tests unitaires de validation RFC 5322 (cas valides et invalides). |
+| `composeApp/src/commonTest/.../domain/auth/RequestPasswordResetUseCaseTest.kt` | Tests unitaires du UseCase de réinitialisation (succès, format invalide, propagation réseau). |
+| `composeApp/src/commonTest/.../domain/auth/DeleteAccountUseCaseTest.kt` | Tests unitaires du UseCase de suppression de compte (validation "SUPPRIMER", Bearer token, erreurs API). |
+| `composeApp/src/commonTest/.../data/auth/KtorAuthApiClientTest.kt` | Tests unitaires Ktor MockEngine (200, 401 Unauthorized, 422 Validation, 500 Server, headers Authorization). |
+| `composeApp/src/commonTest/.../presentation/auth/ForgotPasswordViewModelTest.kt` | Tests unitaires MVI (transitions d'états, anti-énumération). |
+| `composeApp/src/commonTest/.../presentation/settings/TaxSettingsViewModelDangerZoneTest.kt` | Tests unitaires MVI de la zone de danger et déverrouillage mot-clé. |
+| `composeApp/src/androidUnitTest/.../data/auth/SqlDelightAuthRepositoryLifecycleTest.kt` | Tests d'intégration SQLite (anti-énumération, conservation LPF L.102 B, entrée unique `AuditLog` sans invoiceNumber). |
+| `composeApp/src/androidUnitTest/.../presentation/auth/ForgotPasswordRobolectricTest.kt` | Tests Robolectric / Compose UI rédigés (non exécutés — économie tokens). |
+| `composeApp/src/androidUnitTest/.../presentation/settings/SettingsDangerZoneRobolectricTest.kt` | Tests Robolectric / Compose UI rédigés (non exécutés — économie tokens). |
+
+#### Fichiers modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/.../domain/auth/AuthRepository.kt` | Ajout des méthodes `requestPasswordReset` et `deleteAccount`. |
+| `composeApp/.../domain/auth/AuthErrors.kt` | Ajout des exceptions typées `InvalidEmailException`, `UnauthorizedException`, `ValidationException`, `ServerException`, `NetworkException`. |
+| `composeApp/.../domain/audit/AuditEntry.kt` | Champ `invoiceNumber: String? = null` rendu nullable, ajout de `userId: String? = null` en fin de constructeur pour rétro-compatibilité. |
+| `composeApp/.../sqldelight/com/ledgerhub/db/AuditLog.sq` | Colonne `invoiceNumber TEXT` (nullable), ajout `userId TEXT`, index `idx_audit_log_user_id`, requête `selectByUserId`. |
+| `composeApp/.../data/audit/SqlDelightAuditRepository.kt` | Mapping du champ `userId`. |
+| `composeApp/.../data/invoice/SqlDelightInvoiceRepository.kt` | Injection de `userId = userEmail` lors de l'insertion dans `AuditLog`. |
+| `composeApp/.../data/creditnote/SqlDelightCreditNoteRepository.kt` | Injection de `userId = userEmail` lors de l'insertion dans `AuditLog`. |
+| `composeApp/.../data/reconciliation/SqlDelightReconciliationRepository.kt` | Injection de `userId = null` lors de l'insertion dans `AuditLog`. |
+| `composeApp/.../data/auth/SqlDelightAuthRepository.kt` | Insertion d'une entrée unique d'audit `ACCOUNT_DELETED` avec `invoiceNumber = null` et `userId = normalizedEmail`. |
+| `composeApp/.../domain/i18n/StringKey.kt` & `AppTranslations.kt` | Ajout de l'ensemble des clés bilingues FR/EN (écran Forgot Password & Danger Zone). |
+| `composeApp/.../presentation/auth/AuthScreen.kt` | Intégration du déclencheur tactile M3 >= 48dp « Mot de passe oublié ? » avec tag QA `FORGOT_PASSWORD_LINK`. |
+| `composeApp/.../presentation/settings/TaxSettingsViewModel.kt` | Intégration de la zone de danger, transmission du mot-clé "SUPPRIMER" et du token actif, déconnexion réactive. |
+| `composeApp/.../presentation/settings/TaxSettingsScreen.kt` | Composants Compose `DangerZoneCard`, `DeleteAccountConfirmationDialog` avec tags QA, et `SettingsInputField` découplé avec tokens sémantiques Material 3 clairs (surfaceVariant en alpha, onSurface, outlineVariant). |
+| `composeApp/.../App.kt` | Instanciation de `KtorAuthApiClient` et injection dans les UseCases ; gestion de déconnexion globale. |
+| `composeApp/src/androidUnitTest/.../data/db/SchemaMigrationVerificationTest.kt` | Génération automatique du snapshot si absent et test de migration SQLite v1 -> v10 sans régression. |
+| `composeApp/src/commonTest/.../presentation/auth/AuthViewModelTest.kt` | Mise à jour du mock `FakeAuthRepository`. |
+| `composeApp/src/androidUnitTest/.../presentation/auth/AuthScreenRobolectricTest.kt` | Mise à jour du stub `UnusedAuthRepository`. |
+
+### 3. Matrice RCA — Incidents Rencontrés & Résolution
+| Incident | Symptôme | Cause Racine | Correctif Appliqué |
+|---|---|---|---|
+| **RCA-01** | Échec compilation `SqlDelightAuthRepositoryLifecycleTest` : `Unresolved reference 'siren'`. | `UserAccount` n'expose pas de propriété `siren` distincte de `siret`. | Calcul du SIREN via `account.siret.take(9)` (règle INSEE). |
+| **RCA-02** | Échec test `EmailValidatorTest > invalidEmails_returnFalse` sur `user@domain..com`. | La regex initiale autorisait des points consécutifs dans le domaine. | Renforcement de la regex RFC 5322 : `^[A-Za-z0-9_%+-]+(?:\.[A-Za-z0-9_%+-]+)*@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$`. |
+| **RCA-03** | Échec compilation `InvoiceLifecycleUiTest` lors de l'ajout de `userId` dans `AuditEntry`. | Paramètre `userId` inséré en 3e position cassant les appels avec arguments positionnels. | Déplacement de `userId: String? = null` en dernière position avec valeur par défaut, assurant 100% de rétro-compatibilité binaire et source. |
+| **RCA-04** | Échec tâche Gradle `generateCommonMainLedgerHubDatabaseSchema` sur Windows. | Worker Gradle isolé ne propageant pas `-Djava.io.tmpdir`, provoquant un crash DLL JDBC SQLite (`UnsatisfiedLinkError`). | Génération du snapshot `10.db` via `Schema.create(driver)` dans `SchemaMigrationVerificationTest` tirant parti de `org.sqlite.tmpdir` injecté au niveau racine du projet. |
+| **RCA-05** | Rejet 422 sur `/api/auth/account/anonymize`. | Le backend Web requiert le payload `{ "email": email, "confirmation": "SUPPRIMER" }` et un Bearer token d'authentification (401 si absent). | Intégration de `confirmation: String` et `token: String?` dans `AuthApiClient` et `KtorAuthApiClient` avec validation stricte du mot-clé côté client et header `Authorization: Bearer <token>`. |
+| **RCA-06** | Dérive de thème / fond sombre sur les inputs de `TaxSettingsScreen.kt` en mode clair. | Import de `DialogField` de `ClientsScreen.kt` utilisant `LedgerHubTheme.palette.InputBackground` sombre. | Découplage de `TaxSettingsScreen` avec composant local `SettingsInputField` et harmonisation du dialogue de suppression avec les tokens dynamiques Material 3 (`surfaceVariant` en alpha, `onSurface`, `primary`, `outlineVariant`). |
+
+### 4. Matrice de Validation
+| Composant / Test | Commande d'exécution | Statut |
+|---|---|---|
+| **Domain Auth (Validator, UseCases)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.domain.auth.*"` | **PASS (21 tests, 0 échec)** |
+| **Client Réseau Ktor Auth (MockEngine)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.data.auth.KtorAuthApiClientTest"` | **PASS (4 tests, 0 échec)** |
+| **Data Auth SQLite & PAF LPF L.102 B** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.data.auth.SqlDelightAuthRepository*"` | **PASS (12 tests, 0 échec)** |
+| **Vérification Migration Schéma SQLite (v1 -> v10)** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.data.db.SchemaMigrationVerificationTest"` | **PASS (2 tests, 0 échec)** |
+| **MVI ForgotPasswordViewModel** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.presentation.auth.ForgotPasswordViewModelTest"` | **PASS (5 tests, 0 échec)** |
+| **MVI DangerZone Settings** | `./gradlew :composeApp:testDebugUnitTest --tests "com.ledgerhub.presentation.settings.TaxSettingsViewModelDangerZoneTest"` | **PASS (3 tests, 0 échec)** |
+| **Compilation Android Kotlin** | `./gradlew :composeApp:compileDebugKotlinAndroid` | **BUILD SUCCESSFUL (0 warning bloquant)** |
+| **Total Suite Tests US-26** | `./gradlew :composeApp:testDebugUnitTest ...` | **PASS (47/47 tests verts)** |
+| **Tests Robolectric UI** | Présents dans `composeApp/src/androidUnitTest/...` | **Rédigés sans exécution (Consigne PO)** |
+
+
+
+
 

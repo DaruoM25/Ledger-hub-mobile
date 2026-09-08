@@ -24,6 +24,7 @@ class SqlDelightAuditRepository(
     private fun AuditLogRow.toDomain(): AuditEntry = AuditEntry(
         id = id,
         invoiceNumber = invoiceNumber,
+        userId = userId,
         // Un statut devenu inconnu (référentiel qui évoluerait de nouveau) ne doit pas rendre
         // tout l'historique illisible : la ligne est conservée, le champ retombe à null.
         fromStatus = fromStatus?.let { statusOrNull(it) },

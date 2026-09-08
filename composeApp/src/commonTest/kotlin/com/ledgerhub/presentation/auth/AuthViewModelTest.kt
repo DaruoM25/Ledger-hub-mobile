@@ -61,6 +61,18 @@ private class FakeAuthRepository(
         registeredAccount = account
         return Result.success(account)
     }
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> {
+        delay(delayMillis)
+        lastEmail = email
+        return Result.success(Unit)
+    }
+
+    override suspend fun deleteAccount(email: String): Result<Unit> {
+        delay(delayMillis)
+        lastEmail = email
+        return Result.success(Unit)
+    }
 }
 
 /**

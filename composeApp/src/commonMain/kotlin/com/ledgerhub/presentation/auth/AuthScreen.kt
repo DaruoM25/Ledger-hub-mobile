@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -79,6 +81,14 @@ object AuthTags {
     const val TAB_REGISTER = "auth_tab_register"
     const val SIRET_SEARCH_ICON = "auth_siret_search_icon"
     const val SIRENE_MESSAGE = "auth_sirene_message"
+
+    // ── US-26 : Mot de passe oublié ──────────────────────────────────────────
+    const val FORGOT_PASSWORD_BUTTON = "auth_forgot_password_button"
+    const val FORGOT_PASSWORD_SCREEN = "auth_forgot_password_screen"
+    const val FORGOT_PASSWORD_EMAIL_FIELD = "auth_forgot_password_email_field"
+    const val FORGOT_PASSWORD_SUBMIT_BUTTON = "auth_forgot_password_submit_button"
+    const val FORGOT_PASSWORD_SUCCESS_MESSAGE = "auth_forgot_password_success_message"
+    const val FORGOT_PASSWORD_BACK_BUTTON = "auth_forgot_password_back_button"
 }
 
 /** Loupe au repos dans le champ SIRET — glyphe, comme partout ailleurs dans l'app (US-19). */
@@ -99,9 +109,16 @@ private val LoaderSize = 18.dp
  * construit là où l'application dispose de la base (voir `AuthGate` dans `App.kt`).
  */
 @Composable
-fun AuthScreen(viewModel: AuthViewModel) {
+fun AuthScreen(
+    viewModel: AuthViewModel,
+    onForgotPasswordClick: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
-    AuthContent(uiState = uiState, onIntent = viewModel::processIntent)
+    AuthContent(
+        uiState = uiState,
+        onIntent = viewModel::processIntent,
+        onForgotPasswordClick = onForgotPasswordClick,
+    )
 }
 
 /**
@@ -117,6 +134,7 @@ fun AuthScreen(viewModel: AuthViewModel) {
 internal fun AuthContent(
     uiState: AuthUiState,
     onIntent: (AuthIntent) -> Unit = {},
+    onForgotPasswordClick: () -> Unit = {},
 ) {
     val colorScheme = darkColorScheme(
         primary = LedgerHubTheme.palette.Accent,
@@ -207,6 +225,26 @@ internal fun AuthContent(
                     modifier = Modifier.padding(top = 12.dp),
                     onValueChange = { onIntent(AuthIntent.PasswordChanged(it)) },
                 )
+
+                if (!uiState.isRegistering) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(
+                            onClick = onForgotPasswordClick,
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .semantics { testTag = AuthTags.FORGOT_PASSWORD_BUTTON },
+                        ) {
+                            Text(
+                                text = tr(StringKey.AUTH_FORGOT_PASSWORD_LINK),
+                                color = LedgerHubTheme.palette.Accent,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
 
                 if (uiState.errorMessage != null) {
                     Text(
