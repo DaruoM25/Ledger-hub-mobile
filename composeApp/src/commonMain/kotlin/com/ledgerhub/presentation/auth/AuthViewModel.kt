@@ -2,6 +2,8 @@ package com.ledgerhub.presentation.auth
 
 import com.ledgerhub.data.sirene.MockSireneLookupService
 import com.ledgerhub.domain.auth.AuthRepository
+import com.ledgerhub.domain.auth.EmailValidator
+import com.ledgerhub.domain.auth.PasswordValidator
 import com.ledgerhub.domain.auth.UserAccount
 import com.ledgerhub.domain.sirene.SireneLookupResult
 import com.ledgerhub.domain.sirene.SireneLookupService
@@ -50,16 +52,53 @@ class AuthViewModel(
 
     fun processIntent(intent: AuthIntent) {
         when (intent) {
-            is AuthIntent.ModeChanged -> _uiState.update {
-                it.copy(isRegistering = intent.isRegistering, errorMessage = null)
+            is AuthIntent.ModeChanged -> _uiState.update { current ->
+                val pwdErr = if (intent.isRegistering && current.password.isNotBlank() && !PasswordValidator.isValid(current.password)) {
+                    PasswordValidator.ERROR_MESSAGE
+                } else null
+                current.copy(
+                    isRegistering = intent.isRegistering,
+                    passwordError = pwdErr,
+                    passwordConfirmationError = null,
+                    errorMessage = null,
+                )
             }
 
-            is AuthIntent.EmailChanged -> _uiState.update {
-                it.copy(email = intent.value, errorMessage = null)
+            is AuthIntent.EmailChanged -> _uiState.update { current ->
+                val emailErr = if (intent.value.isNotBlank() && !EmailValidator.isValid(intent.value)) {
+                    EMAIL_INVALID_MESSAGE
+                } else null
+                current.copy(
+                    email = intent.value,
+                    emailError = emailErr,
+                    errorMessage = null,
+                )
             }
 
-            is AuthIntent.PasswordChanged -> _uiState.update {
-                it.copy(password = intent.value, errorMessage = null)
+            is AuthIntent.PasswordChanged -> _uiState.update { current ->
+                val pwdErr = if (current.isRegistering && intent.value.isNotBlank() && !PasswordValidator.isValid(intent.value)) {
+                    PasswordValidator.ERROR_MESSAGE
+                } else null
+                val confirmErr = if (current.isRegistering && current.passwordConfirmation.isNotBlank() && current.passwordConfirmation != intent.value) {
+                    PASSWORDS_MISMATCH_MESSAGE
+                } else null
+                current.copy(
+                    password = intent.value,
+                    passwordError = pwdErr,
+                    passwordConfirmationError = confirmErr,
+                    errorMessage = null,
+                )
+            }
+
+            is AuthIntent.PasswordConfirmationChanged -> _uiState.update { current ->
+                val confirmErr = if (intent.value.isNotBlank() && intent.value != current.password) {
+                    PASSWORDS_MISMATCH_MESSAGE
+                } else null
+                current.copy(
+                    passwordConfirmation = intent.value,
+                    passwordConfirmationError = confirmErr,
+                    errorMessage = null,
+                )
             }
 
             is AuthIntent.SiretChanged -> onSiretChanged(intent.value)
@@ -160,6 +199,23 @@ class AuthViewModel(
      * comme celui d'une connexion refusée.
      */
     private fun register(state: AuthUiState) {
+        val emailErr = if (!EmailValidator.isValid(state.email)) EMAIL_INVALID_MESSAGE else null
+        val pwdErr = if (!PasswordValidator.isValid(state.password)) PasswordValidator.ERROR_MESSAGE else null
+        val confirmErr = if (state.passwordConfirmation.isNotBlank() && state.passwordConfirmation != state.password) {
+            PASSWORDS_MISMATCH_MESSAGE
+        } else null
+
+        if (emailErr != null || pwdErr != null || confirmErr != null) {
+            _uiState.update {
+                it.copy(
+                    emailError = emailErr ?: it.emailError,
+                    passwordError = pwdErr ?: it.passwordError,
+                    passwordConfirmationError = confirmErr ?: it.passwordConfirmationError,
+                )
+            }
+            return
+        }
+
         if (!state.isRegisterEnabled) return
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
@@ -189,6 +245,12 @@ class AuthViewModel(
      * passe faux rendent le **même** message — c'est le dépôt qui porte cette règle, pas cet écran.
      */
     private fun login(state: AuthUiState) {
+        val emailErr = if (!EmailValidator.isValid(state.email)) EMAIL_INVALID_MESSAGE else null
+        if (emailErr != null) {
+            _uiState.update { it.copy(emailError = emailErr) }
+            return
+        }
+
         if (!state.isSubmitEnabled) return
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
@@ -214,4 +276,9 @@ class AuthViewModel(
      * iOS     : depuis le deinit de la UIViewController.
      */
     fun onCleared() = scope.cancel()
+
+    companion object {
+        const val EMAIL_INVALID_MESSAGE = "Format d'adresse e-mail invalide"
+        const val PASSWORDS_MISMATCH_MESSAGE = "Les mots de passe ne correspondent pas"
+    }
 }

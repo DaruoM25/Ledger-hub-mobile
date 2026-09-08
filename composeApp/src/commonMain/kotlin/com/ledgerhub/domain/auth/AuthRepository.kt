@@ -1,5 +1,8 @@
 package com.ledgerhub.domain.auth
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+
 /**
  * Abstraction de l'authentification — la couche présentation ne connaît que ce contrat.
  *
@@ -29,7 +32,7 @@ interface AuthRepository {
      * Pour prévenir les attaques par énumération d'utilisateurs, l'opération renvoie un succès
      * même si l'adresse n'est associée à aucun compte connu.
      */
-    suspend fun requestPasswordReset(email: String): Result<Unit>
+    suspend fun requestPasswordReset(email: String): Result<Unit> = Result.success(Unit)
 
     /**
      * Supprime définitivement le compte utilisateur associé à [email] (RGPD Art. 17).
@@ -37,6 +40,21 @@ interface AuthRepository {
      * Purge les identifiants d'accès (`UserAccount`) tout en maintenant l'intégrité
      * des pièces comptables décennales (LPF Art. L.102 B).
      */
-    suspend fun deleteAccount(email: String): Result<Unit>
+    suspend fun deleteAccount(email: String): Result<Unit> = Result.success(Unit)
+
+    /**
+     * Déconnecte l'utilisateur courant et réinitialise l'état de session local.
+     */
+    suspend fun logout(): Result<Unit> = Result.success(Unit)
+
+    /**
+     * Observe l'état du compte utilisateur actif connecté. Émet `null` si non authentifié.
+     */
+    fun observeCurrentAccount(): Flow<UserAccount?> = flowOf(null)
+
+    /**
+     * Retourne le compte utilisateur actif actuellement connecté, ou `null` si déconnecté.
+     */
+    suspend fun getCurrentAccount(): UserAccount? = null
 }
 

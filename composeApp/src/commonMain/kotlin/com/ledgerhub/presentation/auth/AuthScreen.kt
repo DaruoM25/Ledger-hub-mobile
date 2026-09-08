@@ -89,6 +89,12 @@ object AuthTags {
     const val FORGOT_PASSWORD_SUBMIT_BUTTON = "auth_forgot_password_submit_button"
     const val FORGOT_PASSWORD_SUCCESS_MESSAGE = "auth_forgot_password_success_message"
     const val FORGOT_PASSWORD_BACK_BUTTON = "auth_forgot_password_back_button"
+
+    // ── Validation réactive (erreurs sous champs) ─────────────────────────────
+    const val EMAIL_ERROR = "auth_email_error"
+    const val PASSWORD_ERROR = "auth_password_error"
+    const val CONFIRM_PASSWORD_FIELD = "auth_confirm_password_field"
+    const val CONFIRM_PASSWORD_ERROR = "auth_confirm_password_error"
 }
 
 /** Loupe au repos dans le champ SIRET — glyphe, comme partout ailleurs dans l'app (US-19). */
@@ -212,6 +218,9 @@ internal fun AuthContent(
                     placeholder = tr(StringKey.AUTH_EMAIL_PLACEHOLDER),
                     tag = AuthTags.EMAIL_FIELD,
                     enabled = !uiState.isLoading,
+                    isError = uiState.emailError != null,
+                    errorMessage = uiState.emailError,
+                    errorTag = AuthTags.EMAIL_ERROR,
                     modifier = Modifier.padding(top = if (uiState.isRegistering) 12.dp else 20.dp),
                     onValueChange = { onIntent(AuthIntent.EmailChanged(it)) },
                 )
@@ -221,10 +230,29 @@ internal fun AuthContent(
                     placeholder = "••••••••",
                     tag = AuthTags.PASSWORD_FIELD,
                     enabled = !uiState.isLoading,
+                    isError = uiState.passwordError != null,
+                    errorMessage = uiState.passwordError,
+                    errorTag = AuthTags.PASSWORD_ERROR,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.padding(top = 12.dp),
                     onValueChange = { onIntent(AuthIntent.PasswordChanged(it)) },
                 )
+
+                if (uiState.isRegistering) {
+                    AuthField(
+                        label = "Confirmer le mot de passe",
+                        value = uiState.passwordConfirmation,
+                        placeholder = "••••••••",
+                        tag = AuthTags.CONFIRM_PASSWORD_FIELD,
+                        enabled = !uiState.isLoading,
+                        isError = uiState.passwordConfirmationError != null,
+                        errorMessage = uiState.passwordConfirmationError,
+                        errorTag = AuthTags.CONFIRM_PASSWORD_ERROR,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.padding(top = 12.dp),
+                        onValueChange = { onIntent(AuthIntent.PasswordConfirmationChanged(it)) },
+                    )
+                }
 
                 if (!uiState.isRegistering) {
                     Row(
@@ -497,6 +525,9 @@ private fun AuthField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardType: KeyboardType = KeyboardType.Text,
     trailingIcon: @Composable (() -> Unit)? = null,
+    isError: Boolean = false,
+    errorMessage: String? = null,
+    errorTag: String? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = LedgerHubTheme.palette.SecondaryText)
@@ -504,6 +535,7 @@ private fun AuthField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
+            isError = isError,
             singleLine = true,
             placeholder = { Text(placeholder, color = LedgerHubTheme.palette.SecondaryText.copy(alpha = 0.6f)) },
             visualTransformation = visualTransformation,
@@ -516,11 +548,23 @@ private fun AuthField(
                 disabledContainerColor = LedgerHubTheme.palette.InputBackground,
                 focusedBorderColor = LedgerHubTheme.palette.Accent,
                 unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
+                errorBorderColor = MaterialTheme.colorScheme.error,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
                 cursorColor = LedgerHubTheme.palette.Accent,
             ),
             modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
         )
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics {
+                    errorTag?.let { testTag = it }
+                    contentDescription = errorMessage
+                },
+            )
+        }
     }
 }
