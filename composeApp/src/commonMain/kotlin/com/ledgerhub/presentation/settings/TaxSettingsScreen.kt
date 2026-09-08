@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -45,7 +46,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.VatRate
-import com.ledgerhub.presentation.clients.DialogField
 import com.ledgerhub.presentation.components.filterSiret
 import com.ledgerhub.presentation.components.filterVatNumber
 import com.ledgerhub.presentation.i18n.tr
@@ -130,7 +130,7 @@ internal fun TaxSettingsView(
             }
 
             SettingsCard(title = tr(StringKey.SETTINGS_SECTION_ISSUER), glyph = "🏛") {
-                DialogField(
+                SettingsInputField(
                     label = tr(StringKey.SETTINGS_FIELD_ISSUER_NAME),
                     value = uiState.issuerName,
                     tag = TaxSettingsTags.ISSUER_NAME,
@@ -139,7 +139,7 @@ internal fun TaxSettingsView(
                     enabled = !uiState.isSaving,
                     onValueChange = { onIntent(TaxSettingsIntent.IssuerNameChanged(it)) },
                 )
-                DialogField(
+                SettingsInputField(
                     label = tr(StringKey.SETTINGS_FIELD_ISSUER_SIRET),
                     value = uiState.issuerSiret,
                     tag = TaxSettingsTags.ISSUER_SIRET,
@@ -156,7 +156,7 @@ internal fun TaxSettingsView(
                     value = uiState.derivedSiren.ifBlank { "—" },
                     tag = TaxSettingsTags.DERIVED_SIREN,
                 )
-                DialogField(
+                SettingsInputField(
                     label = tr(StringKey.SETTINGS_FIELD_VAT_NUMBER),
                     value = uiState.vatNumber,
                     tag = TaxSettingsTags.VAT_NUMBER,
@@ -385,9 +385,19 @@ private fun DeleteAccountConfirmationDialog(
                     placeholder = { Text(tr(StringKey.SETTINGS_DELETE_DIALOG_INPUT_PLACEHOLDER)) },
                     singleLine = true,
                     enabled = !uiState.isDeletingAccount,
+                    shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         focusedBorderColor = MaterialTheme.colorScheme.error,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        focusedLabelColor = MaterialTheme.colorScheme.error,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -428,5 +438,60 @@ private fun DeleteAccountConfirmationDialog(
         },
         modifier = Modifier.semantics { testTag = TaxSettingsTags.DELETE_DIALOG },
     )
+}
+
+@Composable
+private fun SettingsInputField(
+    label: String,
+    value: String,
+    tag: String,
+    error: String?,
+    errorTag: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    inputFilter: (String) -> String = { it },
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = { onValueChange(inputFilter(it)) },
+            isError = error != null,
+            enabled = enabled,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                disabledBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
+        )
+        if (error != null) {
+            Text(
+                error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics {
+                    testTag = errorTag
+                    contentDescription = error
+                },
+            )
+        }
+    }
 }
 
