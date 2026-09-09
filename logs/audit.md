@@ -2439,3 +2439,38 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N2** | `DashboardScreenRobolectricTest` (Composant graphique, tags sémantiques, défilement) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardScreenRobolectricTest*"` | **PASS (100% vert)** |
 | **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (APK prêt pour déploiement)** |
 
+---
+
+## Maintenance & Déploiement : Résolution des Instances Multiples & Assainissement Samsung Knox (S23+)
+- **Date :** 2026-09-09
+- **Branche :** `main`
+- **Statut :** ✅ Clos — Cible ADB unifiée, manifeste de debug corrigé, instance unique validée sur Galaxy S23+ physique
+
+### 1. Analyse & Décisions Techniques (RCA)
+- **Symptôme initial** : 4 icônes LedgerHub visibles sur Samsung Galaxy S23+ physique, échecs de désinstallation directe (`SecurityException: Shell does not have permission to access user 150`), et déploiement parallèle (`Installed on 2 devices`).
+- **Causes racines identifiées** :
+  1. **Doublon de connexion ADB** : ADB maintenait deux liaisons actives vers le même smartphone (Wi-Fi direct `192.168.1.161:41523` + découverte mDNS TLS `adb-R5CW21ZSVQH-SnTJPq...`), provoquant une double installation simultanée par Gradle.
+  2. **Multi-profil Samsung Knox / Dossier Sécurisé** : L'environnement comprend 3 utilisateurs (`User 0` standard, `User 95` Dual App, `User 150` Secure Folder). Toute commande sans ciblage d'utilisateur tente de toucher `User 150` et est rejetée par Knox.
+  3. **Manifeste de debug (`src/debug/AndroidManifest.xml`)** : `androidx.activity.ComponentActivity` (déclarée pour l'hôte de test Robolectric/ComposeUiTest) incluait un filtre d'intention `<category android:name="android.intent.category.LAUNCHER" />`, créant une deuxième icône au sein du package `com.ledgerhub.app.debug` en plus de `MainActivity`.
+- **Actions appliquées** :
+  - Déconnexion du doublon mDNS (`adb disconnect`).
+  - Suppression du filtre `MAIN`/`LAUNCHER` dans `composeApp/src/debug/AndroidManifest.xml` sur `ComponentActivity` pour ne conserver que l'unique launcher de `MainActivity`.
+  - Recompilation propre de l'APK (`./gradlew :composeApp:assembleDebug`).
+  - Purge des caches et redémarrage du launcher One UI (`am force-stop com.sec.android.app.launcher`).
+  - Déploiement de l'APK unique sur `192.168.1.161:41523` et vérification via `cmd package query-activities --user 0`.
+
+### 2. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/debug/AndroidManifest.xml` | Retrait du filtre `MAIN`/`LAUNCHER` sur `ComponentActivity`. |
+| `logs/audit.md` | Enregistrement de l'analyse RCA et de la procédure d'assainissement multi-utilisateurs. |
+
+### 3. Matrice de Qualification
+| Niveau | Commande / Action | Résultat |
+|---|---|---|
+| **Cible ADB** | `adb devices -l` | 1 seule cible active (`192.168.1.161:41523`) |
+| **Manifeste / Activités** | `cmd package query-activities --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER` | **1 seule et unique activité** (`com.ledgerhub.app.MainActivity`) |
+| **Package** | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** |
+| **Déploiement Device** | `adb install -r composeApp-debug.apk` | **Success** |
+| **Démarrage App** | `am start -n com.ledgerhub.app.debug/com.ledgerhub.app.MainActivity` | **Success (App lancée)** |
+
