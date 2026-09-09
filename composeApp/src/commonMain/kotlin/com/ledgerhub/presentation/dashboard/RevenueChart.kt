@@ -71,9 +71,9 @@ fun RevenueChart(
 
     // Animation de tracé progressif (MOB-DASH-03) :
     // Une valeur [0f -> 1f] en 650 ms anime le dévoilement horizontal de gauche à droite
-    // de la courbe et de son aire dégradée. Se réinitialise proprement à chaque affichage/rechargement.
+    // de la courbe et de son aire dégradée. Se réinitialise au montage (navigation onglet) et à chaque mise à jour.
     val pathProgress = remember { Animatable(0f) }
-    LaunchedEffect(data) {
+    LaunchedEffect(Unit, data) {
         pathProgress.snapTo(0f)
         if (data.isNotEmpty()) {
             pathProgress.animateTo(
