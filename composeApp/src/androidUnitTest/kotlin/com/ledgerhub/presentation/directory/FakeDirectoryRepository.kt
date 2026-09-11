@@ -40,3 +40,16 @@ internal fun danonePdpEntry() = DirectoryEntry(
     status = DirectoryStatus.ACTIVE,
     lastSyncAt = "2026-08-30T09:00:00Z",
 )
+
+internal fun orangeEntry() = DirectoryEntry(
+    siren = "380129866",
+    siret = null,
+    companyName = "ORANGE SA",
+    vatNumber = FrenchVatNumber.format("380129866"),
+    routingMode = RoutingMode.PPF,
+    pdpIdentifier = null,
+    isVatSubject = true,
+    status = DirectoryStatus.ACTIVE,
+    lastSyncAt = "2026-08-30T09:00:00Z",
+)
+

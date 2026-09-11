@@ -81,4 +81,31 @@ class ResolveDirectoryEntryUseCaseTest {
         val useCase = ResolveDirectoryEntryUseCase(FakeDirectoryRepository(listOf(entry("732829320"))))
         assertIs<DirectoryLookupResult.Resolved>(useCase("732 829 320"))
     }
+
+    @Test
+    fun siretWithKnownSirenOnly_fallsBackToSiren_andEnrichesWithSiret() = runTest {
+        // Le dépôt ne connaît que le SIREN sans SIRET spécifique
+        val useCase = ResolveDirectoryEntryUseCase(FakeDirectoryRepository(listOf(entry("380129866", siret = null))))
+        val orangeSiret = "38012986648625"
+
+        val result = useCase(orangeSiret)
+
+        assertIs<DirectoryLookupResult.Resolved>(result)
+        assertEquals("380129866", result.entry.siren)
+        assertEquals(orangeSiret, result.entry.siret)
+        assertEquals("FR89380129866", result.entry.vatNumber)
+    }
+
+    @Test
+    fun resolvingBouyguesSiret_withModulo97Vat_succeeds() = runTest {
+        val bouyguesSiret = "39748093003464"
+        val useCase = ResolveDirectoryEntryUseCase(FakeDirectoryRepository(listOf(entry("397480930", siret = null))))
+
+        val result = useCase(bouyguesSiret)
+
+        assertIs<DirectoryLookupResult.Resolved>(result)
+        assertEquals("397480930", result.entry.siren)
+        assertEquals(bouyguesSiret, result.entry.siret)
+        assertEquals("FR74397480930", result.entry.vatNumber)
+    }
 }

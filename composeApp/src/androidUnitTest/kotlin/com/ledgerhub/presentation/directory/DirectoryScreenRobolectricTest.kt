@@ -93,4 +93,24 @@ class DirectoryScreenRobolectricTest {
         }
         onNodeWithTag(DirectoryTags.NOT_FOUND).performScrollTo().assertIsDisplayed()
     }
+
+    @Test
+    fun mobDir01_searchingValidSiret_resolvesAndDisplaysResultCard_withSirenSiretAndVat() = runComposeUiTest {
+        setContent { DirectoryScreen(viewModel(orangeEntry())) }
+
+        val orangeSiret = "38012986648625"
+        onNodeWithTag(DirectoryTags.SEARCH_FIELD).performScrollTo().performTextInput(orangeSiret)
+
+        onNodeWithContentDescription("Clé de Luhn valide — SIRET").assertIsDisplayed()
+        onNodeWithTag(DirectoryTags.SEARCH_BUTTON).performScrollTo().assertIsEnabled()
+        onNodeWithTag(DirectoryTags.SEARCH_BUTTON).performScrollTo().performClick()
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DirectoryTags.RESULT_CARD).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(DirectoryTags.RESULT_CARD).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DirectoryTags.RESULT_COMPANY).assertIsDisplayed()
+        onNodeWithTag(DirectoryTags.RESULT_VAT).performScrollTo().assertIsDisplayed()
+        onNodeWithContentDescription("Routage PPF").assertIsDisplayed()
+    }
 }

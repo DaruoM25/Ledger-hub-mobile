@@ -16,19 +16,21 @@ class ResolveDirectoryEntryUseCase(
 ) {
 
     suspend operator fun invoke(rawQuery: String): DirectoryLookupResult {
-        val digits = normalize(rawQuery)
-        val kind = identifierKindOf(digits)
+        val cleanQuery = normalize(rawQuery)
+        val kind = identifierKindOf(cleanQuery)
 
         val checksumOk = when (kind) {
-            IdentifierKind.SIREN -> LuhnChecksum.isValidSiren(digits)
-            IdentifierKind.SIRET -> LuhnChecksum.isValidSiret(digits)
+            IdentifierKind.SIREN -> LuhnChecksum.isValidSiren(cleanQuery)
+            IdentifierKind.SIRET -> LuhnChecksum.isValidSiret(cleanQuery)
             IdentifierKind.UNKNOWN -> false
         }
         if (!checksumOk) return DirectoryLookupResult.InvalidChecksum
 
+        val siren = if (cleanQuery.length == 14) cleanQuery.take(9) else cleanQuery
         val entry = when (kind) {
-            IdentifierKind.SIREN -> repository.findBySiren(digits)
-            IdentifierKind.SIRET -> repository.findBySiret(digits)
+            IdentifierKind.SIREN -> repository.findBySiren(siren)
+            IdentifierKind.SIRET -> repository.findBySiret(cleanQuery)
+                ?: repository.findBySiren(siren)?.copy(siret = cleanQuery)
             IdentifierKind.UNKNOWN -> null
         }
         return entry?.let { DirectoryLookupResult.Resolved(it) } ?: DirectoryLookupResult.NotFound

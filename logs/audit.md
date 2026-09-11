@@ -2507,4 +2507,39 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N2** | `ClientsScreenRobolectricTest` (Composants Compose, affichage, interactions) | `./gradlew :composeApp:testDebugUnitTest --tests "*ClientsScreenRobolectricTest*"` | **PASS (100% vert)** |
 | **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (BUILD SUCCESSFUL en 44s)** |
 
+---
+
+## Bugfix [MOB-DIR-01] : Résolution Annuaire DGFIP & Parité Modulo 97 SIREN/SIRET
+- **Date :** 2026-09-11
+- **Branche :** `fix/directory-dgfip-resolution`
+- **Statut :** ✅ Clos — Tests unitaires & Robolectric `*Directory*` 100% verts (BUILD SUCCESSFUL en 2m36s), APK debug assemblé (BUILD SUCCESSFUL en 39s)
+
+### 1. Analyse & Décisions Techniques (RCA)
+- **Symptôme initial** : Échec de résolution lors de la saisie d'un SIRET valide à 14 chiffres (ex. Orange `38012986648625` ou Bouygues `39748093003464`) dans l'écran Annuaire DGFIP, malgré un indicateur de clé de Luhn valide.
+- **Causes racines identifiées** :
+  1. `ResolveDirectoryEntryUseCase` branchait strictement sur `repository.findBySiret(digits)` sans repli SIREN 9 chiffres.
+  2. Le `SEED` de `MockDirectoryRepository` n'avait que des correspondances partielles et manquait d'un fallback dynamique pour les SIREN/SIRET Luhn-valides hors seed statique.
+- **Solutions apportées** :
+  1. **Extraction universelle du SIREN** : `val siren = if (cleanQuery.length == 14) cleanQuery.take(9) else cleanQuery` et fallback automatique `repository.findBySiret(cleanQuery) ?: repository.findBySiren(siren)?.copy(siret = cleanQuery)`.
+  2. **Enrichissement du jeu de référence & fallback dynamique** : Ajout de Orange SA et Bouygues Telecom dans le `SEED`, calcul automatique de la TVA intracommunautaire certifiée via la formule officielle **Modulo 97** (`FrenchVatNumber.format(siren)`), et génération dynamique d'entrée pour les identifiants valides.
+
+### 2. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/directory/ResolveDirectoryEntryUseCase.kt` | Extraction SIREN universelle (`take(9)`) et fallback SIRET -> SIREN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/directory/MockDirectoryRepository.kt` | Intégration Orange, Bouygues Telecom, gestion des inconnus et génération dynamique Modulo 97. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/directory/ResolveDirectoryEntryUseCaseTest.kt` | Tests unitaires de fallback SIRET -> SIREN et calcul TVA Modulo 97. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/directory/DirectoryViewModelTest.kt` | Test du flux complet de résolution d'un SIRET 14 chiffres Orange. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/directory/DirectoryScreenRobolectricTest.kt` | Test Robolectric `[MOB-DIR-01]` vérifiant l'affichage complet de la carte résultat. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/directory/FakeDirectoryRepository.kt` | Helper `orangeEntry()` pour les tests de présentation. |
+| `logs/audit.md` | Enregistrement de l'analyse RCA et de la recette. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | `ResolveDirectoryEntryUseCaseTest` & `DirectoryViewModelTest` | `./gradlew :composeApp:testDebugUnitTest --tests "*Directory*"` | **PASS (100% vert)** |
+| **N2** | `DirectoryScreenRobolectricTest` (Composants Compose, affichage de la carte résultat) | `./gradlew :composeApp:testDebugUnitTest --tests "*DirectoryScreenRobolectricTest*"` | **PASS (100% vert)** |
+| **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (BUILD SUCCESSFUL en 39s)** |
+
+
 

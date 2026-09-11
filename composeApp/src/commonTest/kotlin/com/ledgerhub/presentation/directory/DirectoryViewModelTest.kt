@@ -136,4 +136,36 @@ class DirectoryViewModelTest {
         assertNull(vm.uiState.value.resolved)
         assertFalse(vm.uiState.value.isSearching)
     }
+
+    @Test
+    fun search_withValid14DigitSiret_resolvesEntryWithBothSirenAndSiret() = runTest {
+        val orange = DirectoryEntry(
+            siren = "380129866",
+            siret = null,
+            companyName = "ORANGE SA",
+            vatNumber = FrenchVatNumber.format("380129866"),
+            routingMode = RoutingMode.PPF,
+            pdpIdentifier = null,
+            isVatSubject = true,
+            status = DirectoryStatus.ACTIVE,
+            lastSyncAt = "2026-08-30T09:00:00Z",
+        )
+        val vm = newViewModel(orange)
+        val orangeSiret = "38012986648625"
+
+        vm.processIntent(DirectoryIntent.QueryChanged(orangeSiret))
+        assertTrue(vm.uiState.value.isSearchEnabled)
+
+        vm.processIntent(DirectoryIntent.Search)
+
+        val state = vm.uiState.value
+        assertFalse(state.isSearching)
+        val resolved = assertNotNull(state.resolved)
+        assertEquals("ORANGE SA", resolved.companyName)
+        assertEquals("380129866", resolved.siren)
+        assertEquals(orangeSiret, resolved.siret)
+        assertEquals("FR89380129866", resolved.vatNumber)
+        assertEquals(RoutingMode.PPF, resolved.routingMode)
+        assertEquals(DirectoryStatus.ACTIVE, resolved.status)
+    }
 }

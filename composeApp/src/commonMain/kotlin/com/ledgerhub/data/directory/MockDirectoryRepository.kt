@@ -4,6 +4,7 @@ import com.ledgerhub.domain.directory.DirectoryEntry
 import com.ledgerhub.domain.directory.DirectoryRepository
 import com.ledgerhub.domain.directory.DirectoryStatus
 import com.ledgerhub.domain.directory.FrenchVatNumber
+import com.ledgerhub.domain.directory.LuhnChecksum
 import com.ledgerhub.domain.directory.RoutingMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -26,12 +27,24 @@ class MockDirectoryRepository(
 
     override suspend fun findBySiren(siren: String): DirectoryEntry? {
         delay(simulatedDelayMillis)
-        return mutex.withLock { entries[siren] }
+        if (siren == UNKNOWN_SIREN) return null
+        return mutex.withLock {
+            entries[siren] ?: if (LuhnChecksum.isValidSiren(siren)) {
+                generateDynamicEntry(siren, null)
+            } else null
+        }
     }
 
     override suspend fun findBySiret(siret: String): DirectoryEntry? {
         delay(simulatedDelayMillis)
-        return mutex.withLock { entries.values.firstOrNull { it.siret == siret } }
+        if (siret == UNKNOWN_SIRET) return null
+        return mutex.withLock {
+            entries.values.firstOrNull { it.siret == siret }
+                ?: entries[siret.take(9)]?.copy(siret = siret)
+                ?: if (LuhnChecksum.isValidSiret(siret)) {
+                    generateDynamicEntry(siret.take(9), siret)
+                } else null
+        }
     }
 
     override suspend fun all(): List<DirectoryEntry> =
@@ -41,8 +54,22 @@ class MockDirectoryRepository(
         mutex.withLock { entries[entry.siren] = entry }
     }
 
-    private companion object {
+    private fun generateDynamicEntry(siren: String, siret: String?): DirectoryEntry = DirectoryEntry(
+        siren = siren,
+        siret = siret,
+        companyName = "ENTREPRISE $siren",
+        vatNumber = FrenchVatNumber.format(siren),
+        routingMode = RoutingMode.PPF,
+        pdpIdentifier = null,
+        isVatSubject = true,
+        status = DirectoryStatus.ACTIVE,
+        lastSyncAt = SYNCED_AT,
+    )
+
+    companion object {
         const val SYNCED_AT = "2026-08-30T09:00:00Z"
+        const val UNKNOWN_SIREN = "000000000"
+        const val UNKNOWN_SIRET = "00000000000000"
 
         val SEED: List<DirectoryEntry> = listOf(
             DirectoryEntry(
@@ -50,6 +77,28 @@ class MockDirectoryRepository(
                 siret = "73282932000074",
                 companyName = "RENAULT SAS",
                 vatNumber = FrenchVatNumber.format("732829320"),
+                routingMode = RoutingMode.PPF,
+                pdpIdentifier = null,
+                isVatSubject = true,
+                status = DirectoryStatus.ACTIVE,
+                lastSyncAt = SYNCED_AT,
+            ),
+            DirectoryEntry(
+                siren = "380129866",
+                siret = "38012986648625",
+                companyName = "ORANGE SA",
+                vatNumber = FrenchVatNumber.format("380129866"),
+                routingMode = RoutingMode.PPF,
+                pdpIdentifier = null,
+                isVatSubject = true,
+                status = DirectoryStatus.ACTIVE,
+                lastSyncAt = SYNCED_AT,
+            ),
+            DirectoryEntry(
+                siren = "397480930",
+                siret = "39748093003464",
+                companyName = "BOUYGUES TELECOM",
+                vatNumber = FrenchVatNumber.format("397480930"),
                 routingMode = RoutingMode.PPF,
                 pdpIdentifier = null,
                 isVatSubject = true,
