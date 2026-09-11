@@ -2474,3 +2474,37 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **Déploiement Device** | `adb install -r composeApp-debug.apk` | **Success** |
 | **Démarrage App** | `am start -n com.ledgerhub.app.debug/com.ledgerhub.app.MainActivity` | **Success (App lancée)** |
 
+---
+
+## Sprint Clients — Parité Web & UX : Autocomplétion SIRET, Recherche Instantanée & Auto-dismiss Feedback (Niveau 1)
+- **Date :** 2026-09-11
+- **Branche :** `feat/clients-parity-and-ux`
+- **Statut :** ✅ Clos — Tests unitaires & Robolectric verts (BUILD SUCCESSFUL en 1m30s), APK debug assemblé (BUILD SUCCESSFUL en 44s)
+
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Atteindre la parité d'expérience avec la version Web sur le module Clients :
+  1. **Autocomplétion SIRET** : Résolution asynchrone dès 14 chiffres saisis via `SireneLookupService` (`MockSireneLookupService`), affichage d'un indicateur de chargement dans le champ SIRET, pré-remplissage de la raison sociale et badge indicatif « Pré-rempli via SIRENE ».
+  2. **Harmonisation des messages d'erreur** : Message clair sur doublon SIRET (« Ce numéro SIRET est déjà associé à un client existant. » / `Duplicate SIRET` en EN).
+  3. **Recherche instantanée** : Champ de recherche en tête de liste filtrant en mémoire sur la raison sociale, le SIRET ou l'e-mail, avec bouton d'effacement rapide et état vide dédié (« Aucun client ne correspond à votre recherche » / « No clients match your search »).
+  4. **Auto-dismiss des Toasts (3,5 s)** : Disparition automatique des messages de confirmation (« Client ajouté », « Client mis à jour », « Client supprimé ») après 3 500 ms gérée dans le cycle de vie du ViewModel.
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Nature |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsUiState.kt` | Extension de `ClientFormState` (`isSireneResolving`, `nameAutoFilled`) et `ClientsUiState` (`searchQuery`, `filteredClients`, `isSearchEmpty`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsViewModel.kt` | Intégration de `SireneLookupService`, gestion du lookup SIRET, filtrage temps réel, et `feedbackDismissJob` (3 500 ms). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsScreen.kt` | Barre de recherche, badge « Pré-rempli via SIRENE », indicateur de chargement dans le champ SIRET, vue d'état vide de recherche. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` & `AppTranslations.kt` | Clés et traductions FR/EN (`SEARCH_PLACEHOLDER`, `SEARCH_EMPTY_TITLE`, `SEARCH_EMPTY_SUBTITLE`, `SIRENE_RESOLVING`, `SIRENE_AUTOFILL_HINT`, doublon harmonisé). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Injection de `MockSireneLookupService` dans l'instanciation de `ClientsViewModel`. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/clients/ClientsViewModelTest.kt` | Nouveaux tests unitaires pour la résolution SIRET, la modification manuelle post-autofill, le message de doublon harmonisé, le filtrage de recherche et l'auto-dismiss à 3,5 s. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/clients/ClientsScreenRobolectricTest.kt` | Tests Robolectric validant l'affichage et l'interaction UI sur le module Clients. |
+| `logs/audit.md` | Journalisation complète de l'intervention et de la recette. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | `ClientsViewModelTest` (Autocomplétion, doublons, recherche, auto-dismiss) | `./gradlew :composeApp:testDebugUnitTest --tests "*ClientsViewModelTest*"` | **PASS (100% vert)** |
+| **N2** | `ClientsScreenRobolectricTest` (Composants Compose, affichage, interactions) | `./gradlew :composeApp:testDebugUnitTest --tests "*ClientsScreenRobolectricTest*"` | **PASS (100% vert)** |
+| **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (BUILD SUCCESSFUL en 44s)** |
+
+
