@@ -1,16 +1,23 @@
 package com.ledgerhub.presentation.clients
 
+import com.ledgerhub.data.sirene.MockSireneLookupService
 import com.ledgerhub.domain.client.ClientInUseException
 import com.ledgerhub.domain.client.ClientRepository
 import com.ledgerhub.domain.client.DuplicateClientException
 import com.ledgerhub.domain.invoice.FiscalValidation
 import com.ledgerhub.domain.invoice.Party
 import com.ledgerhub.domain.invoice.ValidationResult
+import com.ledgerhub.domain.sirene.SireneLookupResult
+import com.ledgerhub.domain.sirene.SireneLookupService
+import com.ledgerhub.domain.sirene.SiretInput
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,13 +35,16 @@ sealed interface ClientsIntent {
     data class NameChanged(val value: String) : ClientsIntent
     data class SiretChanged(val value: String) : ClientsIntent
     data class EmailChanged(val value: String) : ClientsIntent
+    data class SearchQueryChanged(val query: String) : ClientsIntent
+    data object ClearSearch : ClientsIntent
     data object FormSubmitted : ClientsIntent
     data object FormDismissed : ClientsIntent
     data object FeedbackShown : ClientsIntent
 }
 
 /**
- * ViewModel de l'écran Clients — CRUD complet sur les fiches persistées.
+ * ViewModel de l'écran Clients — CRUD complet sur les fiches persistées, autocomplétion SIRENE
+ * et filtrage temps réel en mémoire.
  *
  * Convention maison (cf. `InvoiceListViewModel`) : classe simple, [CoroutineScope] +
  * [MutableStateFlow], aucun `androidx.lifecycle` dans commonMain.
@@ -45,9 +55,13 @@ sealed interface ClientsIntent {
  */
 class ClientsViewModel(
     private val repository: ClientRepository,
+    private val sireneLookupService: SireneLookupService = MockSireneLookupService(),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    private var lookupJob: Job? = null
+    private var feedbackDismissJob: Job? = null
 
     private val _uiState = MutableStateFlow(ClientsUiState())
     val uiState: StateFlow<ClientsUiState> = _uiState.asStateFlow()
@@ -86,21 +100,30 @@ class ClientsViewModel(
             ClientsIntent.DeleteConfirmed -> confirmDeletion()
 
             is ClientsIntent.NameChanged ->
-                updateForm(ClientFormField.NAME) { it.copy(name = intent.value) }
+                updateForm(ClientFormField.NAME) { it.copy(name = intent.value, nameAutoFilled = false) }
 
-            is ClientsIntent.SiretChanged ->
-                updateForm(ClientFormField.SIRET) { it.copy(siret = intent.value) }
+            is ClientsIntent.SiretChanged -> onSiretChanged(intent.value)
 
             is ClientsIntent.EmailChanged ->
                 updateForm(ClientFormField.EMAIL) { it.copy(email = intent.value) }
 
+            is ClientsIntent.SearchQueryChanged ->
+                _uiState.update { it.copy(searchQuery = intent.query) }
+
+            ClientsIntent.ClearSearch ->
+                _uiState.update { it.copy(searchQuery = "") }
+
             ClientsIntent.FormSubmitted -> submitForm()
 
-            ClientsIntent.FormDismissed ->
+            ClientsIntent.FormDismissed -> {
+                lookupJob?.cancel()
                 _uiState.update { it.copy(form = null) }
+            }
 
-            ClientsIntent.FeedbackShown ->
+            ClientsIntent.FeedbackShown -> {
+                feedbackDismissJob?.cancel()
                 _uiState.update { it.copy(feedbackMessage = null, errorMessage = null) }
+            }
         }
     }
 
@@ -116,6 +139,66 @@ class ClientsViewModel(
                             isLoading = false,
                             errorMessage = throwable.message ?: "Chargement des clients impossible",
                         )
+                    },
+                )
+            }
+        }
+    }
+
+    private fun onSiretChanged(value: String) {
+        val form = _uiState.value.form ?: return
+        if (form.isSaving) return
+
+        val digits = SiretInput.sanitize(value)
+        val isComplete = digits.length == SiretInput.LENGTH
+
+        lookupJob?.cancel()
+
+        // Mise à jour de l'état du formulaire
+        _uiState.update { current ->
+            val curForm = current.form ?: return@update current
+            val updated = curForm.copy(
+                siret = value,
+                isSireneResolving = isComplete && !curForm.isEditing,
+                name = if (!isComplete && curForm.nameAutoFilled) "" else curForm.name,
+                nameAutoFilled = curForm.nameAutoFilled && isComplete,
+                touchedFields = curForm.touchedFields + ClientFormField.SIRET,
+            )
+            current.copy(form = revalidate(updated))
+        }
+
+        if (!isComplete || form.isEditing) return
+
+        lookupJob = scope.launch {
+            val result = try {
+                Result.success(sireneLookupService.lookup(digits))
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                Result.failure(error)
+            }
+
+            _uiState.update { current ->
+                val currentForm = current.form ?: return@update current
+                if (SiretInput.sanitize(currentForm.siret) != digits) return@update current
+
+                val resolvedCompany = result.getOrNull() as? SireneLookupResult.Verified
+                val updatedForm = if (resolvedCompany != null) {
+                    val companyName = resolvedCompany.company.companyName
+                    currentForm.copy(
+                        name = companyName,
+                        isSireneResolving = false,
+                        nameAutoFilled = true,
+                    )
+                } else {
+                    currentForm.copy(isSireneResolving = false)
+                }
+                val revalidated = revalidate(updatedForm)
+                current.copy(
+                    form = if (currentForm.saveAttempted) {
+                        revalidated.copy(errors = currentForm.errors, saveAttempted = true)
+                    } else {
+                        revalidated
                     },
                 )
             }
@@ -151,6 +234,8 @@ class ClientsViewModel(
         val form = _uiState.value.form ?: return
         if (form.isSaving) return
 
+        lookupJob?.cancel()
+
         val revalidated = revalidate(form).copy(saveAttempted = true)
         if (!revalidated.isValid) {
             _uiState.update { it.copy(form = revalidated) }
@@ -174,9 +259,8 @@ class ClientsViewModel(
             }
             result.fold(
                 onSuccess = {
-                    _uiState.update {
-                        it.copy(form = null, feedbackMessage = successMessageFor(revalidated.isEditing))
-                    }
+                    showTimedFeedback(successMessageFor(revalidated.isEditing))
+                    _uiState.update { it.copy(form = null) }
                     load()
                 },
                 onFailure = { throwable ->
@@ -205,7 +289,8 @@ class ClientsViewModel(
         scope.launch {
             repository.deleteClient(target.siret).fold(
                 onSuccess = {
-                    _uiState.update { it.copy(pendingDeletion = null, feedbackMessage = DELETED_MESSAGE) }
+                    showTimedFeedback(DELETED_MESSAGE)
+                    _uiState.update { it.copy(pendingDeletion = null) }
                     load()
                 },
                 onFailure = { throwable ->
@@ -222,15 +307,32 @@ class ClientsViewModel(
         }
     }
 
+    private fun showTimedFeedback(message: String) {
+        feedbackDismissJob?.cancel()
+        _uiState.update { it.copy(feedbackMessage = message) }
+        feedbackDismissJob = scope.launch {
+            delay(FEEDBACK_AUTO_DISMISS_DELAY_MS)
+            _uiState.update { current ->
+                if (current.feedbackMessage == message) current.copy(feedbackMessage = null) else current
+            }
+        }
+    }
+
     private fun successMessageFor(editing: Boolean) = if (editing) UPDATED_MESSAGE else CREATED_MESSAGE
 
-    fun onCleared() = scope.cancel()
+    fun onCleared() {
+        lookupJob?.cancel()
+        feedbackDismissJob?.cancel()
+        scope.cancel()
+    }
 
-    private companion object {
+    companion object {
         const val CREATED_MESSAGE = "Client ajouté"
         const val UPDATED_MESSAGE = "Client mis à jour"
         const val DELETED_MESSAGE = "Client supprimé"
-        const val DUPLICATE_SIRET_MESSAGE = "Un client porte déjà ce SIRET"
+        const val DUPLICATE_SIRET_MESSAGE = "Ce numéro SIRET est déjà associé à un client existant."
+        const val FEEDBACK_AUTO_DISMISS_DELAY_MS = 3500L
+
         fun clientInUseMessage(count: Long) =
             "Suppression impossible : ce client figure sur $count facture(s) émise(s)"
     }

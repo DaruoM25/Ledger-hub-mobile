@@ -276,7 +276,10 @@ fun App(
             submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
         )
     }
-    val clientsViewModel = remember { ClientsViewModel(clientRepository) }
+    val sireneLookupService = remember { com.ledgerhub.data.sirene.KtorSireneLookupService() }
+    val clientsViewModel = remember(clientRepository, sireneLookupService) {
+        ClientsViewModel(clientRepository, sireneLookupService)
+    }
     val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
     val authApiClient = remember { KtorAuthApiClient() }
     val authRepository = remember(database) { SqlDelightAuthRepository(database) }

@@ -160,4 +160,69 @@ class ClientsScreenRobolectricTest {
 
         onNodeWithTag(ClientsTags.ERROR).performScrollTo().assertIsDisplayed()
     }
+
+    // ── Niveau 3 : UI / Ergonomie (Recherche, Loader SIRENE, État vide de recherche) ──
+
+    @Test
+    fun searchField_isDisplayed_andAllowsTypingAndClearing() = runComposeUiTest {
+        val queryState = androidx.compose.runtime.mutableStateOf("")
+        var cleared = false
+        setContent {
+            ClientsView(
+                uiState = ClientsUiState(isLoading = false, searchQuery = queryState.value, clients = listOf(client)),
+                onIntent = { intent ->
+                    when (intent) {
+                        is ClientsIntent.SearchQueryChanged -> queryState.value = intent.query
+                        ClientsIntent.ClearSearch -> {
+                            queryState.value = ""
+                            cleared = true
+                        }
+                        else -> Unit
+                    }
+                },
+            )
+        }
+
+        onNodeWithTag(ClientsTags.SEARCH_INPUT).assertIsDisplayed()
+        onNodeWithTag(ClientsTags.SEARCH_INPUT).performTextInput("Boulangerie")
+        kotlin.test.assertEquals("Boulangerie", queryState.value)
+
+        // Quand searchQuery n'est pas vide, le bouton de purge est affiché
+        onNodeWithTag(ClientsTags.CLEAR_SEARCH_BUTTON).assertIsDisplayed().performClick()
+        kotlin.test.assertTrue(cleared)
+        kotlin.test.assertEquals("", queryState.value)
+    }
+
+    @Test
+    fun searchEmptyState_isDisplayed_whenNoMatch() = runComposeUiTest {
+        setContent {
+            ClientsView(
+                uiState = ClientsUiState(
+                    isLoading = false,
+                    searchQuery = "Inconnu",
+                    clients = listOf(client),
+                ),
+            )
+        }
+
+        onNodeWithTag(ClientsTags.SEARCH_EMPTY_STATE).assertIsDisplayed()
+        onNodeWithTag(ClientsTags.card(client.siret)).assertDoesNotExist()
+    }
+
+    @Test
+    fun sireneLoader_isDisplayed_whenResolvingSiret() = runComposeUiTest {
+        setContent {
+            ClientsView(
+                uiState = ClientsUiState(
+                    isLoading = false,
+                    form = ClientFormState(
+                        isSireneResolving = true,
+                        siret = "90123456700013",
+                    ),
+                ),
+            )
+        }
+
+        onNodeWithTag(ClientsTags.SIRENE_LOADER).assertIsDisplayed()
+    }
 }

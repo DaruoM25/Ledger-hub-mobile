@@ -161,6 +161,9 @@ object AppTranslations {
         StringKey.CLIENT_ACTION_DELETE to "Supprimer",
         StringKey.CLIENT_DELETE_TITLE to "Supprimer ce client ?",
         StringKey.CLIENT_DELETE_CONFIRM to "Cette fiche sera retirée de la liste. Les factures déjà émises ne sont pas modifiées.",
+        StringKey.CLIENT_DUPLICATE_SIRET to "Ce numéro SIRET est déjà associé à un client existant.",
+        StringKey.CLIENTS_SEARCH_PLACEHOLDER to "Rechercher par nom, SIRET, email…",
+        StringKey.CLIENTS_SEARCH_EMPTY to "Aucun client ne correspond à votre recherche.",
         StringKey.ACTION_SAVE to "Enregistrer",
         StringKey.ACTION_CANCEL to "Annuler",
 
@@ -535,6 +538,9 @@ object AppTranslations {
         StringKey.CLIENT_ACTION_DELETE to "Delete",
         StringKey.CLIENT_DELETE_TITLE to "Delete this client?",
         StringKey.CLIENT_DELETE_CONFIRM to "The record will be removed from the list. Invoices already issued are left untouched.",
+        StringKey.CLIENT_DUPLICATE_SIRET to "This SIRET number is already associated with an existing client.",
+        StringKey.CLIENTS_SEARCH_PLACEHOLDER to "Search by name, SIRET, email…",
+        StringKey.CLIENTS_SEARCH_EMPTY to "No clients match your search.",
         StringKey.ACTION_SAVE to "Save",
         StringKey.ACTION_CANCEL to "Cancel",
 

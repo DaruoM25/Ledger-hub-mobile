@@ -27,6 +27,8 @@ data class ClientFormState(
     val touchedFields: Set<ClientFormField> = emptySet(),
     val saveAttempted: Boolean = false,
     val isSaving: Boolean = false,
+    val isSireneResolving: Boolean = false,
+    val nameAutoFilled: Boolean = false,
 ) {
     val isEditing: Boolean get() = editedSiret != null
 
@@ -36,10 +38,11 @@ data class ClientFormState(
         get() = if (saveAttempted) errors else errors.filterKeys { it in touchedFields }
 }
 
-/** État de l'écran Clients — liste persistée + formulaire modal éventuellement ouvert. */
+/** État de l'écran Clients — liste persistée + formulaire modal éventuellement ouvert + filtre temps réel. */
 data class ClientsUiState(
     val isLoading: Boolean = true,
     val clients: List<Party> = emptyList(),
+    val searchQuery: String = "",
     val form: ClientFormState? = null,
     /** Fiche dont la suppression attend confirmation. */
     val pendingDeletion: Party? = null,
@@ -47,4 +50,17 @@ data class ClientsUiState(
     val feedbackMessage: String? = null,
 ) {
     val isEmpty: Boolean get() = !isLoading && clients.isEmpty()
+
+    val filteredClients: List<Party>
+        get() {
+            val q = searchQuery.trim().lowercase()
+            if (q.isEmpty()) return clients
+            return clients.filter { client ->
+                client.name.lowercase().contains(q) ||
+                    client.siret.lowercase().contains(q) ||
+                    client.email.lowercase().contains(q)
+            }
+        }
+
+    val isSearchEmpty: Boolean get() = !isLoading && searchQuery.isNotBlank() && filteredClients.isEmpty() && clients.isNotEmpty()
 }

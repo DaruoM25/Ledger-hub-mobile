@@ -4,6 +4,8 @@ import com.ledgerhub.domain.client.ClientInUseException
 import com.ledgerhub.domain.client.ClientRepository
 import com.ledgerhub.domain.client.DuplicateClientException
 import com.ledgerhub.domain.invoice.Party
+import com.ledgerhub.data.sirene.MockSireneLookupService
+import com.ledgerhub.domain.sirene.SireneLookupService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -70,7 +72,12 @@ class ClientsViewModelTest {
     private fun viewModel(
         repository: ClientRepository,
         scheduler: kotlinx.coroutines.test.TestCoroutineScheduler,
-    ) = ClientsViewModel(repository, StandardTestDispatcher(scheduler))
+        sireneLookupService: SireneLookupService = MockSireneLookupService(simulatedDelayMillis = 0L),
+    ) = ClientsViewModel(
+        repository = repository,
+        sireneLookupService = sireneLookupService,
+        dispatcher = StandardTestDispatcher(scheduler),
+    )
 
     private fun fillForm(vm: ClientsViewModel, name: String, siret: String, email: String) {
         vm.processIntent(ClientsIntent.NameChanged(name))
@@ -292,5 +299,122 @@ class ClientsViewModelTest {
 
         assertNull(vm.uiState.value.pendingDeletion)
         assertEquals(1, repository.clients.size)
+    }
+
+    // ── Niveau 1 : Autocomplétion SIRET, Doublon harmonisé, Recherche & Auto-dismiss ──
+
+    @Test
+    fun siretChanged_with14Digits_triggersSireneLookup_andPrefillsCompanyName() = runTest {
+        val mockSirene = com.ledgerhub.data.sirene.MockSireneLookupService(simulatedDelayMillis = 100L)
+        val vm = ClientsViewModel(FakeClientRepository(), mockSirene, StandardTestDispatcher(testScheduler))
+        advanceUntilIdle()
+
+        vm.processIntent(ClientsIntent.AddClicked)
+        val demoSiret = com.ledgerhub.data.sirene.MockSireneLookupService.DEMO_SIRET
+
+        vm.processIntent(ClientsIntent.SiretChanged(demoSiret))
+
+        // Loader actif pendant la résolution
+        assertTrue(vm.uiState.value.form?.isSireneResolving == true)
+
+        testScheduler.advanceTimeBy(150L)
+        advanceUntilIdle()
+
+        val form = assertNotNull(vm.uiState.value.form)
+        assertFalse(form.isSireneResolving)
+        assertTrue(form.nameAutoFilled)
+        assertEquals(com.ledgerhub.data.sirene.MockSireneLookupService.DEFAULT_COMPANY_NAME, form.name)
+    }
+
+    @Test
+    fun companyNameChanged_manuallyAfterAutofill_disablesAutoFilledFlag() = runTest {
+        val mockSirene = com.ledgerhub.data.sirene.MockSireneLookupService(simulatedDelayMillis = 100L)
+        val vm = ClientsViewModel(FakeClientRepository(), mockSirene, StandardTestDispatcher(testScheduler))
+        advanceUntilIdle()
+
+        vm.processIntent(ClientsIntent.AddClicked)
+        vm.processIntent(ClientsIntent.SiretChanged(com.ledgerhub.data.sirene.MockSireneLookupService.DEMO_SIRET))
+        testScheduler.advanceTimeBy(150L)
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.form?.nameAutoFilled == true)
+
+        // Modification manuelle
+        vm.processIntent(ClientsIntent.NameChanged("Mon Entreprise Personnalisée"))
+        assertFalse(vm.uiState.value.form?.nameAutoFilled == true)
+        assertEquals("Mon Entreprise Personnalisée", vm.uiState.value.form?.name)
+    }
+
+    @Test
+    fun duplicateSiret_returnsHarmonizedErrorMessage() = runTest {
+        val repository = FakeClientRepository(listOf(client()))
+        val vm = viewModel(repository, testScheduler)
+        advanceUntilIdle()
+
+        vm.processIntent(ClientsIntent.AddClicked)
+        fillForm(vm, "Autre Raison SAS", validSiret, "autre@client.fr")
+        vm.processIntent(ClientsIntent.FormSubmitted)
+        advanceUntilIdle()
+
+        val form = assertNotNull(vm.uiState.value.form)
+        assertEquals("Ce numéro SIRET est déjà associé à un client existant.", form.errors[ClientFormField.SIRET])
+    }
+
+    @Test
+    fun searchQueryChanged_filtersClientsByNameSiretOrEmail() = runTest {
+        val c1 = Party("Alpha SARL", "111111111", "11111111111111", "alpha@test.fr")
+        val c2 = Party("Beta SAS", "222222222", "22222222222222", "contact@beta.com")
+        val c3 = Party("Gamma EURL", "333333333", "33333333333333", "gamma@cabinet.fr")
+        val vm = viewModel(FakeClientRepository(listOf(c1, c2, c3)), testScheduler)
+        advanceUntilIdle()
+
+        assertEquals(3, vm.uiState.value.filteredClients.size)
+
+        // Filtre par nom
+        vm.processIntent(ClientsIntent.SearchQueryChanged("beta"))
+        assertEquals(listOf("Beta SAS"), vm.uiState.value.filteredClients.map { it.name })
+        assertFalse(vm.uiState.value.isSearchEmpty)
+
+        // Filtre par SIRET
+        vm.processIntent(ClientsIntent.SearchQueryChanged("3333333"))
+        assertEquals(listOf("Gamma EURL"), vm.uiState.value.filteredClients.map { it.name })
+
+        // Filtre par email
+        vm.processIntent(ClientsIntent.SearchQueryChanged("alpha@test"))
+        assertEquals(listOf("Alpha SARL"), vm.uiState.value.filteredClients.map { it.name })
+
+        // Aucun résultat
+        vm.processIntent(ClientsIntent.SearchQueryChanged("inexistant"))
+        assertTrue(vm.uiState.value.filteredClients.isEmpty())
+        assertTrue(vm.uiState.value.isSearchEmpty)
+
+        // Purge
+        vm.processIntent(ClientsIntent.ClearSearch)
+        assertEquals(3, vm.uiState.value.filteredClients.size)
+        assertFalse(vm.uiState.value.isSearchEmpty)
+    }
+
+    @Test
+    fun feedbackMessage_autoDismissesAfter3500ms() = runTest {
+        val repository = FakeClientRepository(listOf(client()))
+        val vm = viewModel(repository, testScheduler)
+        advanceUntilIdle()
+
+        // Suppression d'un client déclenchant un feedbackMessage
+        vm.processIntent(ClientsIntent.DeleteClicked(client()))
+        vm.processIntent(ClientsIntent.DeleteConfirmed)
+
+        // Avant que le délai ne s'écoule, le message est présent
+        testScheduler.runCurrent()
+        assertEquals("Client supprimé", vm.uiState.value.feedbackMessage)
+
+        // À 3 400 ms, le message est toujours présent
+        testScheduler.advanceTimeBy(3400L)
+        assertEquals("Client supprimé", vm.uiState.value.feedbackMessage)
+
+        // À 3 500 ms (soit +100 ms), le message disparaît
+        testScheduler.advanceTimeBy(100L)
+        testScheduler.runCurrent()
+        assertNull(vm.uiState.value.feedbackMessage)
     }
 }

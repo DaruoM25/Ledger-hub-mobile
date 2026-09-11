@@ -21,6 +21,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,6 +45,9 @@ import com.ledgerhub.presentation.theme.LedgerHubTheme
 object ClientsTags {
     const val SCREEN = "clients_screen"
     const val ADD_BUTTON = "clients_add_button"
+    const val SEARCH_INPUT = "clients_search_input"
+    const val CLEAR_SEARCH_BUTTON = "clients_clear_search_button"
+    const val SEARCH_EMPTY_STATE = "clients_search_empty_state"
     const val EMPTY_STATE = "clients_empty_state"
     const val FEEDBACK = "clients_feedback"
     const val ERROR = "clients_error"
@@ -53,6 +58,7 @@ object ClientsTags {
     const val FORM_EMAIL = "client_form_email"
     const val FORM_SAVE = "client_form_save"
     const val FORM_CANCEL = "client_form_cancel"
+    const val SIRENE_LOADER = "client_form_sirene_loader"
 
     const val DELETE_DIALOG = "client_delete_dialog"
     const val DELETE_CONFIRM = "client_delete_confirm"
@@ -105,6 +111,47 @@ internal fun ClientsView(
             }
         }
 
+        // Champ de recherche compact sous le titre
+        OutlinedTextField(
+            value = uiState.searchQuery,
+            onValueChange = { onIntent(ClientsIntent.SearchQueryChanged(it)) },
+            placeholder = {
+                Text(
+                    tr(StringKey.CLIENTS_SEARCH_PLACEHOLDER),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            },
+            leadingIcon = {
+                Text("🔍", style = MaterialTheme.typography.bodyMedium)
+            },
+            trailingIcon = {
+                if (uiState.searchQuery.isNotEmpty()) {
+                    IconButton(
+                        onClick = { onIntent(ClientsIntent.ClearSearch) },
+                        modifier = Modifier.semantics { testTag = ClientsTags.CLEAR_SEARCH_BUTTON },
+                    ) {
+                        Text("✕", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+                focusedBorderColor = LedgerHubTheme.palette.Accent,
+                unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
+                focusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                unfocusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                cursorColor = LedgerHubTheme.palette.Accent,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { testTag = ClientsTags.SEARCH_INPUT },
+        )
+
         Button(
             onClick = { onIntent(ClientsIntent.AddClicked) },
             modifier = Modifier.fillMaxWidth().semantics { testTag = ClientsTags.ADD_BUTTON },
@@ -136,7 +183,12 @@ internal fun ClientsView(
                 modifier = Modifier.semantics { testTag = ClientsTags.EMPTY_STATE },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            else -> uiState.clients.forEach { client ->
+            uiState.isSearchEmpty -> Text(
+                tr(StringKey.CLIENTS_SEARCH_EMPTY),
+                modifier = Modifier.semantics { testTag = ClientsTags.SEARCH_EMPTY_STATE },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> uiState.filteredClients.forEach { client ->
                 ClientCard(
                     client = client,
                     onEdit = { onIntent(ClientsIntent.EditClicked(client)) },
@@ -235,6 +287,17 @@ private fun ClientFormDialog(form: ClientFormState, onIntent: (ClientsIntent) ->
                     errorTag = ClientsTags.errorTag(ClientFormField.NAME),
                     enabled = !form.isSaving,
                     onValueChange = { onIntent(ClientsIntent.NameChanged(it)) },
+                    trailingIcon = if (form.isSireneResolving) {
+                        {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .semantics { testTag = ClientsTags.SIRENE_LOADER },
+                                strokeWidth = 2.dp,
+                                color = LedgerHubTheme.palette.Accent,
+                            )
+                        }
+                    } else null,
                 )
                 DialogField(
                     label = tr(StringKey.CLIENT_FIELD_SIRET),
@@ -317,6 +380,7 @@ internal fun DialogField(
     keyboardType: KeyboardType = KeyboardType.Text,
     inputFilter: (String) -> String = { it },
     helper: String? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -327,6 +391,7 @@ internal fun DialogField(
             enabled = enabled,
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            trailingIcon = trailingIcon,
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = LedgerHubTheme.palette.InputBackground,
