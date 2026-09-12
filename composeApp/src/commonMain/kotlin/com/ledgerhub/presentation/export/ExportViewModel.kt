@@ -21,23 +21,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.ledgerhub.domain.subscription.SubscriptionRepository
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+
 /**
  * ViewModel de la modale d'export comptable (US-22) — convention maison (cf. `AuthViewModel`) :
  * classe simple, [MutableStateFlow], portée annulable, aucun `androidx.lifecycle` en commonMain.
- *
- * ## Pourquoi une progression en paliers, et non un `delay` unique
- *
- * L'archive est produite en quelques millisecondes : la compression annoncée à l'utilisateur est
- * une **simulation**, et c'est assumé. Elle est égrenée en [PROGRESS_STEPS] paliers plutôt qu'en
- * une attente unique pour deux raisons qui se rejoignent : une barre qui saute de 0 à 100 % ne
- * renseigne sur rien, et un état qui ne change qu'une fois n'offre aux tests aucune prise pour
- * observer la progression autrement qu'en courant après elle.
- *
- * @param generationDuration durée totale de la simulation. Injectable — non par goût du réglage,
- *   mais parce que les tests Robolectric (N3a) tournent en temps réel : les faire attendre deux
- *   secondes reviendrait à parier sur l'ordonnanceur. Le niveau 2, lui, contrôle le temps virtuel
- *   et éprouve la valeur de production.
- * @param dispatcher injecté pour des tests déterministes (même motif que `DirectoryViewModel`).
  */
 class ExportViewModel(
     private val invoiceRepository: InvoiceRepository,
@@ -45,6 +35,7 @@ class ExportViewModel(
     private val taxSettings: TaxSettings = TaxSettings.Default,
     clock: Clock = SystemClock,
     private val generationDuration: Long = GENERATION_MILLIS,
+    private val subscriptionRepository: SubscriptionRepository? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -53,9 +44,20 @@ class ExportViewModel(
     private var generationJob: Job? = null
 
     private val _uiState = MutableStateFlow(
-        ExportUiState(period = ExportPeriod.yearToDate(clock.nowIso())),
+        ExportUiState(
+            period = ExportPeriod.yearToDate(clock.nowIso()),
+            isPro = true,
+        ),
     )
     val uiState: StateFlow<ExportUiState> = _uiState.asStateFlow()
+
+    init {
+        subscriptionRepository?.observeSubscription()
+            ?.onEach { status ->
+                _uiState.update { it.copy(isPro = status.isPro) }
+            }
+            ?.launchIn(scope)
+    }
 
     fun processIntent(intent: ExportIntent) {
         when (intent) {

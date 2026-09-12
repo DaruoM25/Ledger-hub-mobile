@@ -2614,3 +2614,64 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N1 & N2** | Suite complète de tests unitaires & Robolectric (1139 tests) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, 1139 tests)** |
 | **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m45s)** |
 
+---
+
+## Sprint 2 — Monétisation : RevenueCat, Quotas 3 factures & Paywall Material 3
+- **Date :** 2026-09-12
+- **Branche :** `feat/revenuecat-paywall-quotas`
+- **Statut :** ✅ Clos — Suite complète unitaire & Robolectric 100% verte (1157 tests), Assemblage Release R8 validé (BUILD SUCCESSFUL en 6m05s)
+
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Implémenter le socle complet de monétisation KMP prêt pour RevenueCat avec contrôle des quotas et écran Paywall Material 3 :
+  1. **Domaine & Modélisation d'Abonnement (`domain/subscription/`)** :
+     - `SubscriptionTier` : Niveaux `FREE`, `PRO_MONTHLY` (9,99 €/mois), `PRO_ANNUAL` (99,99 €/an).
+     - `SubscriptionStatus` : État immutable avec propriété `isPro` et indicateur de dérogation `isBypassed`.
+     - `PremiumFeature` : Clés fonctionnelles (`UNLIMITED_INVOICES`, `FEC_EXPORT`, `B2B_PENALTIES`, `SMART_RECONCILIATION`).
+     - `CheckInvoiceQuotaUseCase` : Règle métier stricte limitant la création à **3 factures gratuites par mois calendaire** pour le palier `FREE`.
+     - `CanAccessFeatureUseCase` : Évaluation des droits d'accès aux fonctionnalités avancées.
+     - `SubscriptionRepository` : Contrat d'interface réactif basé sur `StateFlow`.
+  2. **Couche Données Réactive (`data/subscription/`)** :
+     - `MockSubscriptionRepository` : Implémentation réactive en mémoire avec simulation d'achat, restauration et application de codes promo (codes dérogatoires `DEVPOST2026`, `SHIPATON2026`, `PRO2026`).
+  3. **UI/UX Paywall Material 3 (`presentation/subscription/`)** :
+     - `PaywallScreen` : Sélecteur de formules (Mensuel vs Annuel avec badge « 2 mois offerts »), liste des avantages exclusifs Pro avec glyphes, zone de saisie pour code promo / jury Devpost, bandeau d'erreur/succès, cibles tactiles conformes 48dp.
+     - `PaywallViewModel` : Architecture UDF unidirectionnelle (Intents `SelectTier`, `PurchaseSelected`, `RestorePurchases`, `ApplyPromoCode`, `Dismiss`).
+  4. **Gating & Intégration Shell (`App.kt` & `ExportViewModel.kt`)** :
+     - Navigation globale : déclenchement du `Overlay.Paywall` lors du franchissement du quota de 3 factures ou de l'accès aux exports verrouillés.
+     - Blocage de l'export FEC comptable (Art. A.47 A-1 LPF) pour les utilisateurs `FREE` avec redirection vers le paywall.
+  5. **Internationalisation (i18n)** :
+     - Ajout de l'ensemble des traductions bilingues FR/EN dans `StringKey.kt` et `AppTranslations.kt`.
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/subscription/SubscriptionTier.kt` | **[NEW]** Énumération des paliers d'abonnement. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/subscription/SubscriptionStatus.kt` | **[NEW]** Modèle d'état d'abonnement et constantes prédéfinies. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/subscription/PremiumFeature.kt` | **[NEW]** Énumération des fonctionnalités payantes. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/subscription/SubscriptionRepository.kt` | **[NEW]** Contrat d'interface du repository d'abonnement. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/subscription/CheckInvoiceQuotaUseCase.kt` | **[NEW]** Cas d'utilisation de contrôle de quota mensuel (3 factures max). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/subscription/CanAccessFeatureUseCase.kt` | **[NEW]** Cas d'utilisation de vérification d'accès aux fonctionnalités. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/subscription/MockSubscriptionRepository.kt` | **[NEW]** Implémentation réactive avec support des codes promo Devpost. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/subscription/PaywallTags.kt` | **[NEW]** Tags sémantiques pour les tests automatisés du Paywall. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/subscription/PaywallUiState.kt` | **[NEW]** État d'interface et modèles de plans tarifaires. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/subscription/PaywallIntent.kt` | **[NEW]** Événements UDF utilisateur pour le Paywall. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/subscription/PaywallViewModel.kt` | **[NEW]** Gestionnaire d'état de l'écran Paywall. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/subscription/PaywallScreen.kt` | **[NEW]** Écran Paywall Material 3. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/i18n/StringKey.kt` | Ajout des clés d'i18n pour l'abonnement et le paywall. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/i18n/AppTranslations.kt` | Traductions complètes FR/EN pour la monétisation. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/export/ExportUiState.kt` | Ajout des indicateurs `isFecLocked` et `isPro`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/export/ExportViewModel.kt` | Intégration du `SubscriptionRepository` pour le verrouillage FEC. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Gating de la création de facture et affichage de l'overlay Paywall. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/subscription/CheckInvoiceQuotaUseCaseTest.kt` | **[NEW]** Tests unitaires du cas d'usage quota 3 factures/mois. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/subscription/CanAccessFeatureUseCaseTest.kt` | **[NEW]** Tests unitaires de validation d'accès aux fonctionnalités. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/subscription/SubscriptionRepositoryTest.kt` | **[NEW]** Tests unitaires du repository et validation des codes promo. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/subscription/PaywallViewModelTest.kt` | **[NEW]** Tests unitaires du ViewModel Paywall et gestion d'état. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/subscription/PaywallScreenRobolectricTest.kt` | **[NEW]** Tests d'interaction Robolectric sur l'écran Paywall. |
+| `logs/audit.md` | Journalisation complète de l'intervention Sprint 2. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1 & N2** | Suite complète de tests unitaires & Robolectric (1157 tests) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, 1157 tests)** |
+| **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m05s)** |
+
+

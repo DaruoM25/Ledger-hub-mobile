@@ -149,6 +149,14 @@ import com.ledgerhub.presentation.settings.TaxSettingsViewModel
 import com.ledgerhub.presentation.theme.LedgerHubTheme
 import com.ledgerhub.presentation.theme.ThemeIntent
 import com.ledgerhub.presentation.theme.ThemeViewModel
+import com.ledgerhub.data.subscription.MockSubscriptionRepository
+import com.ledgerhub.domain.subscription.CanAccessFeatureUseCase
+import com.ledgerhub.domain.subscription.CheckInvoiceQuotaUseCase
+import com.ledgerhub.domain.subscription.PremiumFeature
+import com.ledgerhub.domain.subscription.SubscriptionRepository
+import com.ledgerhub.domain.subscription.SubscriptionStatus
+import com.ledgerhub.presentation.subscription.PaywallScreen
+import com.ledgerhub.presentation.subscription.PaywallViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -203,6 +211,9 @@ private sealed interface Overlay {
 
     /** Émission d'un avoir annulant [invoice] — US-05. */
     data class CreditNote(val invoice: Invoice) : Overlay
+
+    /** Écran Paywall & Monétisation (Sprint 2 — RevenueCat & Quotas). */
+    data class Paywall(val reason: PremiumFeature? = null) : Overlay
 }
 
 /**
@@ -248,6 +259,13 @@ fun App(
         )
     }
     val auditRepository = remember(database) { SqlDelightAuditRepository(database) }
+    val subscriptionRepository = remember { MockSubscriptionRepository() }
+    val checkInvoiceQuotaUseCase = remember(invoiceRepository, subscriptionRepository) {
+        CheckInvoiceQuotaUseCase(invoiceRepository, subscriptionRepository)
+    }
+    val canAccessFeatureUseCase = remember(subscriptionRepository, checkInvoiceQuotaUseCase) {
+        CanAccessFeatureUseCase(subscriptionRepository, checkInvoiceQuotaUseCase)
+    }
     // Rapprochement bancaire (US-18) : releve simule (aucun connecteur bancaire n'existe encore),
     // lettrages persistes en SQLDelight.
     val reconciliationRepository = remember(database) { SqlDelightReconciliationRepository(database) }
@@ -340,7 +358,18 @@ fun App(
     val themeState by themeViewModel.uiState.collectAsState()
     LaunchedEffect(themeViewModel) { themeViewModel.processIntent(ThemeIntent.Load) }
 
-    val onCreateInvoice = { overlay = Overlay.CreateInvoice }
+    val appScope = rememberCoroutineScope()
+    val onCreateInvoice = {
+        appScope.launch {
+            val quota = checkInvoiceQuotaUseCase()
+            if (quota.isQuotaReached) {
+                overlay = Overlay.Paywall(PremiumFeature.UNLIMITED_INVOICES)
+            } else {
+                overlay = Overlay.CreateInvoice
+            }
+        }
+        Unit
+    }
     val onCreateQuote = { overlay = Overlay.CreateQuote }
     val onEditQuote = { quote: Quote -> overlay = Overlay.EditQuote(quote) }
     val onConvertToInvoice = { quote: Quote -> overlay = Overlay.CreateInvoiceFromQuote(quote) }
@@ -575,6 +604,7 @@ fun App(
                                         taxSettings = taxSettings,
                                         eReportingRepository = eReportingRepository,
                                         onOpenEReporting = onOpenEReporting,
+                                        subscriptionRepository = subscriptionRepository,
                                     )
                                 }
                             }
@@ -636,6 +666,7 @@ fun App(
                                     taxSettings = taxSettings,
                                     eReportingRepository = eReportingRepository,
                                     onOpenEReporting = onOpenEReporting,
+                                    subscriptionRepository = subscriptionRepository,
                                 )
                             }
                         }
@@ -653,11 +684,12 @@ fun App(
                 // son ViewModel nait et meurt avec l'overlay — il ne porte aucun etat a conserver
                 // au-dela d'un export.
                 if (overlay is Overlay.ExportModal) {
-                    val exportViewModel = remember(taxSettings) {
+                    val exportViewModel = remember(taxSettings, subscriptionRepository) {
                         ExportViewModel(
                             invoiceRepository = invoiceRepository,
                             documentExporter = documentExporter,
                             taxSettings = taxSettings,
+                            subscriptionRepository = subscriptionRepository,
                         )
                     }
                     DisposableEffect(exportViewModel) {
@@ -871,8 +903,22 @@ private fun ShellContent(
     taxSettings: TaxSettings,
     eReportingRepository: SqlDelightEReportingRepository,
     onOpenEReporting: () -> Unit,
+    subscriptionRepository: SubscriptionRepository,
 ) {
     when (overlay) {
+        is Overlay.Paywall -> {
+            val paywallViewModel = remember(overlay.reason, subscriptionRepository) {
+                PaywallViewModel(
+                    subscriptionRepository = subscriptionRepository,
+                    reasonFeature = overlay.reason,
+                )
+            }
+            DisposableEffect(paywallViewModel) { onDispose { paywallViewModel.onCleared() } }
+            PaywallScreen(
+                viewModel = paywallViewModel,
+                onDismiss = onBack,
+            )
+        }
         Overlay.Integrations -> {
             // Le hub ne lit rien et n'écrit rien : son ViewModel peut naître et mourir avec
             // l'overlay, contrairement aux ViewModels d'onglets hissés dans App().

@@ -40,6 +40,7 @@ data class ExportUiState(
     val stage: ExportStage = ExportStage.IDLE,
     val progress: Float = 0f,
     val archive: AccountingArchive? = null,
+    val isPro: Boolean = true,
 ) {
     val periodError: ExportPeriodError? get() = period.validate()
 
@@ -47,6 +48,8 @@ data class ExportUiState(
 
     val isReady: Boolean get() = stage == ExportStage.READY
 
-    /** Une génération ne se lance ni sur une période invalide, ni par-dessus une autre en cours. */
-    val isGenerateEnabled: Boolean get() = stage == ExportStage.IDLE && periodError == null
+    val isFecLocked: Boolean get() = selectedFormat == ExportFormat.FEC_OFFICIAL && !isPro
+
+    /** Une génération ne se lance ni sur une période invalide, ni par-dessus une autre en cours, ni sur un format Pro verrouillé. */
+    val isGenerateEnabled: Boolean get() = stage == ExportStage.IDLE && periodError == null && !isFecLocked
 }
