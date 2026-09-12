@@ -19,20 +19,20 @@ import kotlin.test.Test
 class QuoteFormScreenTest {
 
     @Test
-    fun initialState_submitButtonIsDisabled() = runComposeUiTest {
+    fun initialState_bothActionButtonsAreOfferedAndClickable() = runComposeUiTest {
         setContent { QuoteFormScreen(viewModel = QuoteFormViewModel()) }
 
+        onNodeWithTag(QuoteFormTags.SAVE_DRAFT_BUTTON).performScrollTo().assertIsDisplayed()
         onNodeWithTag(QuoteFormTags.SUBMIT_BUTTON).performScrollTo().assertIsDisplayed()
-        onNodeWithTag(QuoteFormTags.SUBMIT_BUTTON).assertIsNotEnabled()
     }
 
     @Test
-    fun typingInvalidSiren_displaysFieldError() = runComposeUiTest {
+    fun typingInvalidSiret_displaysFieldError() = runComposeUiTest {
         setContent { QuoteFormScreen(viewModel = QuoteFormViewModel()) }
 
-        onNodeWithTag(QuoteFormTags.ISSUER_SIREN).performScrollTo().performTextInput("123")
+        onNodeWithTag(QuoteFormTags.RECIPIENT_SIRET).performScrollTo().performTextInput("123")
 
-        onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.ISSUER_SIREN))
+        onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.RECIPIENT_SIRET))
             .performScrollTo()
             .assertIsDisplayed()
     }

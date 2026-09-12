@@ -10,6 +10,7 @@ import com.ledgerhub.domain.invoice.ValidationResult
 import com.ledgerhub.domain.invoice.parseAmountToCents
 import com.ledgerhub.domain.quote.Quote
 import com.ledgerhub.domain.quote.QuoteLine
+import com.ledgerhub.domain.quote.QuoteStatus
 import com.ledgerhub.domain.quote.SubmitQuoteUseCase
 import com.ledgerhub.domain.quote.totalHtOf
 import com.ledgerhub.domain.quote.totalTtcOf
@@ -17,6 +18,7 @@ import com.ledgerhub.domain.quote.totalVatOf
 import com.ledgerhub.presentation.components.QuickClientDraft
 import com.ledgerhub.presentation.components.QuickClientField
 import com.ledgerhub.presentation.components.validateQuickClient
+import com.ledgerhub.presentation.invoiceform.CabinetIdentity
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private val ISO_DATE_REGEX = Regex("""^\d{4}-\d{2}-\d{2}$""")
+private val EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
 
 private fun formatUnitPrice(cents: Long): String =
     if (cents % 100L == 0L) (cents / 100L).toString()
@@ -38,28 +41,21 @@ private fun formatUnitPrice(cents: Long): String =
 /**
  * ViewModel du formulaire de devis — PATTERN UDF/MVVM, symétrique à InvoiceFormViewModel.
  * La validation reste synchrone (locale) ; seule la soumission via [SubmitQuoteUseCase]
- * est asynchrone (délai réseau simulé par [MockQuoteRepository] à ce stade).
- *
- * @param submitQuoteUseCase injecté pour permettre les tests avec un mock configurable
- *   (succès/échec) — le défaut construit un [MockQuoteRepository] tant qu'aucun backend
- *   réel (Ktor) n'est branché.
- * @param dispatcher injecté pour permettre les tests sans dépendance au thread réel.
- * @param initialQuote devis existant à charger dans le formulaire (mode modification).
+ * est asynchrone.
  */
 class QuoteFormViewModel(
     private val submitQuoteUseCase: SubmitQuoteUseCase = SubmitQuoteUseCase(MockQuoteRepository()),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     /**
-     * Annuaire des fiches clients alimentant le sélecteur (US-11). `null` = pas d'annuaire
-     * branché : le champ raison sociale du destinataire se comporte alors comme un champ libre,
-     * sans suggestion ni création rapide.
+     * Annuaire des fiches clients alimentant le sélecteur (US-11).
      */
     private val clientRepository: ClientRepository? = null,
     initialQuote: Quote? = null,
+    issuer: Party = CabinetIdentity.party,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
-    // L'état initial doit lui aussi refléter les erreurs de validation (formulaire vide = invalide) :
+    // L'état initial reflète aussi les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
     private val _uiState = MutableStateFlow(
         revalidate(
@@ -68,12 +64,11 @@ class QuoteFormViewModel(
                     quoteNumber = initialQuote.number,
                     issueDate = initialQuote.issueDate,
                     validityDate = initialQuote.validityDate,
-                    issuerName = initialQuote.issuer.name,
-                    issuerSiren = initialQuote.issuer.siren,
-                    issuerSiret = initialQuote.issuer.siret,
                     recipientName = initialQuote.recipient.name,
                     recipientSiren = initialQuote.recipient.siren,
                     recipientSiret = initialQuote.recipient.siret,
+                    recipientEmail = initialQuote.recipient.email,
+                    issuer = initialQuote.issuer.takeIf { it.name.isNotBlank() } ?: issuer,
                     clientQuery = initialQuote.recipient.name,
                     lines = initialQuote.lines.map {
                         QuoteLineFormState(
@@ -86,7 +81,10 @@ class QuoteFormViewModel(
                     isClientDirectoryAvailable = clientRepository != null,
                 )
             } else {
-                QuoteFormUiState(isClientDirectoryAvailable = clientRepository != null)
+                QuoteFormUiState(
+                    issuer = issuer,
+                    isClientDirectoryAvailable = clientRepository != null,
+                )
             }
         ),
     )
@@ -99,10 +97,9 @@ class QuoteFormViewModel(
 
     fun processIntent(intent: QuoteFormIntent) {
         when (intent) {
-            QuoteFormIntent.Submit -> submit()
+            QuoteFormIntent.SaveDraft -> submit(QuoteStatus.DRAFT)
+            QuoteFormIntent.FinalizeQuote, QuoteFormIntent.Submit -> submit(QuoteStatus.SENT)
 
-            // Le champ raison sociale est un sélecteur depuis US-11 : les deux intentions
-            // décrivent le même geste.
             is QuoteFormIntent.RecipientNameChanged -> onClientQueryChanged(intent.value)
             is QuoteFormIntent.OnClientQueryChanged -> onClientQueryChanged(intent.value)
 
@@ -118,7 +115,6 @@ class QuoteFormViewModel(
                         name = intent.name,
                         siret = intent.siret,
                         email = intent.email,
-                        // La frappe efface l'erreur du champ corrigé, pas celles des autres.
                         errors = draft.errors.filterKeys { field ->
                             when (field) {
                                 QuickClientField.NAME -> intent.name == draft.name
@@ -144,7 +140,6 @@ class QuoteFormViewModel(
         scope.launch {
             val matches = repository.searchClients(query).getOrDefault(emptyList())
             _uiState.update { current ->
-                // La saisie a pu changer pendant la lecture : on n'écrase pas un état plus récent.
                 if (current.clientQuery != query) current
                 else current.copy(clientSuggestions = matches)
             }
@@ -157,7 +152,7 @@ class QuoteFormViewModel(
                 current.copy(
                     clientQuery = value,
                     recipientName = value,
-                    // Toute frappe manuelle rompt le lien avec la fiche retenue.
+                    touchedFields = current.touchedFields + QuoteFormField.RECIPIENT_NAME,
                     selectedClient = current.selectedClient?.takeIf { it.name == value },
                     isClientDropdownExpanded = true,
                 ),
@@ -166,10 +161,6 @@ class QuoteFormViewModel(
         refreshSuggestions(value)
     }
 
-    /**
-     * Reprend la fiche dans le devis. Le devis porte SIREN **et** SIRET du destinataire : les
-     * deux viennent de la fiche, sans dériver le SIREN du SIRET.
-     */
     private fun onClientSelected(client: Party) {
         _uiState.update { current ->
             revalidate(
@@ -179,6 +170,12 @@ class QuoteFormViewModel(
                     recipientName = client.name,
                     recipientSiren = client.siren,
                     recipientSiret = client.siret,
+                    recipientEmail = client.email,
+                    touchedFields = current.touchedFields + setOf(
+                        QuoteFormField.RECIPIENT_NAME,
+                        QuoteFormField.RECIPIENT_SIRET,
+                        QuoteFormField.RECIPIENT_EMAIL,
+                    ),
                     isClientDropdownExpanded = false,
                     clientSuggestions = emptyList(),
                 ),
@@ -191,7 +188,6 @@ class QuoteFormViewModel(
             current.copy(
                 showQuickClientDialog = true,
                 isClientDropdownExpanded = false,
-                // Le nom déjà tapé est repris : l'utilisateur ne le ressaisit pas.
                 quickClientDraft = QuickClientDraft(name = current.clientQuery.trim()),
             )
         }
@@ -202,11 +198,9 @@ class QuoteFormViewModel(
         val draft = _uiState.value.quickClientDraft ?: return
         if (draft.isSaving) return
 
-        // Règles partagées avec le formulaire de facture — source unique (voir ClientPicker.kt).
         val errors = validateQuickClient(name, siret, email)
         val submitted = draft.copy(name = name, siret = siret, email = email)
         if (errors.isNotEmpty()) {
-            // La modale reste ouverte : c'est là que l'erreur se corrige.
             _uiState.update { it.copy(quickClientDraft = submitted.copy(errors = errors)) }
             return
         }
@@ -215,7 +209,6 @@ class QuoteFormViewModel(
 
         val client = Party(
             name = name.trim(),
-            // Règle INSEE : le SIREN est le préfixe à 9 chiffres du SIRET, déjà validé.
             siren = siret.take(9),
             siret = siret,
             email = email.trim(),
@@ -246,24 +239,62 @@ class QuoteFormViewModel(
 
     private fun applyChange(current: QuoteFormUiState, intent: QuoteFormIntent): QuoteFormUiState =
         when (intent) {
-            is QuoteFormIntent.QuoteNumberChanged -> current.copy(quoteNumber = intent.value)
-            is QuoteFormIntent.IssueDateChanged -> current.copy(issueDate = intent.value)
-            is QuoteFormIntent.ValidityDateChanged -> current.copy(validityDate = intent.value)
-            is QuoteFormIntent.IssuerNameChanged -> current.copy(issuerName = intent.value)
-            is QuoteFormIntent.IssuerSirenChanged -> current.copy(issuerSiren = intent.value)
-            is QuoteFormIntent.IssuerSiretChanged -> current.copy(issuerSiret = intent.value)
-            // SIREN et SIRET restent modifiables après une sélection ; les retoucher à la main
-            // rompt le lien avec la fiche (l'état cesse d'affirmer qu'un client est sélectionné).
+            is QuoteFormIntent.QuoteNumberChanged ->
+                current.copy(
+                    quoteNumber = intent.value,
+                    touchedFields = current.touchedFields + QuoteFormField.QUOTE_NUMBER,
+                )
+
+            is QuoteFormIntent.IssueDateChanged ->
+                current.copy(
+                    issueDate = intent.value,
+                    touchedFields = current.touchedFields + QuoteFormField.ISSUE_DATE,
+                )
+
+            is QuoteFormIntent.ValidityDateChanged ->
+                current.copy(
+                    validityDate = intent.value,
+                    touchedFields = current.touchedFields + QuoteFormField.VALIDITY_DATE,
+                )
+
+            is QuoteFormIntent.IssuerNameChanged ->
+                current.copy(
+                    issuer = current.issuer.copy(name = intent.value),
+                    touchedFields = current.touchedFields + QuoteFormField.ISSUER_NAME,
+                )
+
+            is QuoteFormIntent.IssuerSirenChanged ->
+                current.copy(
+                    issuer = current.issuer.copy(siren = intent.value),
+                    touchedFields = current.touchedFields + QuoteFormField.ISSUER_SIREN,
+                )
+
+            is QuoteFormIntent.IssuerSiretChanged ->
+                current.copy(
+                    issuer = current.issuer.copy(siret = intent.value),
+                    touchedFields = current.touchedFields + QuoteFormField.ISSUER_SIRET,
+                )
+
             is QuoteFormIntent.RecipientSirenChanged ->
                 current.copy(
                     recipientSiren = intent.value,
+                    touchedFields = current.touchedFields + QuoteFormField.RECIPIENT_SIREN,
                     selectedClient = current.selectedClient?.takeIf { it.siren == intent.value },
                 )
 
             is QuoteFormIntent.RecipientSiretChanged ->
                 current.copy(
                     recipientSiret = intent.value,
+                    recipientSiren = if (intent.value.length >= 9) intent.value.take(9) else current.recipientSiren,
+                    touchedFields = current.touchedFields + QuoteFormField.RECIPIENT_SIRET,
                     selectedClient = current.selectedClient?.takeIf { it.siret == intent.value },
+                )
+
+            is QuoteFormIntent.RecipientEmailChanged ->
+                current.copy(
+                    recipientEmail = intent.value,
+                    touchedFields = current.touchedFields + QuoteFormField.RECIPIENT_EMAIL,
+                    selectedClient = current.selectedClient?.takeIf { it.email == intent.value },
                 )
 
             QuoteFormIntent.AddLine ->
@@ -283,11 +314,16 @@ class QuoteFormViewModel(
                     current.copy(
                         lines = current.lines.mapIndexed { i, line ->
                             if (i == intent.index) {
+                                val touched = line.touched.toMutableSet()
+                                if (line.label != intent.label) touched += QuoteLineField.LABEL
+                                if (line.quantity != intent.quantity) touched += QuoteLineField.QUANTITY
+                                if (line.unitPriceHt != intent.unitPriceHt) touched += QuoteLineField.UNIT_PRICE
                                 line.copy(
                                     label = intent.label,
                                     quantity = intent.quantity,
                                     unitPriceHt = intent.unitPriceHt,
                                     vatRate = intent.vatRate,
+                                    touched = touched,
                                 )
                             } else {
                                 line
@@ -296,8 +332,8 @@ class QuoteFormViewModel(
                     )
                 }
 
-            // Soumission et gestes du sélecteur client : interceptés en amont par processIntent,
-            // ils n'atteignent jamais cette branche.
+            QuoteFormIntent.SaveDraft,
+            QuoteFormIntent.FinalizeQuote,
             QuoteFormIntent.Submit,
             is QuoteFormIntent.RecipientNameChanged,
             is QuoteFormIntent.OnClientQueryChanged,
@@ -333,18 +369,14 @@ class QuoteFormViewModel(
         if (state.recipientName.isBlank()) {
             errors[QuoteFormField.RECIPIENT_NAME] = "Le nom du destinataire est requis"
         }
-        (FiscalValidation.validateSiren(state.recipientSiren) as? ValidationResult.Invalid)?.let {
-            errors[QuoteFormField.RECIPIENT_SIREN] = it.reason
-        }
         (FiscalValidation.validateSiret(state.recipientSiret) as? ValidationResult.Invalid)?.let {
             errors[QuoteFormField.RECIPIENT_SIRET] = it.reason
         }
+        if (state.recipientEmail.isNotBlank() && !EMAIL_REGEX.matches(state.recipientEmail)) {
+            errors[QuoteFormField.RECIPIENT_EMAIL] = "Format d'adresse e-mail invalide"
+        }
 
         val validatedLines = state.lines.map(::validateLine)
-
-        // Seules les lignes sans erreur contribuent aux totaux affichés — une ligne invalide
-        // ne doit ni fausser le total ni empêcher l'affichage de celui des lignes correctes,
-        // mais bloque tout de même la soumission globale (voir isSubmitEnabled).
         val validDomainLines = validatedLines.mapNotNull { line -> if (line.errors.isEmpty()) line.toDomainOrNull() else null }
 
         return state.copy(
@@ -374,7 +406,6 @@ class QuoteFormViewModel(
         return line.copy(errors = lineErrors)
     }
 
-    /** Convertit une ligne de formulaire déjà validée (sans erreur) en ligne de domaine. Null sinon. */
     private fun QuoteLineFormState.toDomainOrNull(): QuoteLine? {
         if (errors.isNotEmpty()) return null
         val quantity = quantity.toIntOrNull() ?: return null
@@ -382,12 +413,17 @@ class QuoteFormViewModel(
         return QuoteLine(label = label, quantity = quantity, unitPriceHt = Money(unitPriceCents), vatRate = vatRate)
     }
 
-    private fun buildQuote(state: QuoteFormUiState): Quote = Quote(
+    private fun buildQuote(state: QuoteFormUiState, status: QuoteStatus): Quote = Quote(
         number = state.quoteNumber,
         issueDate = state.issueDate,
         validityDate = state.validityDate,
-        issuer = Party(state.issuerName, state.issuerSiren, state.issuerSiret),
-        recipient = Party(state.recipientName, state.recipientSiren, state.recipientSiret),
+        issuer = state.issuer,
+        recipient = Party(
+            name = state.recipientName,
+            siren = if (state.recipientSiret.length >= 9) state.recipientSiret.take(9) else state.recipientSiren,
+            siret = state.recipientSiret,
+            email = state.recipientEmail,
+        ),
         lines = state.lines.map { line ->
             QuoteLine(
                 label = line.label,
@@ -396,17 +432,20 @@ class QuoteFormViewModel(
                 vatRate = line.vatRate,
             )
         },
+        status = status,
     )
 
-    private fun submit() {
-        val revalidated = revalidate(_uiState.value)
+    private fun submit(targetStatus: QuoteStatus) {
+        if (_uiState.value.isSubmitting) return
+
+        val revalidated = revalidate(_uiState.value).copy(submitAttempted = true)
         val hasLineErrors = revalidated.lines.any { it.errors.isNotEmpty() }
         if (revalidated.errors.isNotEmpty() || hasLineErrors) {
             _uiState.value = revalidated
             return
         }
 
-        val quote = buildQuote(revalidated)
+        val quote = buildQuote(revalidated, targetStatus)
         _uiState.value = revalidated.copy(submissionStatus = SubmissionStatus.Loading)
 
         scope.launch {
@@ -428,10 +467,6 @@ class QuoteFormViewModel(
         }
     }
 
-    /**
-     * À appeler depuis le cycle de vie de la plateforme.
-     * Android : depuis onDestroy() ou rememberViewModel().
-     * iOS     : depuis le deinit de la UIViewController.
-     */
     fun onCleared() = scope.cancel()
 }
+

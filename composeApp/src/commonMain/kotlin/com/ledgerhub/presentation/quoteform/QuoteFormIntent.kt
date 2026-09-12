@@ -18,15 +18,15 @@ sealed interface QuoteFormIntent {
     data class RecipientNameChanged(val value: String) : QuoteFormIntent
     data class RecipientSirenChanged(val value: String) : QuoteFormIntent
     data class RecipientSiretChanged(val value: String) : QuoteFormIntent
+    data class RecipientEmailChanged(val value: String) : QuoteFormIntent
 
     // ── Sélecteur client dynamique (US-11) ────────────────────────────────────
     /** Frappe dans le champ de recherche : refiltre les fiches et ouvre la liste. */
     data class OnClientQueryChanged(val value: String) : QuoteFormIntent
 
     /**
-     * Une suggestion est retenue : raison sociale, SIREN et SIRET du destinataire sont repris de
-     * la fiche. Le devis ne porte pas d'email — la fiche en garde un, il n'est simplement pas
-     * recopié faute de champ où l'écrire.
+     * Une suggestion est retenue : raison sociale, SIREN, SIRET et email du destinataire sont
+     * repris de la fiche.
      */
     data class OnClientSelected(val client: Party) : QuoteFormIntent
 
@@ -73,5 +73,12 @@ sealed interface QuoteFormIntent {
         val vatRate: VatRate,
     ) : QuoteFormIntent
 
+    /** Enregistre le devis avec le statut [com.ledgerhub.domain.quote.QuoteStatus.DRAFT]. */
+    data object SaveDraft : QuoteFormIntent
+
+    /** Valide et finalise le devis avec le statut [com.ledgerhub.domain.quote.QuoteStatus.SENT]. */
+    data object FinalizeQuote : QuoteFormIntent
+
+    /** Alias rétrocompatible vers [FinalizeQuote]. */
     data object Submit : QuoteFormIntent
 }

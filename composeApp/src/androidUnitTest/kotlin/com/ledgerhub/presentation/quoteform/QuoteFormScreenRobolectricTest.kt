@@ -61,20 +61,29 @@ private class FakeQuoteClientDirectory(initial: List<Party> = emptyList()) : Cli
 class QuoteFormScreenRobolectricTest {
 
     @Test
-    fun initialState_submitButtonIsDisabled() = runComposeUiTest {
+    fun initialState_bothActionButtonsAreOffered() = runComposeUiTest {
         setContent { QuoteFormScreen(viewModel = QuoteFormViewModel()) }
 
+        onNodeWithTag(QuoteFormTags.SAVE_DRAFT_BUTTON).performScrollTo().assertIsDisplayed()
         onNodeWithTag(QuoteFormTags.SUBMIT_BUTTON).performScrollTo().assertIsDisplayed()
-        onNodeWithTag(QuoteFormTags.SUBMIT_BUTTON).assertIsNotEnabled()
     }
 
     @Test
-    fun typingInvalidSiren_displaysFieldError() = runComposeUiTest {
+    fun initialRender_displaysAllSectionCards_withNoErrors() = runComposeUiTest {
         setContent { QuoteFormScreen(viewModel = QuoteFormViewModel()) }
 
-        onNodeWithTag(QuoteFormTags.ISSUER_SIREN).performScrollTo().performTextInput("123")
+        onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.RECIPIENT_NAME)).assertDoesNotExist()
+        onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.RECIPIENT_SIRET)).assertDoesNotExist()
+        onNodeWithTag(QuoteFormTags.lineErrorTag(0, QuoteLineField.LABEL)).assertDoesNotExist()
+    }
 
-        onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.ISSUER_SIREN))
+    @Test
+    fun typingInvalidSiret_displaysFieldError() = runComposeUiTest {
+        setContent { QuoteFormScreen(viewModel = QuoteFormViewModel()) }
+
+        onNodeWithTag(QuoteFormTags.RECIPIENT_SIRET).performScrollTo().performTextInput("123")
+
+        onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.RECIPIENT_SIRET))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -139,8 +148,8 @@ class QuoteFormScreenRobolectricTest {
         onNodeWithTag(ClientPickerTags.CLIENT_SEARCH_INPUT)
             .performScrollTo()
             .assertTextContains("Boulangerie Moreau SARL")
-        onNodeWithTag(QuoteFormTags.RECIPIENT_SIREN).performScrollTo().assertTextContains("784102336")
         onNodeWithTag(QuoteFormTags.RECIPIENT_SIRET).performScrollTo().assertTextContains("78410233600004")
+        onNodeWithTag(QuoteFormTags.RECIPIENT_EMAIL).performScrollTo().assertTextContains("compta@moreau.fr")
         // La liste se referme une fois le choix fait.
         onAllNodesWithTag(ClientPickerTags.CLIENT_SUGGESTIONS_LIST).assertCountEquals(0)
     }

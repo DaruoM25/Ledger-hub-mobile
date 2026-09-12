@@ -2540,6 +2540,41 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N1** | `ResolveDirectoryEntryUseCaseTest` & `DirectoryViewModelTest` | `./gradlew :composeApp:testDebugUnitTest --tests "*Directory*"` | **PASS (100% vert)** |
 | **N2** | `DirectoryScreenRobolectricTest` (Composants Compose, affichage de la carte résultat) | `./gradlew :composeApp:testDebugUnitTest --tests "*DirectoryScreenRobolectricTest*"` | **PASS (100% vert)** |
 | **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (BUILD SUCCESSFUL en 39s)** |
+---
 
+## Sprint — US Devis : Harmonisation UI/UX & Parité Facture (Design System & Validation Progressive)
+- **Date :** 2026-09-12
+- **Branche :** `feat/quote-form-parity`
+- **Statut :** ✅ Clos — Tests unitaires & Robolectric `*Quote*` 100% verts (BUILD SUCCESSFUL en 1m21s), APK debug assemblé (BUILD SUCCESSFUL en 56s)
 
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Aligner fidèlement l'ergonomie et le design de l'écran de création de Devis sur le formulaire Facture :
+  1. **Architecture en Cartes Modulaires (`SectionCard`)** : Regroupement visuel par blocs thématiques avec icône/glyphe (`🏢 Informations Client`, `📄 Détails du Devis`, `📦 Prestations & Produits`, `💰 Récapitulatif Financier`).
+  2. **Validation Progressive & Discrète** : Élimination complète des bordures et messages rouges prématurés à l'affichage initial. Les erreurs ne sont affichées que pour les champs explicitement touchés (`touchedFields` / `QuoteLineFormState.touched`) ou après tentative de validation (`submitAttempted`).
+  3. **Suppression de l'émetteur manuel** : Remplacement des champs manuels de l'émetteur par l'identité du cabinet automatique (`CabinetIdentity.party` / `TaxSettings`), en miroir direct de la Facture.
+  4. **Alignement Ergonomique des Lignes de Devis** : Disposition de la `Quantité` et du `Prix unitaire HT (€)` côte à côte (`Row(1.dp, 1.dp)`) sous la désignation, complété par le sélecteur `VatRateDropdown` (`20%`, `10%`, `8.5%`, `5.5%`, `2.1%`, `0%`).
+  5. **Récapitulatif Financier Dynamique** : Carte financière claire avec calcul en temps réel du Total HT, de la TVA ventilée et du Total TTC au centime près.
+  6. **Double Action Explicite** : Remplacement du bouton d'envoi unique par deux boutons distincts :
+     - *« 💾 Enregistrer le brouillon »* (`QuoteFormIntent.SaveDraft` -> statut `QuoteStatus.DRAFT`).
+     - *« 📄 Finaliser le devis »* (`QuoteFormIntent.FinalizeQuote` -> statut `QuoteStatus.SENT`).
 
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormField.kt` | Ajout du champ `RECIPIENT_EMAIL`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormIntent.kt` | Ajout des intents `RecipientEmailChanged`, `SaveDraft`, `FinalizeQuote`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteLineFormState.kt` | Ajout du suivi de focus `touched` et méthode `visibleErrors(revealAll: Boolean)`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormUiState.kt` | Intégration de `touchedFields`, `submitAttempted`, `visibleErrors`, `recipientEmail`, et émetteur par défaut `CabinetIdentity.party`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormViewModel.kt` | Gestion progressive des erreurs, calcul des totaux, distinction `SaveDraft` (`DRAFT`) vs `FinalizeQuote` (`SENT`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreen.kt` | Refonte complète de l'UI avec `SectionCard`, `ClientPicker`, `Row` ergonomique Quantité / Prix unitaire, `VatRateDropdown`, `RecapRow`, et double action. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormViewModelTest.kt` | Tests unitaires de validation progressive, focus tracking et soumission brouillon / finalisé. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreenTest.kt` | Tests Compose partagés sur l'interface et les actions. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreenRobolectricTest.kt` | Tests Robolectric validant l'absence d'erreurs initiales, les champs client et le double bouton d'action. |
+| `logs/audit.md` | Journalisation complète du chantier de parité. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | `QuoteFormViewModelTest` & `QuoteValidationTest` | `./gradlew :composeApp:testDebugUnitTest --tests "*Quote*"` | **PASS (100% vert, 82 tests)** |
+| **N2** | `QuoteFormScreenRobolectricTest` & `QuoteFormScreenTest` | `./gradlew :composeApp:testDebugUnitTest --tests "*QuoteFormScreen*"` | **PASS (100% vert)** |
+| **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (BUILD SUCCESSFUL en 56s)** |

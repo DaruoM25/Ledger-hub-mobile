@@ -11,6 +11,8 @@ enum class QuoteFormField {
     RECIPIENT_NAME,
     RECIPIENT_SIREN,
     RECIPIENT_SIRET,
+    RECIPIENT_EMAIL,
     // Les erreurs de ligne (libellé/quantité/prix) vivent dans
     // QuoteLineFormState.errors (par ligne), pas ici (en-tête).
 }
+

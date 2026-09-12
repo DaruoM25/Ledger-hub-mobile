@@ -423,4 +423,69 @@ class QuoteFormViewModelTest {
         assertNull(viewModel.uiState.value.quickClientDraft)
         assertTrue(repository.clients.isEmpty())
     }
+
+    // ── Validation progressive & Actions Brouillon vs Finaliser ───────────────
+
+    @Test
+    fun initialState_calculatesErrors_butShowsNoneInVisibleErrors() {
+        val viewModel = QuoteFormViewModel()
+        val state = viewModel.uiState.value
+
+        // Le calcul brut contient des erreurs (formulaire vide)
+        assertTrue(state.errors.isNotEmpty())
+        assertFalse(state.isSubmitEnabled)
+
+        // Mais la vue n'en présente aucune
+        assertTrue(state.visibleErrors.isEmpty())
+        assertTrue(state.lines.all { it.visibleErrors(false).isEmpty() })
+    }
+
+    @Test
+    fun typingInField_marksItTouched_andRevealsOnlyItsError() {
+        val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.QuoteNumberChanged(""))
+
+        val state = viewModel.uiState.value
+        assertEquals(1, state.visibleErrors.size)
+        assertNotNull(state.visibleErrors[QuoteFormField.QUOTE_NUMBER])
+        assertNull(state.visibleErrors[QuoteFormField.ISSUE_DATE])
+        assertNull(state.visibleErrors[QuoteFormField.RECIPIENT_NAME])
+    }
+
+    @Test
+    fun clickingFinalizeOnEmptyForm_setsSubmitAttempted_revealingAllErrors() {
+        val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.FinalizeQuote)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.submitAttempted)
+        assertTrue(state.visibleErrors.isNotEmpty())
+        assertEquals(state.errors, state.visibleErrors)
+    }
+
+    @Test
+    fun saveDraft_persistsWithDraftStatus_andFinalizeWithSentStatus() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val mockRepo = MockQuoteRepository(simulatedDelayMillis = 100L)
+        val viewModel = QuoteFormViewModel(submitQuoteUseCase = SubmitQuoteUseCase(mockRepo), dispatcher = dispatcher)
+
+        fillValidSingleLineForm(viewModel)
+
+        // Sauvegarde Brouillon
+        viewModel.processIntent(QuoteFormIntent.SaveDraft)
+        advanceUntilIdle()
+
+        val draftQuote = viewModel.uiState.value.submittedQuote
+        assertNotNull(draftQuote)
+        assertEquals(com.ledgerhub.domain.quote.QuoteStatus.DRAFT, draftQuote.status)
+
+        // Finalisation
+        viewModel.processIntent(QuoteFormIntent.FinalizeQuote)
+        advanceUntilIdle()
+
+        val finalizedQuote = viewModel.uiState.value.submittedQuote
+        assertNotNull(finalizedQuote)
+        assertEquals(com.ledgerhub.domain.quote.QuoteStatus.SENT, finalizedQuote.status)
+    }
 }
+

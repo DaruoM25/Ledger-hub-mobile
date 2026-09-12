@@ -20,4 +20,11 @@ data class QuoteLineFormState(
     val unitPriceHt: String = "",
     val vatRate: VatRate = VatRate.TAUX_NORMAL,
     val errors: Map<QuoteLineField, String> = emptyMap(),
-)
+    /** Champs modifiés par l'utilisateur sur cette ligne. */
+    val touched: Set<QuoteLineField> = emptySet(),
+) {
+    /** Erreurs visibles : si [revealAll] est faux, seules les erreurs des champs touchés sont exposées. */
+    fun visibleErrors(revealAll: Boolean): Map<QuoteLineField, String> =
+        if (revealAll) errors else errors.filterKeys { it in touched }
+}
+
