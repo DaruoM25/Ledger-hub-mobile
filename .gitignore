@@ -27,8 +27,17 @@ output-metadata.json
 *.keystore
 *.pem
 *.key
+*.p12
+*.cer
+*.mobileprovision
 google-services.json
 .env*
+!.env.example
+
+# Bases de données locales & Scratch
+*.db
+*.sqlite
+scratch_db.db
 
 # iOS & Xcode
 iosApp/.build/
@@ -39,6 +48,8 @@ iosApp/DerivedData/
 *.hmap
 *.ipa
 
-# Logs et outils IA
+# Logs, captures et outils IA
 .claude/
 *.log
+screenshots/*.png
+tree_*.txt

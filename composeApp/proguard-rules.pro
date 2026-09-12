@@ -16,6 +16,10 @@
 -keepclasseswithmembers class * {
     kotlinx.serialization.KSerializer serializer(...);
 }
+-keep class *$$serializer { *; }
+-keepclassmembers class *$$serializer {
+    *** INSTANCE;
+}
 -keepclassmembers class * implements kotlinx.serialization.KSerializer {
     *** INSTANCE;
 }
@@ -28,6 +32,8 @@
 -keepclassmembers class * {
     @kotlinx.serialization.SerialName <fields>;
 }
+-keep class com.ledgerhub.data.remote.dto.** { *; }
+-keepclassmembers class com.ledgerhub.data.remote.dto.** { *; }
 -dontwarn kotlinx.serialization.**
 
 # ── 3. SQLDelight — Base locale SQLite ────────────────────────────────────────
@@ -38,6 +44,8 @@
 -keep interface com.squareup.sqldelight.** { *; }
 -keep class app.cash.sqldelight.** { *; }
 -keep interface app.cash.sqldelight.** { *; }
+-dontwarn app.cash.sqldelight.**
+-dontwarn com.squareup.sqldelight.**
 
 # ── 4. Ktor & Réseau ─────────────────────────────────────────────────────────
 -keep class io.ktor.** { *; }
@@ -46,9 +54,11 @@
 -dontwarn okio.**
 
 # ── 5. Compose Multiplatform ─────────────────────────────────────────────────
-# Préservation des points d'entrée Compose requis pour la recomposition
+# Préservation des points d'entrée Compose requis pour la recomposition et les ressources
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
+-keep class org.jetbrains.compose.** { *; }
+-dontwarn org.jetbrains.compose.**
 
 # ── 6. Éradication des logs en production (Anti-fuite d'informations) ─────────
 -assumenosideeffects class android.util.Log {

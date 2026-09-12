@@ -179,6 +179,7 @@ sqldelight {
 // connexion avant meme de l'ouvrir.
 val ledgerApiBaseUrl: String =
     (findProperty("ledgerhub.apiBaseUrl") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getenv("LEDGERHUB_API_BASE_URL")?.trim()?.takeIf { it.isNotEmpty() }
         ?: "http://130.61.25.71"
 
 // ── Configuration Android ─────────────────────────────────────────────────────

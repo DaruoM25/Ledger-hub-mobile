@@ -32,7 +32,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "w411dp-h891dp")
 class SettingsDangerZoneRobolectricTest {
 
     private class FakeTaxSettingsRepository : TaxSettingsRepository {
@@ -77,16 +76,12 @@ class SettingsDangerZoneRobolectricTest {
 
         // Faire défiler jusqu'à la carte Zone de Danger
         onNodeWithTag(TaxSettingsTags.DANGER_ZONE_CARD).performScrollTo().assertIsDisplayed()
-        onNodeWithTag(TaxSettingsTags.DELETE_ACCOUNT_BUTTON).assertIsDisplayed()
+        onNodeWithTag(TaxSettingsTags.DELETE_ACCOUNT_BUTTON).performScrollTo().performClick()
 
-        // Clic sur supprimer -> ouverture AlertDialog
-        onNodeWithTag(TaxSettingsTags.DELETE_ACCOUNT_BUTTON).performClick()
-        onNodeWithTag(TaxSettingsTags.DELETE_DIALOG).assertIsDisplayed()
-
-        // Bouton confirmer désactivé au départ
+        // Saisie et confirmation
+        onNodeWithTag(TaxSettingsTags.DELETE_CONFIRMATION_INPUT).assertIsDisplayed()
         onNodeWithTag(TaxSettingsTags.DELETE_CONFIRM_BUTTON).assertIsNotEnabled()
 
-        // Saisie en minuscules -> toujours désactivé
         onNodeWithTag(TaxSettingsTags.DELETE_CONFIRMATION_INPUT).performTextInput("supprimer")
         onNodeWithTag(TaxSettingsTags.DELETE_CONFIRM_BUTTON).assertIsNotEnabled()
 

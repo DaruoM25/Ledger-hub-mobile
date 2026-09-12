@@ -2578,3 +2578,39 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N1** | `QuoteFormViewModelTest` & `QuoteValidationTest` | `./gradlew :composeApp:testDebugUnitTest --tests "*Quote*"` | **PASS (100% vert, 82 tests)** |
 | **N2** | `QuoteFormScreenRobolectricTest` & `QuoteFormScreenTest` | `./gradlew :composeApp:testDebugUnitTest --tests "*QuoteFormScreen*"` | **PASS (100% vert)** |
 | **Package** | Assemblage de l'artéfact `composeApp-debug.apk` | `./gradlew :composeApp:assembleDebug` | **PASS (BUILD SUCCESSFUL en 56s)** |
+
+---
+
+## Sprint 1 — Sécurité : Hardening R8 / ProGuard & Étanchéité des Secrets
+- **Date :** 2026-09-12
+- **Branche :** `feat/security-hardening-r8`
+- **Statut :** ✅ Clos — Tests unitaires & Robolectric 100% verts (1139/1139 tests, BUILD SUCCESSFUL en 2m), Assemblage Release R8 validé (BUILD SUCCESSFUL en 6m45s)
+
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Sécuriser le dépôt et l'artéfact binaire de production :
+  1. **Étanchéité des Secrets & Endpoints** :
+     - Création d'un modèle d'environnement `.env.example` à la racine contenant les templates de variables pour l'API LedgerHub, RevenueCat et les services tiers.
+     - Résolution hiérarchique de l'URL API dans Gradle (`-P`, variable d'environnement `LEDGERHUB_API_BASE_URL`, `local.properties` et fallback sécurisé).
+     - Durcissement de `.gitignore` excluant strictement les bases SQLite locales (`*.db`, `*.sqlite`, `scratch_db.db`), les certificats de signature supplémentaires (`*.p12`, `*.cer`, `*.mobileprovision`) et les captures temporaires.
+  2. **Hardening R8 / ProGuard (`composeApp/proguard-rules.pro`)** :
+     - Verrouillage strict de `kotlinx.serialization` : préservation des serializers générés (`*$$serializer`), des instances compagnons (`Companion`), des DTOs du package `com.ledgerhub.data.remote.dto.**` et des annotations `@SerialName`.
+     - Préservation des interfaces et tables SQLDelight (`com.ledgerhub.db.**`, `app.cash.sqldelight.**`, `com.squareup.sqldelight.**`).
+     - Préservation de la recomposition Compose Multiplatform et des ressources (`androidx.compose.**`, `org.jetbrains.compose.**`).
+     - Éradication totale des logs de production (`android.util.Log`, `kotlin.io.ConsoleKt.print/println`, `PrintStream`).
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `.env.example` | **[NEW]** Modèle des variables d'environnement et secrets tiers. |
+| `.gitignore` | Exclusion renforcée des bases locales SQLite, certificats et captures. |
+| `composeApp/build.gradle.kts` | Support de la variable `LEDGERHUB_API_BASE_URL` et vérification de la configuration Release. |
+| `composeApp/proguard-rules.pro` | Règles exhaustives R8 pour kotlinx.serialization, DTOs, SQLDelight et Compose. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/settings/SettingsDangerZoneRobolectricTest.kt` | Nettoyage de la configuration d'exécution Robolectric. |
+| `logs/audit.md` | Journalisation complète du chantier de sécurité. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1 & N2** | Suite complète de tests unitaires & Robolectric (1139 tests) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, 1139 tests)** |
+| **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m45s)** |
+

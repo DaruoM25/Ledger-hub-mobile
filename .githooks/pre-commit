@@ -24,6 +24,9 @@ LEAKS_DETECTED=0
 
 # 1. Vérification des noms de fichiers interdits
 for file in $STAGED_FILES; do
+    if [[ "$file" == *".env.example"* || "$file" == *".env.sample"* || "$file" == *".env.template"* ]]; then
+        continue
+    fi
     if echo "$file" | grep -iE "$FORBIDDEN_FILES_REGEX" > /dev/null 2>&1; then
         echo "${RED}[ERREUR] Fichier sensible interdit indexé : $file${RESET}"
         LEAKS_DETECTED=1
