@@ -126,7 +126,11 @@ class InvoiceStatusesInstrumentedTest {
         val file = File(dir, "US13_mobile_invoices_statuses_${Build.MODEL}.png".replace(' ', '_'))
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
-        val sharedFile = File("/sdcard/Download", file.name).apply { parentFile?.mkdirs() }
+        val sharedFile = File(
+            InstrumentationRegistry.getInstrumentation().targetContext
+                .getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)!!,
+            file.name,
+        ).apply { parentFile?.mkdirs() }
         sharedFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
         println("[screenshot] ${file.absolutePath}")

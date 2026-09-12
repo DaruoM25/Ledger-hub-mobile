@@ -552,6 +552,24 @@ Procédure : `adb uninstall com.ledgerhub.app.debug` puis `adb install -r`, donc
 
 ---
 
+## Qualification N3b ciblée — DGFIP, Devis & Paywall
+- **Date :** 2026-09-12
+- **Terminal :** Samsung Galaxy S23+ (`SM-S916B`, Android 16, ADB Wi-Fi)
+- **Statut :** ✅ 3/3 tests instrumentés ciblés passants
+
+### Parcours validés
+| Parcours | Vérification | Preuve |
+|---|---|---|
+| Annuaire DGFIP | SIRET `38012986648625`, résultat d'annuaire affiché | `screenshots/n3b_dgfip.png` |
+| Formulaire Devis | écran nominal, aucun tag d'erreur de validation visible | `screenshots/n3b_quote.png` |
+| Paywall | code `DEVPOST2026`, statut Pro activé | `screenshots/n3b_paywall.png` |
+
+### Correctif Scoped Storage
+Les tests instrumentés n'écrivent plus dans `/sdcard/Download`, interdit par Android 16. Les captures sont écrites dans le stockage externe privé de l'application et publiées via MediaStore sous `Pictures/n3b` pour permettre leur rapatriement ADB sans permission legacy.
+
+### Résultat runtime
+`connectedDebugAndroidTest` ciblé : **3 tests, 0 échec, 0 erreur**. Aucun `FATAL EXCEPTION`, `AndroidRuntime` ou crash `com.ledgerhub` relevé dans logcat après exécution.
+
 ## US-04 (Partie 2) — CRUD Clients & Paramètres fiscaux
 - **Date :** 2026-08-29
 - **Branche :** `feature/US-04-clients-actions-settings`
@@ -2673,5 +2691,3 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 |---|---|---|---|
 | **N1 & N2** | Suite complète de tests unitaires & Robolectric (1157 tests) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, 1157 tests)** |
 | **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m05s)** |
-
-

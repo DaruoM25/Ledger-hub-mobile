@@ -87,7 +87,11 @@ class ClientPickerGeometryInstrumentedTest {
         val appFile = File(appDir, name)
         appFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
-        val sharedFile = File("/sdcard/Download", name).apply { parentFile?.mkdirs() }
+        val sharedFile = File(
+            InstrumentationRegistry.getInstrumentation().targetContext
+                .getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)!!,
+            name,
+        ).apply { parentFile?.mkdirs() }
         sharedFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
         println("[screenshot] ${appFile.absolutePath}")

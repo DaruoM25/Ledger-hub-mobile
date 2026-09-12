@@ -58,7 +58,8 @@ class QuotesInstrumentedTest {
         appFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
         try {
-            val downloadDir = File("/sdcard/Download")
+            val downloadDir = InstrumentationRegistry.getInstrumentation().targetContext
+                .getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)!!
             if (downloadDir.exists()) {
                 val downloadFile = File(downloadDir, name)
                 downloadFile.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

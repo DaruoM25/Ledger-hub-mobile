@@ -197,7 +197,10 @@ class CompliancePanelInstrumentedTest {
         val appFile = File(context.getExternalFilesDir(null), screenshotName)
         appFile.outputStream().use { stream -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream) }
 
-        val sharedFile = File("/sdcard/Download", screenshotName).apply { parentFile?.mkdirs() }
+        val sharedFile = File(
+            context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)!!,
+            screenshotName,
+        ).apply { parentFile?.mkdirs() }
         runCatching {
             sharedFile.outputStream().use { stream ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
