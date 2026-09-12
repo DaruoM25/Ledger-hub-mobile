@@ -2691,3 +2691,29 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 |---|---|---|---|
 | **N1 & N2** | Suite complète de tests unitaires & Robolectric (1157 tests) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, 1157 tests)** |
 | **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m05s)** |
+
+---
+
+## DevOps & CI/CD : Qualification Native KMP sur Simulateur iOS (GitHub Actions)
+- **Date :** 2026-09-12
+- **Branche :** `chore/opensource-licensing-and-readme`
+- **Statut :** ✅ Clos — Workflow `.github/workflows/mobile-ci.yml` mis à jour
+
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Étendre la chaîne d'intégration continue pour exécuter systématiquement la suite de tests partagés `commonTest` sur runner `macos-14` (Apple Silicon M1/M2) via le simulateur iOS headless.
+- **Modifications apportées** :
+  - Ajout de l'étape `./gradlew :composeApp:iosSimulatorArm64Test --no-daemon --console=plain` dans le job `ios-validation` avant l'étape de linkage du framework.
+  - Conservation du step `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --no-daemon` pour garantir l'intégrité binaire du framework final.
+
+### 2. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `.github/workflows/mobile-ci.yml` | Ajout de l'exécution des tests KMP sur le simulateur iOS (`iosSimulatorArm64Test`). |
+| `logs/audit.md` | Journalisation de la mise à jour CI/CD. |
+
+### 3. Matrice de Qualification
+| Job CI | Runner | Commande | Couverture |
+|---|---|---|---|
+| `android-common-qa` | `ubuntu-latest` | `./gradlew :composeApp:testDebugUnitTest` & `assembleDebug` | Tests unitaires JVM/Android, Robolectric & APK debug |
+| `ios-validation` | `macos-14` | `./gradlew :composeApp:compileKotlinIosSimulatorArm64`, `:composeApp:iosSimulatorArm64Test` & `linkDebugFrameworkIosSimulatorArm64` | Compilation native, exécution `commonTest` sur simulateur iOS headless & framework statique |
+

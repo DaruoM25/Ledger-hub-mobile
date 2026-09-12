@@ -54,5 +54,8 @@ jobs:
       - name: Compile iOS Simulator Target
         run: ./gradlew :composeApp:compileKotlinIosSimulatorArm64 --no-daemon
 
+      - name: Run KMP Common Tests on iOS Simulator
+        run: ./gradlew :composeApp:iosSimulatorArm64Test --no-daemon --console=plain
+
       - name: Link iOS Framework
         run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --no-daemon
