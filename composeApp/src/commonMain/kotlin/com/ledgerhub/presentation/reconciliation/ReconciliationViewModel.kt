@@ -113,6 +113,7 @@ class ReconciliationViewModel(
                             isReconciling = false,
                             selectedTransactionId = null,
                             selectedInvoiceNumber = null,
+                            showEreportingBanner = true,
                         )
                     }
                     load()

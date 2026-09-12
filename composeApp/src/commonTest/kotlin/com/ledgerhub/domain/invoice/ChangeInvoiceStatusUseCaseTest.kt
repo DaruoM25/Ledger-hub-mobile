@@ -106,15 +106,27 @@ class ChangeInvoiceStatusUseCaseTest {
     }
 
     @Test
+    fun refusal_withReasonUnder10Chars_isRefused() = runTest {
+        val repository = RecordingStatusRepository()
+
+        val result = ChangeInvoiceStatusUseCase(repository)(
+            invoice(InvoiceStatus.DEPOSITED), InvoiceStatus.REFUSED, reason = "Court",
+        )
+
+        assertIs<IllegalArgumentException>(result.exceptionOrNull())
+        assertEquals(0, repository.callCount)
+    }
+
+    @Test
     fun rejection_withReason_isAcceptedAndTheReasonIsTrimmed() = runTest {
         val repository = RecordingStatusRepository()
 
         val result = ChangeInvoiceStatusUseCase(repository)(
-            invoice(InvoiceStatus.DEPOSITED), InvoiceStatus.REJECTED, reason = "  SIRET invalide  ",
+            invoice(InvoiceStatus.DEPOSITED), InvoiceStatus.REJECTED, reason = "  Numéro de SIRET invalide  ",
         )
 
         assertTrue(result.isSuccess)
-        assertEquals("SIRET invalide", repository.lastReason)
+        assertEquals("Numéro de SIRET invalide", repository.lastReason)
     }
 
     @Test

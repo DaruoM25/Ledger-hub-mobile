@@ -264,6 +264,7 @@ class SqlDelightInvoiceRepositoryTest {
             deliveryZip = "",
             deliveryCity = "",
             deliveryCountry = "",
+            refusalReason = null,
         )
         database.invoiceLineQueries.insert(
             invoiceNumber = "F-2025-900",

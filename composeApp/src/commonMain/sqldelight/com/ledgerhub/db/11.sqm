@@ -1,0 +1,15 @@
+-- Migration 11 -> 12 — US-28 : Cycle de vie réglementaire, motif de refus et table InvoiceStatusHistory
+
+ALTER TABLE Invoice ADD COLUMN refusalReason TEXT;
+
+CREATE TABLE InvoiceStatusHistory (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceId TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updatedBy TEXT NOT NULL,
+    changedAt INTEGER NOT NULL,
+    reason TEXT,
+    FOREIGN KEY (invoiceId) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+CREATE INDEX InvoiceStatusHistory_invoice ON InvoiceStatusHistory(invoiceId, changedAt);

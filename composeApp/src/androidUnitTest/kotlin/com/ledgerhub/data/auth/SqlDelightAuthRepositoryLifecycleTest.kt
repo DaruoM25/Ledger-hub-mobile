@@ -88,6 +88,7 @@ class SqlDelightAuthRepositoryLifecycleTest {
             deliveryZip = "",
             deliveryCity = "",
             deliveryCountry = "",
+            refusalReason = null,
         )
 
         // Vérification présence initiale

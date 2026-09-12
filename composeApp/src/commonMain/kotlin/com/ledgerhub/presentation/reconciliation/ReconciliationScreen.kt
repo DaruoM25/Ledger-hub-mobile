@@ -56,6 +56,7 @@ object ReconciliationTags {
     const val TAB_INVOICES = "bank_reconciliation_tab_invoices"
     const val SELECTION_HINT = "bank_reconciliation_hint"
     const val ERROR = "bank_reconciliation_error"
+    const val RECONCILIATION_EREPORTING_BANNER = "bank_reconciliation_ereporting_banner"
 
     fun transactionCard(id: String): String = "transaction_card_$id"
     fun invoiceCard(number: String): String = "invoice_card_$number"
@@ -119,6 +120,34 @@ internal fun ReconciliationContent(
                         .padding(top = 8.dp)
                         .semantics { testTag = ReconciliationTags.ERROR },
                 )
+            }
+
+            if (uiState.showEreportingBanner) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .semantics { testTag = ReconciliationTags.RECONCILIATION_EREPORTING_BANNER },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "☁",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = tr(StringKey.RECONCILIATION_EREPORTING_READY_BANNER),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
             }
 
             Box(modifier = Modifier.weight(1f).padding(top = 12.dp)) {

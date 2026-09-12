@@ -65,11 +65,13 @@ data class InvoiceDetailUiState(
             ?.sortedBy { it.ordinal }
             .orEmpty()
 
-    /** Les transitions négatives exigent un motif — voir `ChangeInvoiceStatusUseCase`. */
+    /** Les transitions négatives exigent un motif d'au moins 10 caractères (US-28). */
     val pendingTransitionRequiresReason: Boolean
         get() = pendingTransition == InvoiceStatus.REJECTED || pendingTransition == InvoiceStatus.REFUSED
 
+    val isReasonValid: Boolean
+        get() = !pendingTransitionRequiresReason || transitionReason.trim().length >= 10
+
     val canConfirmTransition: Boolean
-        get() = !isTransitioning &&
-            (!pendingTransitionRequiresReason || transitionReason.isNotBlank())
+        get() = !isTransitioning && isReasonValid
 }

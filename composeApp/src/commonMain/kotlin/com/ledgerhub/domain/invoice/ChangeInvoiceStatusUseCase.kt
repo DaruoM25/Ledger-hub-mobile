@@ -22,10 +22,15 @@ class ChangeInvoiceStatusUseCase(
         if (!InvoiceStatusTransition.isAllowed(invoice.status, target)) {
             return Result.failure(InvalidStatusTransitionException(invoice.status, target))
         }
-        if (target in REASON_REQUIRED && reason.isNullOrBlank()) {
-            return Result.failure(
-                IllegalArgumentException("Un motif est requis pour passer la facture ${invoice.number} à $target"),
-            )
+        if (target in REASON_REQUIRED) {
+            val trimmed = reason?.trim().orEmpty()
+            if (trimmed.length < MIN_REASON_LENGTH) {
+                return Result.failure(
+                    IllegalArgumentException(
+                        "Le motif est requis et doit comporter au moins $MIN_REASON_LENGTH caractères pour passer la facture ${invoice.number} à $target",
+                    ),
+                )
+            }
         }
         return repository.changeStatus(
             invoiceNumber = invoice.number,
@@ -36,7 +41,9 @@ class ChangeInvoiceStatusUseCase(
     }
 
     private companion object {
-        /** Transitions négatives : sans motif, la trace ne vaut rien en contrôle. */
+        const val MIN_REASON_LENGTH = 10
+
+        /** Transitions négatives : sans motif d'au moins 10 caractères, la trace ne vaut rien en contrôle. */
         val REASON_REQUIRED = setOf(InvoiceStatus.REJECTED, InvoiceStatus.REFUSED)
     }
 }

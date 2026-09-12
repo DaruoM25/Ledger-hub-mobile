@@ -198,6 +198,7 @@ class ReconciliationViewModelTest {
         assertNull(state.selectedInvoiceNumber)
         assertTrue(state.isTransactionReconciled("TX-2026-0091"))
         assertNotNull(state.matchFor("TX-2026-0091"))
+        assertTrue(state.showEreportingBanner, "La bannière de transmission e-Reporting doit être activée après lettrage")
     }
 
     @Test

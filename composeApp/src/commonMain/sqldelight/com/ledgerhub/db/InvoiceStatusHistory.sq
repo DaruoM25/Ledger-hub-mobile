@@ -1,0 +1,28 @@
+CREATE TABLE InvoiceStatusHistory (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceId TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updatedBy TEXT NOT NULL,
+    changedAt INTEGER NOT NULL,
+    reason TEXT,
+    FOREIGN KEY (invoiceId) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+CREATE INDEX InvoiceStatusHistory_invoice ON InvoiceStatusHistory(invoiceId, changedAt);
+
+insert:
+INSERT INTO InvoiceStatusHistory(id, invoiceId, status, updatedBy, changedAt, reason)
+VALUES (?, ?, ?, ?, ?, ?);
+
+selectByInvoiceId:
+SELECT * FROM InvoiceStatusHistory
+WHERE invoiceId = ?
+ORDER BY changedAt ASC, id ASC;
+
+selectAll:
+SELECT * FROM InvoiceStatusHistory
+ORDER BY changedAt ASC, id ASC;
+
+deleteByInvoiceId:
+DELETE FROM InvoiceStatusHistory
+WHERE invoiceId = ?;

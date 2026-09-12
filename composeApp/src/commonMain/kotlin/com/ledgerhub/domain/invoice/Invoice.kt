@@ -40,6 +40,8 @@ data class Invoice(
     val isEReporting: Boolean = false,
     /** Adresse de livraison spécifique si différente de l'adresse client. */
     val deliveryAddress: DeliveryAddress = DeliveryAddress(),
+    /** Motif de refus acheteur ou de rejet plateforme (US-28). */
+    val refusalReason: String? = null,
 ) {
     init {
         require(lines.isNotEmpty()) { "Une facture doit contenir au moins une ligne de facturation" }

@@ -1,5 +1,6 @@
 package com.ledgerhub.presentation.invoices.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,8 +16,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +39,7 @@ import com.ledgerhub.domain.audit.AuditMilestoneId
 import com.ledgerhub.domain.audit.AuditMilestoneState
 import com.ledgerhub.domain.audit.abbreviateFingerprint
 import com.ledgerhub.domain.i18n.StringKey
+import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import com.ledgerhub.presentation.i18n.formatIsoDate
 import com.ledgerhub.presentation.i18n.tr
@@ -64,7 +70,7 @@ private val ConnectorWidth = 2.dp
 private const val PENDING_ALPHA = 0.55f
 
 /**
- * Timeline verticale de traçabilité réglementaire (US-17).
+ * Timeline verticale de traçabilité réglementaire (US-17 & US-28).
  *
  * Purement présentationnelle : l'état des jalons est résolu en amont par
  * [buildAuditTimeline][com.ledgerhub.domain.audit.buildAuditTimeline], sur la Piste d'Audit
@@ -81,22 +87,28 @@ fun AuditTrailTimeline(
     milestones: List<AuditMilestone>,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(12.dp),
+    Card(
         modifier = modifier
             .fillMaxWidth()
+            .wrapContentHeight()
             .semantics { testTag = AuditTrailTags.PANEL },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF1A1D24),
+        ),
+        border = BorderStroke(1.dp, Color(0xFF2C303B)),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
         ) {
             Text(
                 text = tr(StringKey.AUDIT_PANEL_TITLE),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White,
             )
+            Spacer(modifier = Modifier.height(16.dp))
             milestones.forEachIndexed { index, milestone ->
                 MilestoneRow(
                     milestone = milestone,
@@ -125,10 +137,6 @@ private fun MilestoneRow(milestone: AuditMilestone, isLast: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            // La fusion est ce qui donne au jalon un texte propre : sans elle, le libellé, le badge
-            // et l'empreinte restent des nœuds frères et l'étape n'existe comme tout ni pour un
-            // lecteur d'écran, ni pour une assertion de test. Le texte annoncé est celui réellement
-            // affiché — pas une `contentDescription` parallèle, qui divergerait tôt ou tard de lui.
             .semantics(mergeDescendants = true) { testTag = AuditTrailTags.stepTag(milestone.id) },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -151,32 +159,33 @@ private fun MilestoneRow(milestone: AuditMilestone, isLast: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = if (isLast) 0.dp else 16.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface.copy(
-                    alpha = if (milestone.state == AuditMilestoneState.PENDING) PENDING_ALPHA else 1f,
-                ),
+                fontWeight = FontWeight.SemiBold,
+                color = if (milestone.state == AuditMilestoneState.PENDING) {
+                    Color(0xFF94A3B8)
+                } else {
+                    Color.White
+                },
             )
             milestone.timestampIso?.let { iso ->
                 Text(
                     text = formatTimestamp(iso, language.formatDate(iso)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFF94A3B8),
+                    fontWeight = FontWeight.Medium,
                 )
             }
             milestone.fingerprint?.let { Fingerprint(it) }
-            // Motif de la décision de l'administration. Affiché sous le jalon concerné plutôt que
-            // dans un encart séparé : c'est la justification de cet état précis, détachée elle
-            // perdrait son référent.
+            // Motif de la décision de l'administration ou du refus.
             milestone.reason?.takeIf { it.isNotBlank() }?.let { reason ->
                 Text(
                     text = reason,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFFCBD5E1),
                 )
             }
             MilestoneBadge(milestone = milestone, accent = accent)
@@ -196,8 +205,6 @@ private fun Bullet(state: AuditMilestoneState, accent: Color) {
             .border(width = 2.dp, color = accent, shape = CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        // Glyphe en plus de la couleur : la seule teinte ne distinguerait pas les états pour un
-        // utilisateur daltonien.
         val glyph = when (state) {
             AuditMilestoneState.DONE -> "✓"
             AuditMilestoneState.REJECTED -> "!"
@@ -209,37 +216,24 @@ private fun Bullet(state: AuditMilestoneState, accent: Color) {
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                // Redondant à l'oral : le badge énonce déjà l'état en toutes lettres. Annoncer
-                // « ✓ » en tête de chaque jalon n'ajoute rien et alourdit la lecture.
                 modifier = Modifier.clearAndSetSemantics { },
             )
         }
     }
 }
 
-/**
- * Empreinte d'intégrité. Tronquée à l'affichage — 64 caractères hexadécimaux sont illisibles sur
- * un téléphone — et en police à chasse fixe, la seule qui rende une empreinte comparable d'un
- * coup d'œil.
- */
 @Composable
 private fun Fingerprint(fingerprint: String) {
     val text = "${tr(StringKey.AUDIT_SHA256_LABEL)} : ${fingerprint.abbreviateFingerprint()}"
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        // Pas de `contentDescription` ici : le texte de ce `Text` est déjà repris dans la
-        // fusion du jalon, la doubler ferait annoncer l'empreinte deux fois.
+        color = Color(0xFF94A3B8),
+        fontWeight = FontWeight.Medium,
         modifier = Modifier.semantics { testTag = AuditTrailTags.SHA256 },
     )
 }
 
-/**
- * Badge d'état. Le jalon « statut » emprunte la palette réglementaire du statut réel
- * ([tagColor] / [containerColor]) — celle déjà employée par la liste et le détail : deux chartes
- * pour un même statut seraient une source de confusion, pas de clarté.
- */
 @Composable
 private fun MilestoneBadge(milestone: AuditMilestone, accent: Color) {
     val status = milestone.reportedStatus
@@ -248,10 +242,31 @@ private fun MilestoneBadge(milestone: AuditMilestone, accent: Color) {
         milestone.state == AuditMilestoneState.PENDING -> tr(StringKey.AUDIT_STEP_PENDING)
         else -> tr(StringKey.AUDIT_STEP_DONE)
     }
-    val container = status?.containerColor() ?: accent.copy(alpha = 0.12f)
-    val content = status?.onContainerColor() ?: accent
+    val isPositive = status == InvoiceStatus.APPROVED ||
+        status == InvoiceStatus.DEPOSITED ||
+        status == InvoiceStatus.PAID ||
+        (status == null && milestone.state == AuditMilestoneState.DONE)
 
-    Surface(color = container, contentColor = content, shape = RoundedCornerShape(6.dp)) {
+    val isNegative = status == InvoiceStatus.REJECTED ||
+        status == InvoiceStatus.REFUSED ||
+        (status == null && milestone.state == AuditMilestoneState.REJECTED)
+
+    val container = when {
+        isPositive -> Color(0xFF1B382B)
+        isNegative -> Color(0xFF3E1B1B)
+        else -> Color(0xFF242933)
+    }
+    val content = when {
+        isPositive -> Color(0xFF81C784)
+        isNegative -> Color(0xFFEF9A9A)
+        else -> Color(0xFF94A3B8)
+    }
+
+    Surface(
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(6.dp),
+    ) {
         Row(
             modifier = Modifier
                 .heightIn(min = 20.dp)
@@ -262,9 +277,13 @@ private fun MilestoneBadge(milestone: AuditMilestone, accent: Color) {
             Box(
                 modifier = Modifier
                     .size(6.dp)
-                    .background(status?.tagColor() ?: accent, CircleShape),
+                    .background(content, CircleShape),
             )
-            Text(text = text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

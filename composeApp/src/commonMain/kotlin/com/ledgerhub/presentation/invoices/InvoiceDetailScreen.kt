@@ -1,16 +1,21 @@
 package com.ledgerhub.presentation.invoices
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +84,7 @@ object InvoiceDetailScreenTags {
     fun transitionButton(target: InvoiceStatus) = "invoices_detail_transition_" + target.name
     const val CREDIT_NOTE_BUTTON = "invoices_detail_credit_note_button"
     const val LOCKED_BANNER = "invoices_detail_locked_banner"
+    const val BOTTOM_SPACER = "invoices_detail_bottom_spacer"
     fun vatRow(rate: VatRate) = "invoices_detail_vat_row_${rate.name}"
 }
 
@@ -129,7 +135,8 @@ internal fun InvoiceDetailView(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .semantics { testTag = InvoiceDetailScreenTags.SCREEN }
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val invoice = uiState.invoice
@@ -137,16 +144,23 @@ internal fun InvoiceDetailView(
             uiState.isLoading -> LoadingState()
             uiState.errorMessage != null -> ErrorState(uiState.errorMessage, onRetry)
             uiState.notFound -> NotFoundState()
-            invoice != null -> InvoiceBody(
-                uiState = uiState,
-                invoice = invoice,
-                onEditClick = onEditClick,
-                onCreateCreditNoteClick = onCreateCreditNoteClick,
-                onExportInvoiceXml = onExportInvoiceXml,
-                onExportCreditNoteXml = onExportCreditNoteXml,
-                onStartTransition = onStartTransition,
-                onPreviewClick = { previewedInvoice = it },
-            )
+            invoice != null -> {
+                InvoiceBody(
+                    uiState = uiState,
+                    invoice = invoice,
+                    onEditClick = onEditClick,
+                    onCreateCreditNoteClick = onCreateCreditNoteClick,
+                    onExportInvoiceXml = onExportInvoiceXml,
+                    onExportCreditNoteXml = onExportCreditNoteXml,
+                    onStartTransition = onStartTransition,
+                    onPreviewClick = { previewedInvoice = it },
+                )
+                Spacer(
+                    modifier = Modifier
+                        .height(32.dp)
+                        .semantics { testTag = InvoiceDetailScreenTags.BOTTOM_SPACER }
+                )
+            }
         }
     }
 
@@ -345,14 +359,31 @@ private fun LifecycleSection(
         modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.LIFECYCLE_SECTION },
     )
     transitions.forEach { target ->
-        Button(
-            onClick = { onStartTransition(target) },
-            enabled = !uiState.isTransitioning,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { testTag = InvoiceDetailScreenTags.transitionButton(target) },
-        ) {
-            Text(tr(target.actionKey()))
+        val isNegative = target == InvoiceStatus.REFUSED || target == InvoiceStatus.REJECTED
+        if (isNegative) {
+            OutlinedButton(
+                onClick = { onStartTransition(target) },
+                enabled = !uiState.isTransitioning,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { testTag = InvoiceDetailScreenTags.transitionButton(target) },
+            ) {
+                Text("⚠  ${tr(target.actionKey())}")
+            }
+        } else {
+            Button(
+                onClick = { onStartTransition(target) },
+                enabled = !uiState.isTransitioning,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { testTag = InvoiceDetailScreenTags.transitionButton(target) },
+            ) {
+                Text(tr(target.actionKey()))
+            }
         }
     }
     uiState.transitionError?.let { message ->
@@ -413,7 +444,7 @@ private fun AuditTrailSection(invoice: Invoice, entries: List<AuditEntry>) {
     }
 }
 
-/** Saisie du motif. Obligatoire sur les transitions negatives, libre ailleurs. */
+/** Saisie du motif. Obligatoire sur les transitions negatives (min 10 caractères), libre ailleurs. */
 @Composable
 private fun TransitionReasonDialog(
     uiState: InvoiceDetailUiState,
@@ -422,6 +453,7 @@ private fun TransitionReasonDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isReasonTooShort = uiState.pendingTransitionRequiresReason && uiState.transitionReason.trim().length < 10
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.semantics { testTag = InvoiceDetailScreenTags.TRANSITION_DIALOG },
@@ -431,18 +463,26 @@ private fun TransitionReasonDialog(
                 OutlinedTextField(
                     value = uiState.transitionReason,
                     onValueChange = onReasonChanged,
-                    label = { Text(tr(StringKey.AUDIT_REASON_LABEL)) },
+                    label = {
+                        Text(
+                            if (uiState.pendingTransitionRequiresReason) {
+                                tr(StringKey.REFUSAL_REASON_LABEL)
+                            } else {
+                                tr(StringKey.AUDIT_REASON_LABEL)
+                            }
+                        )
+                    },
                     singleLine = true,
-                    isError = uiState.pendingTransitionRequiresReason && uiState.transitionReason.isBlank(),
+                    isError = isReasonTooShort,
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics { testTag = InvoiceDetailScreenTags.TRANSITION_REASON },
                 )
-                if (uiState.pendingTransitionRequiresReason && uiState.transitionReason.isBlank()) {
+                if (uiState.pendingTransitionRequiresReason) {
                     Text(
-                        tr(StringKey.AUDIT_REASON_REQUIRED),
+                        tr(StringKey.AUDIT_REASON_MIN_LENGTH_HINT),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = if (isReasonTooShort) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

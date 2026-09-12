@@ -2830,4 +2830,134 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m29s)** |
 | **N3b** | Déploiement et qualification physique sur Samsung Galaxy S23+ (Android 16) | `./gradlew :composeApp:installDebug` + Protocole ADB | **PASS (4 scénarios validés, captures n3b_adaptive_compact.png et n3b_adaptive_expanded.png)** |
 
+---
 
+## Sprint — US-28 Mobile : Cycle de Vie Réglementaire, Machine d'États & Piste d'Audit 2026
+- **Date :** 2026-09-12
+- **Branche :** `feature/US-28-invoice-lifecycle-2026`
+- **Statut :** ✅ Clos — 100% des tests unitaires et Robolectric validés, persistance SQLite atomique certifiée, qualification physique N3b conforme
+
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Implémenter le cycle de vie légal DGFIP 2026 sur mobile avec machine d'états déclarative, persistance SQLDelight v12 et rapprochement bancaire :
+  1. **Domaine & Machine d'États Fiscale (`commonMain`)** :
+     - Validation stricte de la contrainte $\ge 10$ caractères sur le motif de refus acheteur et rejet plateforme (`ChangeInvoiceStatusUseCase`).
+     - Introduction de l'exception légale `IllegalInvoiceTransitionException` (alias de conformité sur `InvalidStatusTransitionException`).
+     - Ajout de la propriété `refusalReason` sur le modèle immuable de domaine `Invoice`.
+  2. **Persistance SQLDelight & Migration v12 (`11.sqm`)** :
+     - Ajout de la colonne `refusalReason TEXT` sur la table `Invoice`.
+     - Création de la table `InvoiceStatusHistory` (`id`, `invoiceId`, `status`, `updatedBy`, `changedAt`, `reason`) avec indexation sur `(invoiceId, changedAt)`.
+     - Transaction atomique dans `SqlDelightInvoiceRepository.changeStatus` garantissant la mise à jour synchronisée de la facture, de l'historique et du journal `AuditLog`.
+  3. **UI Compose Multiplatform & Sémantique M3** :
+     - `InvoiceDetailScreen` : Dialogue de refus Material 3 (`TransitionReasonDialog`) avec contrôle réactif bloquant la confirmation tant que le motif fait moins de 10 caractères, affichage d'un retour visuel et message d'aide réglementaire.
+     - `ReconciliationScreen` : Passage automatique à l'état `PAID` (Encashed) lors du lettrage d'un encaissement et affichage réactif de la bannière informative Material 3 (`RECONCILIATION_EREPORTING_BANNER`) : *"Donnée de paiement rapprochée et prête pour transmission e-Reporting de paiement"*.
+     - Complétude 100% i18n FR / EN dans `StringKey.kt` et `AppTranslations.kt`.
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/11.sqm` | **[NEW]** Migration SQLite v11 -> v12 (`refusalReason` et table `InvoiceStatusHistory`). |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/InvoiceStatusHistory.sq` | **[NEW]** Schéma et requêtes SQLDelight pour l'historique de statut. |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/Invoice.sq` | Ajout de la colonne `refusalReason` et de la requête `updateStatusAndReason`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/Invoice.kt` | Ajout du champ `refusalReason: String? = null`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/InvoiceStatusTransition.kt` | Ajout de l'alias de conformité `IllegalInvoiceTransitionException`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/ChangeInvoiceStatusUseCase.kt` | Règle obligatoire $\ge 10$ caractères sur les transitions négatives (`REJECTED` / `REFUSED`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/invoice/SqlDelightInvoiceRepository.kt` | Écriture atomique (Statut + Motif + `InvoiceStatusHistory` + `AuditLog`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/time/Clock.kt` | Ajout de `nowEpochMillis()` pour horodatage d'historique. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | Clés i18n pour motif obligatoire, libellé de refus et bannière e-Reporting. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | Traductions complètes FR et EN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailUiState.kt` | Contrôle réactif `isReasonValid` et `canConfirmTransition`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailScreen.kt` | Dialogue de refus enrichi avec feedback $\ge 10$ caractères. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/components/AuditTrailTimeline.kt` | Refonte contrastes WCAG, container Surface `surfaceVariant`, badges contrastés. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationUiState.kt` | Ajout du drapeau `showEreportingBanner`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationViewModel.kt` | Activation de la bannière e-Reporting après lettrage réussi. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationScreen.kt` | Rendu de la bannière Material 3 e-Reporting avec testTag dédié. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/invoice/ChangeInvoiceStatusUseCaseTest.kt` | Tests unitaires du validateur de motif $< 10$ vs $\ge 10$ caractères. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailViewModelTest.kt` | Tests du cycle de validation de motif dans le ViewModel. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationViewModelTest.kt` | Test d'activation de la bannière e-Reporting après lettrage. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailRegulationRobolectricTest.kt` | **[NEW]** Tests Robolectric du dialogue de refus et de l'état du bouton. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationRegulationRobolectricTest.kt` | **[NEW]** Tests Robolectric du rapprochement bancaire et affichage de la bannière e-Reporting. |
+| `composeApp/src/androidInstrumentedTest/kotlin/com/ledgerhub/presentation/invoices/Us28InvoiceLifecycleN3bInstrumentedTest.kt` | **[NEW]** Test instrumenté N3b sur terminal physique avec capture d'écran. |
+| `logs/audit.md` | Journalisation complète de l'intervention. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests Domaine & Validations DGFIP (`InvoiceStatusTransitionTest`, `ChangeInvoiceStatusUseCaseTest`, `AppTranslationsTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*InvoiceStatusTransitionTest*" --tests "*ChangeInvoiceStatusUseCaseTest*" --tests "*AppTranslationsTest*"` | **PASS (100% vert)** |
+| **N2** | Tests ViewModels & Intégration (`InvoiceDetailViewModelTest`, `ReconciliationViewModelTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*InvoiceDetailViewModelTest*" --tests "*ReconciliationViewModelTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests d'Interface Robolectric (`InvoiceDetailRegulationRobolectricTest`, `ReconciliationRegulationRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*InvoiceDetailRegulationRobolectricTest*" --tests "*ReconciliationRegulationRobolectricTest*"` | **PASS (100% vert)** |
+| **N3b** | Qualification physique & capture sur terminal réel (Samsung Galaxy S23+, Android 16) | `.\gradlew.bat :composeApp:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.ledgerhub.presentation.invoices.Us28InvoiceLifecycleN3bInstrumentedTest' --console=plain` | **PASS (100% vert, capture `screenshots/us-28/01_n3b_invoice_lifecycle.png`)** |
+| **Global** | Suite complète de non-régression (1165+ tests unitaires & Robolectric) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, BUILD SUCCESSFUL)** |
+
+### 4. Correctifs UI/UX & Accessibilité / Contraste (Audit Trail & Cycle de Vie)
+- **Contraste Audit Trail (`AuditTrailTimeline.kt`)** :
+  - Utilisation d'un conteneur `Surface` en `MaterialTheme.colorScheme.surfaceVariant` garantissant une lisibilité optimale sur thèmes sombres et clairs.
+  - Titres et libellés en `MaterialTheme.colorScheme.onSurface` et sous-titres/horodatages/SHA-256 en `MaterialTheme.colorScheme.onSurfaceVariant` avec graisses adaptées (`SemiBold` / `Medium`).
+  - Pastilles et badges de statut avec fond émeraude contrasté (`Color(0xFF1B382B)`) et texte clair (`Color(0xFF81C784)`).
+- **Différenciation des Actions de Cycle de Vie (`InvoiceDetailScreen.kt`)** :
+  - Action positive (« Marquer comme encaissée ») : bouton primaire `Button` M3.
+  - Action d'alerte/refus (« Signaler un refus de l'acheteur ») : bouton `OutlinedButton` stylé avec bordure d'avertissement (`MaterialTheme.colorScheme.error`) et icône d'alerte `⚠`.
+- **Marges et Défilement** :
+
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/11.sqm` | **[NEW]** Migration SQLite v11 -> v12 (`refusalReason` et table `InvoiceStatusHistory`). |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/InvoiceStatusHistory.sq` | **[NEW]** Schéma et requêtes SQLDelight pour l'historique de statut. |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/Invoice.sq` | Ajout de la colonne `refusalReason` et de la requête `updateStatusAndReason`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/Invoice.kt` | Ajout du champ `refusalReason: String? = null`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/InvoiceStatusTransition.kt` | Ajout de l'alias de conformité `IllegalInvoiceTransitionException`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/ChangeInvoiceStatusUseCase.kt` | Règle obligatoire $\ge 10$ caractères sur les transitions négatives (`REJECTED` / `REFUSED`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/invoice/SqlDelightInvoiceRepository.kt` | Écriture atomique (Statut + Motif + `InvoiceStatusHistory` + `AuditLog`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/time/Clock.kt` | Ajout de `nowEpochMillis()` pour horodatage d'historique. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | Clés i18n pour motif obligatoire, libellé de refus et bannière e-Reporting. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | Traductions complètes FR et EN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailUiState.kt` | Contrôle réactif `isReasonValid` et `canConfirmTransition`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailScreen.kt` | Dialogue de refus enrichi avec feedback $\ge 10$ caractères. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationUiState.kt` | Ajout du drapeau `showEreportingBanner`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationViewModel.kt` | Activation de la bannière e-Reporting après lettrage réussi. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationScreen.kt` | Rendu de la bannière Material 3 e-Reporting avec testTag dédié. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/invoice/ChangeInvoiceStatusUseCaseTest.kt` | Tests unitaires du validateur de motif $< 10$ vs $\ge 10$ caractères. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailViewModelTest.kt` | Tests du cycle de validation de motif dans le ViewModel. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationViewModelTest.kt` | Test d'activation de la bannière e-Reporting après lettrage. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/invoices/InvoiceDetailRegulationRobolectricTest.kt` | **[NEW]** Tests Robolectric du dialogue de refus et de l'état du bouton. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/reconciliation/ReconciliationRegulationRobolectricTest.kt` | **[NEW]** Tests Robolectric du rapprochement bancaire et affichage de la bannière e-Reporting. |
+| `logs/audit.md` | Journalisation complète de l'intervention. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests Domaine & Validations DGFIP (`InvoiceStatusTransitionTest`, `ChangeInvoiceStatusUseCaseTest`, `AppTranslationsTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*InvoiceStatusTransitionTest*" --tests "*ChangeInvoiceStatusUseCaseTest*" --tests "*AppTranslationsTest*"` | **PASS (100% vert)** |
+| **N2** | Tests ViewModels & Intégration (`InvoiceDetailViewModelTest`, `ReconciliationViewModelTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*InvoiceDetailViewModelTest*" --tests "*ReconciliationViewModelTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests d'Interface Robolectric (`InvoiceDetailRegulationRobolectricTest`, `ReconciliationRegulationRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*InvoiceDetailRegulationRobolectricTest*" --tests "*ReconciliationRegulationRobolectricTest*"` | **PASS (100% vert)** |
+| **Global** | Suite complète de non-régression (1165+ tests unitaires & Robolectric) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, BUILD SUCCESSFUL)** |
+
+---
+
+## Sprint 12 — US-28 : Refonte Visuelle Dark Theme & Qualification N3b Piste d'Audit
+
+- **Date :** 2026-09-12
+- **Statut :** ✅ Clos — 100% conforme WCAG, Dark Theme unifié, Test instrumenté N3b validé sur Samsung Galaxy S23+ (SM-S916B)
+
+### 1. Analyse & Corrections Graphiques
+- **Rupture de thème résolue** : Remplacement de la `Surface` par une `Card` Material 3 sombre (`containerColor = Color(0xFF1A1D24)`, `border = BorderStroke(1.dp, Color(0xFF2C303B))`, `shape = RoundedCornerShape(16.dp)`, `wrapContentHeight()`).
+- **Contraste & Typographie (WCAG)** :
+  - Titre de section : `Color.White`, `titleMedium`, `FontWeight.SemiBold`.
+  - Libellés d'étapes : `Color.White` (jalons passés) / `Color(0xFF94A3B8)` (jalons en attente).
+  - Horodatages et empreintes SHA-256 : `Color(0xFF94A3B8)`.
+  - Badges d'état : Containers sombres émeraude (`0xFF1B382B`) avec texte contrasté vert clair (`0xFF81C784`).
+- **Layout & Troncature** :
+  - `wrapContentHeight()` sur la carte d'audit, padding intérieur `16.dp`.
+  - Encapsulation stricte de l'ensemble des 4 jalons (`MilestoneRow`) dans la `Column` enfant directe de la `Card`.
+  - Résolution de la troncature optique en qualification N3b : défilement jusqu'au `BOTTOM_SPACER` (`32.dp`) pour garantir l'inclusion intégrale de la Card d'audit dans la fenêtre visible capturée.
+- **Qualification N3b sur terminal physique** :
+  - Exécution du test instrumenté `Us28InvoiceLifecycleN3bInstrumentedTest` sur Samsung Galaxy S23+ (`SM-S916B` sous Android 16).
+  - Capture haute fidélité enregistrée dans `screenshots/us-28/01_n3b_invoice_lifecycle.png`.
+
+### 2. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | Troncature apparente du bas de la carte d'audit et débordement du badge sur la capture N3b. |
+| **Cause racine** | Défilement partiel lors du test d'instrumentation (le `performScrollTo` ciblait le jalon sans descendre jusqu'au spacer de fin de liste), tronquant le bas de la vue au niveau de la ligne de pliure de l'écran. |
+| **Correctif** | Ajout d'un tag sémantique `BOTTOM_SPACER` sur le `Spacer(32.dp)` de fin de liste et exécution du défilement complet avant la capture d'écran. |
+| **Validation** | Exécution réussie sur Samsung Galaxy S23+ (`BUILD SUCCESSFUL`) et capture d'écran 100% intègre. |

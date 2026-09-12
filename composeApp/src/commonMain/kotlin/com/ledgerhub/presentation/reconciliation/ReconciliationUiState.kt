@@ -27,6 +27,8 @@ data class ReconciliationUiState(
     val selectedInvoiceNumber: String? = null,
     val isReconciling: Boolean = false,
     val errorMessage: String? = null,
+    /** Bannière réglementaire Material 3 : transmission e-Reporting de paiement prête (US-28). */
+    val showEreportingBanner: Boolean = false,
     /** Onglet visible en agencement compact — sans effet au-delà du seuil « expanded ». */
     val compactTab: ReconciliationTab = ReconciliationTab.TRANSACTIONS,
 ) {

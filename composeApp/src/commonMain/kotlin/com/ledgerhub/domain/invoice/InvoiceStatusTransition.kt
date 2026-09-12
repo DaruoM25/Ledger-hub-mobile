@@ -71,3 +71,6 @@ class InvalidStatusTransitionException(
     val from: InvoiceStatus,
     val to: InvoiceStatus,
 ) : Exception("Transition interdite : une facture $from ne peut pas passer à $to")
+
+/** Alias de conformité légale US-28 pour les transitions d'état non autorisées. */
+typealias IllegalInvoiceTransitionException = InvalidStatusTransitionException

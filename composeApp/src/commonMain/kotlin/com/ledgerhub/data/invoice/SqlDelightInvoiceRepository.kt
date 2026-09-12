@@ -35,7 +35,8 @@ class SqlDelightInvoiceRepository(
 ) : InvoiceRepository, InvoiceStatusRepository {
 
     /**
-     * Change le statut **et** écrit la trace d'audit, dans une seule transaction.
+     * Change le statut **et** écrit la trace d'audit ainsi que l'historique de statut (US-28),
+     * dans une seule transaction atomique.
      *
      * L'atomicité est la raison d'être de cette méthode : un statut modifié sans trace rendrait
      * la piste d'audit mensongère, une trace sans changement la rendrait fausse. La validation de
@@ -49,16 +50,31 @@ class SqlDelightInvoiceRepository(
         to: InvoiceStatus,
         reason: String?,
     ): Result<Unit> = runCatching {
+        val nowIso = clock.nowIso()
+        val nowEpochMs = clock.nowEpochMillis()
+        val auditId = newAuditId(invoiceNumber, to)
         database.transaction {
-            database.invoiceQueries.updateStatus(to.name, invoiceNumber)
+            database.invoiceQueries.updateStatusAndReason(
+                status = to.name,
+                refusalReason = reason?.takeIf { to == InvoiceStatus.REFUSED || to == InvoiceStatus.REJECTED },
+                number = invoiceNumber,
+            )
+            database.invoiceStatusHistoryQueries.insert(
+                id = auditId,
+                invoiceId = invoiceNumber,
+                status = to.name,
+                updatedBy = userEmail,
+                changedAt = nowEpochMs,
+                reason = reason,
+            )
             database.auditLogQueries.insert(
-                id = newAuditId(invoiceNumber, to),
+                id = auditId,
                 invoiceNumber = invoiceNumber,
                 userId = userEmail,
                 fromStatus = from.name,
                 toStatus = to.name,
                 reason = reason,
-                createdAt = clock.nowIso(),
+                createdAt = nowIso,
             )
         }
     }
@@ -105,6 +121,7 @@ class SqlDelightInvoiceRepository(
                 deliveryZip = invoice.deliveryAddress.zip,
                 deliveryCity = invoice.deliveryAddress.city,
                 deliveryCountry = invoice.deliveryAddress.country,
+                refusalReason = invoice.refusalReason,
             )
             // Remplacement intégral des lignes — plus simple et moins sujet aux bugs qu'un diff
             // ligne à ligne, pour un volume de lignes par facture qui reste faible en pratique.
@@ -190,6 +207,7 @@ class SqlDelightInvoiceRepository(
             optionTvaDebit = optionTvaDebit == 1L,
             isEReporting = isEReporting == 1L,
             deliveryAddress = delivery,
+            refusalReason = refusalReason,
         )
     }
 

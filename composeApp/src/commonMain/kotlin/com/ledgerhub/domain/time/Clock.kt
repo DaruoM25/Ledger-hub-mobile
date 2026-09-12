@@ -13,11 +13,15 @@ import kotlinx.datetime.Clock as KotlinxClock
 interface Clock {
     /** Instant courant en ISO 8601 UTC, ex. `2026-08-29T14:33:07.512Z`. */
     fun nowIso(): String
+
+    /** Horodatage courant en millisecondes depuis l'époque Unix. */
+    fun nowEpochMillis(): Long = kotlinx.datetime.Instant.parse(nowIso()).toEpochMilliseconds()
 }
 
 /** Horloge réelle — `kotlinx-datetime`, adoptée en US-07 (la v1 s'en passait). */
 object SystemClock : Clock {
     override fun nowIso(): String = KotlinxClock.System.now().toString()
+    override fun nowEpochMillis(): Long = KotlinxClock.System.now().toEpochMilliseconds()
 }
 
 /**
@@ -28,6 +32,7 @@ class FixedClock(private var instant: kotlinx.datetime.Instant) : Clock {
     constructor(iso: String) : this(kotlinx.datetime.Instant.parse(iso))
 
     override fun nowIso(): String = instant.toString()
+    override fun nowEpochMillis(): Long = instant.toEpochMilliseconds()
 
     fun advanceBy(seconds: Long) {
         instant = instant.plus(kotlin.time.Duration.parse("${seconds}s"))

@@ -135,4 +135,29 @@ class InvoiceDetailViewModelTest {
         assertEquals(null, state.errorMessage)
         assertEquals("F-2026-001", state.invoice?.number)
     }
+
+    @Test
+    fun refusalTransition_requiresMinimum10CharactersToConfirm() = runTest {
+        val repository = FakeLedgerRepository(
+            detailResult = Result.success(testInvoice("F-2026-REF", status = InvoiceStatus.DEPOSITED)),
+        )
+        val vm = viewModel(repository, number = "F-2026-REF", scheduler = testScheduler)
+        advanceUntilIdle()
+
+        vm.startTransition(InvoiceStatus.REFUSED)
+        var state = vm.uiState.value
+        assertEquals(InvoiceStatus.REFUSED, state.pendingTransition)
+        assertTrue(state.pendingTransitionRequiresReason)
+        assertFalse(state.canConfirmTransition, "Motif vide -> confirmation désactivée")
+
+        vm.updateTransitionReason("Court")
+        state = vm.uiState.value
+        assertFalse(state.isReasonValid)
+        assertFalse(state.canConfirmTransition, "Motif < 10 chars -> confirmation désactivée")
+
+        vm.updateTransitionReason("Prestation non conforme au devis")
+        state = vm.uiState.value
+        assertTrue(state.isReasonValid)
+        assertTrue(state.canConfirmTransition, "Motif >= 10 chars -> confirmation activée")
+    }
 }

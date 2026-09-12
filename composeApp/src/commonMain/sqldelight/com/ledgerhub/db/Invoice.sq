@@ -35,6 +35,8 @@ CREATE TABLE Invoice (
     deliveryZip TEXT NOT NULL DEFAULT '',
     deliveryCity TEXT NOT NULL DEFAULT '',
     deliveryCountry TEXT NOT NULL DEFAULT '',
+    -- Cycle de vie réglementaire (US-28)
+    refusalReason TEXT,
     FOREIGN KEY (recipientSiret) REFERENCES Customer(siret)
 );
 
@@ -45,9 +47,10 @@ INSERT OR REPLACE INTO Invoice(
     recipientSiret, recipientName, recipientEmail,
     dueDate, facturX, applyB2bPenalties,
     clientSiren, natureOperation, optionTvaDebit, isEReporting,
-    deliveryStreet, deliveryZip, deliveryCity, deliveryCountry
+    deliveryStreet, deliveryZip, deliveryCity, deliveryCountry,
+    refusalReason
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectAll:
 SELECT * FROM Invoice;
@@ -77,6 +80,11 @@ WHERE recipientSiret = ?;
 updateStatus:
 UPDATE Invoice
 SET status = ?
+WHERE number = ?;
+
+updateStatusAndReason:
+UPDATE Invoice
+SET status = ?, refusalReason = ?
 WHERE number = ?;
 
 deleteByNumber:
