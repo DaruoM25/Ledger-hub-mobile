@@ -62,12 +62,20 @@ fun InvoiceCard(
     modifier: Modifier = Modifier,
     /** Avoir annulant cette facture, s'il en existe un — mention croisée US-05. */
     creditNoteNumber: String? = null,
+    isSelected: Boolean = false,
 ) {
+    val borderStroke = if (isSelected) {
+        androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+    } else {
+        null
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .semantics { testTag = InvoiceCardTags.card(invoice.number) },
+        border = borderStroke,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

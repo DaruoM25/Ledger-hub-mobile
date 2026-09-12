@@ -2717,3 +2717,46 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | `android-common-qa` | `ubuntu-latest` | `./gradlew :composeApp:testDebugUnitTest` & `assembleDebug` | Tests unitaires JVM/Android, Robolectric & APK debug |
 | `ios-validation` | `macos-14` | `./gradlew :composeApp:compileKotlinIosSimulatorArm64`, `:composeApp:iosSimulatorArm64Test` & `linkDebugFrameworkIosSimulatorArm64` | Compilation native, exécution `commonTest` sur simulateur iOS headless & framework statique |
 
+---
+
+## Sprint — Ergonomie : Layout Adaptatif, Foldables & Dual-Pane Master-Detail
+- **Date :** 2026-09-12
+- **Branche :** `feat/responsive-foldable-adaptive-layout`
+- **Statut :** ✅ Clos — Suite complète unitaire & Robolectric 100% verte (1161 tests), Déploiement physique S23+ (N3b) validé, Assemblage Release R8 validé (BUILD SUCCESSFUL en 6m29s)
+
+### 1. Analyse & Décisions Techniques
+- **Objectif** : Rendre le shell applicatif et la navigation 100% adaptatifs aux smartphones pliables (Galaxy Z Fold, Z Flip), tablettes et multi-fenêtres :
+  1. **Abstraction de Breakpoints KMP Pur (`presentation/adaptive/WindowSizeClass.kt`)** :
+     - Modélisation de `WindowWidthSizeClass` (`COMPACT` < 600 dp, `MEDIUM` 600–839 dp, `EXPANDED` ≥ 840 dp) et `LocalWindowSizeClass`.
+     - Respect strict de l'étanchéité KMP : zéro import `androidx.window` ou API Android spécifique dans `commonMain`.
+  2. **Navigation Tri-Modale Material 3 (`App.kt` & `AdaptiveNavigationRail.kt`)** :
+     - `COMPACT` (< 600 dp) : `Scaffold` avec `LedgerHeader` et `LedgerBottomBar` (smartphone standard & écran externe Fold).
+     - `MEDIUM` (600–839 dp) : `AdaptiveNavigationRail` vertical compact (80 dp) avec FAB de création rapide, raccourcis et bascules thème/langue (Foldable déplié & tablettes portrait).
+     - `EXPANDED` (≥ 840 dp) : `LedgerSidebar` permanente (240 dp) avec canvas central surélevé.
+  3. **Dual-Pane Master-Detail (`presentation/invoices/InvoiceAdaptivePane.kt`)** :
+     - Sur `EXPANDED` : Affichage côte à côte de la liste des factures (Panneau gauche ~40% avec sélection active) et du détail interactif de la facture sélectionnée (Panneau droit ~60%).
+     - Sur `COMPACT` et `MEDIUM` : Maintien strict du flux séquentiel mobile `Overlay.InvoiceDetail`.
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/adaptive/WindowSizeClass.kt` | **[NEW]** Breakpoints KMP pur et `LocalWindowSizeClass`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/adaptive/AdaptiveNavigationRail.kt` | **[NEW]** NavigationRail M3 pour pliables et tablettes portrait. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceAdaptivePane.kt` | **[NEW]** Orchestrateur Master-Detail pour le palier Expanded. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Intégration du tri-mode (`BottomBar` / `NavigationRail` / `Sidebar`) et injection `LocalWindowSizeClass`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceListScreen.kt` | Support du surlignage de l'élément sélectionné (`selectedInvoiceNumber`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/components/InvoiceCard.kt` | Support du paramètre `isSelected` avec bordure active. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/adaptive/WindowSizeClassTest.kt` | **[NEW]** Tests unitaires du calcul des breakpoints. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/adaptive/AdaptiveNavigationRobolectricTest.kt` | **[NEW]** Tests Robolectric multi-configurations (390dp, 720dp, 1024dp). |
+| `logs/audit.md` | Journalisation complète de l'intervention. |
+
+### 3. Matrice de Qualification
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests unitaires des breakpoints (`WindowSizeClassTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*WindowSizeClassTest*"` | **PASS (100% vert)** |
+| **N2** | Tests d'interface Robolectric multi-résolutions (`AdaptiveNavigationRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*Adaptive*"` | **PASS (100% vert)** |
+| **N1 + N2** | Suite complète de non-régression (1161 tests unitaires & Robolectric) | `./gradlew :composeApp:testDebugUnitTest --console=plain` | **PASS (100% vert, 1161/1161 tests)** |
+| **N3a** | Validation de l'assemblage Release avec minification & obfuscation R8 | `./gradlew :composeApp:assembleRelease --console=plain` | **PASS (BUILD SUCCESSFUL en 6m29s)** |
+| **N3b** | Déploiement et qualification physique sur Samsung Galaxy S23+ (Android 16) | `./gradlew :composeApp:installDebug` + Protocole ADB | **PASS (4 scénarios validés, captures n3b_adaptive_compact.png et n3b_adaptive_expanded.png)** |
+
+

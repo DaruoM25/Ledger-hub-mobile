@@ -168,7 +168,7 @@ private const val CURRENT_USER_EMAIL_PLACEHOLDER = "demo@ledgerhub.app"
 private val ExpandedWidthThreshold = 840.dp
 
 /** Destinations du shell de navigation — parité Web (sidebar / barre du bas). Libellés traduits via [titleKey]. */
-private enum class Destination(val titleKey: StringKey, val glyph: String) {
+internal enum class Destination(val titleKey: StringKey, val glyph: String) {
     OVERVIEW(StringKey.NAV_OVERVIEW, "▦"),
     QUOTES(StringKey.NAV_QUOTES, "📝"),
     INVOICES(StringKey.NAV_INVOICES, "🧾"),
@@ -550,124 +550,190 @@ fun App(
                     },
             ) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val expanded = maxWidth >= ExpandedWidthThreshold
+                    val windowSizeClass = com.ledgerhub.presentation.adaptive.calculateWindowSizeClass(maxWidth, maxHeight)
 
-                    if (expanded) {
-                        Row(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                            LedgerSidebar(
-                                selected = destination,
-                                language = language,
-                                themeMode = themeState.mode,
-                                resolvedTheme = resolvedTheme,
-                                onSelect = { destination = it; overlay = Overlay.None },
-                                onCreateInvoice = onCreateInvoice,
-                                onSelectLanguage = { language = it },
-                                onToggleTheme = onToggleTheme,
-                                onOpenCommandPalette = onOpenCommandPalette,
-                                onOpenIntegrations = onOpenIntegrations,
-                                onOpenExportModal = onOpenExportModal,
-                            )
-                            Box(modifier = Modifier.weight(1f).padding(16.dp)) {
-                                Card(
-                                    modifier = Modifier.fillMaxSize(),
-                                    shape = RoundedCornerShape(20.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                ) {
-                                    ShellContent(
-                                        destination = destination,
-                                        overlay = overlay,
+                    CompositionLocalProvider(com.ledgerhub.presentation.adaptive.LocalWindowSizeClass provides windowSizeClass) {
+                        when (windowSizeClass.widthSizeClass) {
+                            com.ledgerhub.presentation.adaptive.WindowWidthSizeClass.EXPANDED -> {
+                                // Mode Grand Écran / Tablette Paysage (>= 840 dp) : Sidebar permanente + Canvas central
+                                Row(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                                    LedgerSidebar(
+                                        selected = destination,
+                                        language = language,
+                                        themeMode = themeState.mode,
+                                        resolvedTheme = resolvedTheme,
+                                        onSelect = { destination = it; overlay = Overlay.None },
                                         onCreateInvoice = onCreateInvoice,
-                                        onBack = onBackToTabs,
-                                        onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
-                                        invoiceRepository = invoiceRepository,
-                                        ledgerRepository = ledgerRepository,
-                                        creditNoteRepository = creditNoteRepository,
-                                        quoteRepository = quoteRepository,
-                                        auditRepository = auditRepository,
-                                        changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
-                                        onCreateCreditNote = onCreateCreditNote,
-                                        onCreateQuote = onCreateQuote,
-                                        onEditQuote = onEditQuote,
-                                        onConvertToInvoice = onConvertToInvoice,
-                                        onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
-                                        onExportInvoiceXml = onExportInvoiceXml,
-                                        onExportCreditNoteXml = onExportCreditNoteXml,
-                                        dashboardViewModel = dashboardViewModel,
-                                        invoiceListViewModel = invoiceListViewModel,
-                                        quotesViewModel = quotesViewModel,
-                                        clientsViewModel = clientsViewModel,
-                                        clientRepository = clientRepository,
-                                        directoryViewModel = directoryViewModel,
-                                        reconciliationViewModel = reconciliationViewModel,
-                                        taxSettingsViewModel = taxSettingsViewModel,
-                                        taxSettings = taxSettings,
-                                        eReportingRepository = eReportingRepository,
-                                        onOpenEReporting = onOpenEReporting,
-                                        subscriptionRepository = subscriptionRepository,
+                                        onSelectLanguage = { language = it },
+                                        onToggleTheme = onToggleTheme,
+                                        onOpenCommandPalette = onOpenCommandPalette,
+                                        onOpenIntegrations = onOpenIntegrations,
+                                        onOpenExportModal = onOpenExportModal,
                                     )
+                                    Box(modifier = Modifier.weight(1f).padding(16.dp)) {
+                                        Card(
+                                            modifier = Modifier.fillMaxSize(),
+                                            shape = RoundedCornerShape(20.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                        ) {
+                                            ShellContent(
+                                                destination = destination,
+                                                overlay = overlay,
+                                                onCreateInvoice = onCreateInvoice,
+                                                onBack = onBackToTabs,
+                                                onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
+                                                invoiceRepository = invoiceRepository,
+                                                ledgerRepository = ledgerRepository,
+                                                creditNoteRepository = creditNoteRepository,
+                                                quoteRepository = quoteRepository,
+                                                auditRepository = auditRepository,
+                                                changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+                                                onCreateCreditNote = onCreateCreditNote,
+                                                onCreateQuote = onCreateQuote,
+                                                onEditQuote = onEditQuote,
+                                                onConvertToInvoice = onConvertToInvoice,
+                                                onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
+                                                onExportInvoiceXml = onExportInvoiceXml,
+                                                onExportCreditNoteXml = onExportCreditNoteXml,
+                                                dashboardViewModel = dashboardViewModel,
+                                                invoiceListViewModel = invoiceListViewModel,
+                                                quotesViewModel = quotesViewModel,
+                                                clientsViewModel = clientsViewModel,
+                                                clientRepository = clientRepository,
+                                                directoryViewModel = directoryViewModel,
+                                                reconciliationViewModel = reconciliationViewModel,
+                                                taxSettingsViewModel = taxSettingsViewModel,
+                                                taxSettings = taxSettings,
+                                                eReportingRepository = eReportingRepository,
+                                                onOpenEReporting = onOpenEReporting,
+                                                subscriptionRepository = subscriptionRepository,
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    } else {
-                        Scaffold(
-                            containerColor = MaterialTheme.colorScheme.background,
-                            topBar = {
-                                LedgerHeader(
-                                    language = language,
-                                    themeMode = themeState.mode,
-                                    resolvedTheme = resolvedTheme,
-                                    onSelectLanguage = { language = it },
-                                    onToggleTheme = onToggleTheme,
-                                    onOpenCommandPalette = onOpenCommandPalette,
-                                    onOpenIntegrations = onOpenIntegrations,
-                                    onOpenExportModal = onOpenExportModal,
-                                )
-                            },
-                            bottomBar = {
-                                // La feuille d'export se superpose aux onglets : la barre reste,
-                                // sans quoi la navigation disparaitrait derriere une modale.
-                                if (overlay is Overlay.None || overlay is Overlay.ExportModal) {
-                                    LedgerBottomBar(
+
+                            com.ledgerhub.presentation.adaptive.WindowWidthSizeClass.MEDIUM -> {
+                                // Mode Foldable Déplié / Tablette Portrait (600 dp à 839 dp) : NavigationRail compact (80 dp)
+                                Row(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                                    com.ledgerhub.presentation.adaptive.AdaptiveNavigationRail(
                                         selected = destination,
-                                        onSelect = { destination = it },
+                                        language = language,
+                                        themeMode = themeState.mode,
+                                        resolvedTheme = resolvedTheme,
+                                        onSelect = { destination = it; overlay = Overlay.None },
+                                        onCreateInvoice = onCreateInvoice,
+                                        onSelectLanguage = { language = it },
+                                        onToggleTheme = onToggleTheme,
+                                        onOpenCommandPalette = onOpenCommandPalette,
+                                        onOpenIntegrations = onOpenIntegrations,
+                                        onOpenExportModal = onOpenExportModal,
                                     )
+                                    Box(modifier = Modifier.weight(1f).padding(12.dp)) {
+                                        Card(
+                                            modifier = Modifier.fillMaxSize(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                        ) {
+                                            ShellContent(
+                                                destination = destination,
+                                                overlay = overlay,
+                                                onCreateInvoice = onCreateInvoice,
+                                                onBack = onBackToTabs,
+                                                onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
+                                                invoiceRepository = invoiceRepository,
+                                                ledgerRepository = ledgerRepository,
+                                                creditNoteRepository = creditNoteRepository,
+                                                quoteRepository = quoteRepository,
+                                                auditRepository = auditRepository,
+                                                changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+                                                onCreateCreditNote = onCreateCreditNote,
+                                                onCreateQuote = onCreateQuote,
+                                                onEditQuote = onEditQuote,
+                                                onConvertToInvoice = onConvertToInvoice,
+                                                onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
+                                                onExportInvoiceXml = onExportInvoiceXml,
+                                                onExportCreditNoteXml = onExportCreditNoteXml,
+                                                dashboardViewModel = dashboardViewModel,
+                                                invoiceListViewModel = invoiceListViewModel,
+                                                quotesViewModel = quotesViewModel,
+                                                clientsViewModel = clientsViewModel,
+                                                clientRepository = clientRepository,
+                                                directoryViewModel = directoryViewModel,
+                                                reconciliationViewModel = reconciliationViewModel,
+                                                taxSettingsViewModel = taxSettingsViewModel,
+                                                taxSettings = taxSettings,
+                                                eReportingRepository = eReportingRepository,
+                                                onOpenEReporting = onOpenEReporting,
+                                                subscriptionRepository = subscriptionRepository,
+                                            )
+                                        }
+                                    }
                                 }
-                            },
-                        ) { inner ->
-                            Box(modifier = Modifier.fillMaxSize().padding(inner)) {
-                                ShellContent(
-                                    destination = destination,
-                                    overlay = overlay,
-                                    onCreateInvoice = onCreateInvoice,
-                                    onBack = onBackToTabs,
-                                    onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
-                                    invoiceRepository = invoiceRepository,
-                                    ledgerRepository = ledgerRepository,
-                                    creditNoteRepository = creditNoteRepository,
-                                    quoteRepository = quoteRepository,
-                                    auditRepository = auditRepository,
-                                    changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
-                                    onCreateCreditNote = onCreateCreditNote,
-                                    onCreateQuote = onCreateQuote,
-                                    onEditQuote = onEditQuote,
-                                    onConvertToInvoice = onConvertToInvoice,
-                                    onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
-                                    onExportInvoiceXml = onExportInvoiceXml,
-                                    onExportCreditNoteXml = onExportCreditNoteXml,
-                                    dashboardViewModel = dashboardViewModel,
-                                    invoiceListViewModel = invoiceListViewModel,
-                                    quotesViewModel = quotesViewModel,
-                                    clientsViewModel = clientsViewModel,
-                                    clientRepository = clientRepository,
-                                    directoryViewModel = directoryViewModel,
-                                    reconciliationViewModel = reconciliationViewModel,
-                                    taxSettingsViewModel = taxSettingsViewModel,
-                                    taxSettings = taxSettings,
-                                    eReportingRepository = eReportingRepository,
-                                    onOpenEReporting = onOpenEReporting,
-                                    subscriptionRepository = subscriptionRepository,
-                                )
+                            }
+
+                            com.ledgerhub.presentation.adaptive.WindowWidthSizeClass.COMPACT -> {
+                                // Mode Smartphone Portrait / Écran Externe Foldable (< 600 dp) : Header + BottomBar
+                                Scaffold(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                    topBar = {
+                                        LedgerHeader(
+                                            language = language,
+                                            themeMode = themeState.mode,
+                                            resolvedTheme = resolvedTheme,
+                                            onSelectLanguage = { language = it },
+                                            onToggleTheme = onToggleTheme,
+                                            onOpenCommandPalette = onOpenCommandPalette,
+                                            onOpenIntegrations = onOpenIntegrations,
+                                            onOpenExportModal = onOpenExportModal,
+                                        )
+                                    },
+                                    bottomBar = {
+                                        if (overlay is Overlay.None || overlay is Overlay.ExportModal) {
+                                            LedgerBottomBar(
+                                                selected = destination,
+                                                onSelect = { destination = it },
+                                            )
+                                        }
+                                    },
+                                ) { inner ->
+                                    Box(modifier = Modifier.fillMaxSize().padding(inner)) {
+                                        ShellContent(
+                                            destination = destination,
+                                            overlay = overlay,
+                                            onCreateInvoice = onCreateInvoice,
+                                            onBack = onBackToTabs,
+                                            onOpenInvoice = { overlay = Overlay.InvoiceDetail(it) },
+                                            invoiceRepository = invoiceRepository,
+                                            ledgerRepository = ledgerRepository,
+                                            creditNoteRepository = creditNoteRepository,
+                                            quoteRepository = quoteRepository,
+                                            auditRepository = auditRepository,
+                                            changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+                                            onCreateCreditNote = onCreateCreditNote,
+                                            onCreateQuote = onCreateQuote,
+                                            onEditQuote = onEditQuote,
+                                            onConvertToInvoice = onConvertToInvoice,
+                                            onNavigateToQuotesWithFilter = onNavigateToQuotesWithFilter,
+                                            onExportInvoiceXml = onExportInvoiceXml,
+                                            onExportCreditNoteXml = onExportCreditNoteXml,
+                                            dashboardViewModel = dashboardViewModel,
+                                            invoiceListViewModel = invoiceListViewModel,
+                                            quotesViewModel = quotesViewModel,
+                                            clientsViewModel = clientsViewModel,
+                                            clientRepository = clientRepository,
+                                            directoryViewModel = directoryViewModel,
+                                            reconciliationViewModel = reconciliationViewModel,
+                                            taxSettingsViewModel = taxSettingsViewModel,
+                                            taxSettings = taxSettings,
+                                            eReportingRepository = eReportingRepository,
+                                            onOpenEReporting = onOpenEReporting,
+                                            subscriptionRepository = subscriptionRepository,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1054,6 +1120,12 @@ private fun ShellContent(
             reconciliationViewModel = reconciliationViewModel,
             taxSettingsViewModel = taxSettingsViewModel,
             onOpenEReporting = onOpenEReporting,
+            ledgerRepository = ledgerRepository,
+            creditNoteRepository = creditNoteRepository,
+            auditRepository = auditRepository,
+            changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+            onExportInvoiceXml = onExportInvoiceXml,
+            onExportCreditNoteXml = onExportCreditNoteXml,
         )
     }
 }
@@ -1077,6 +1149,12 @@ private fun TabsContent(
     reconciliationViewModel: ReconciliationViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
     onOpenEReporting: () -> Unit,
+    ledgerRepository: LocalLedgerRepository,
+    creditNoteRepository: SqlDelightCreditNoteRepository,
+    auditRepository: SqlDelightAuditRepository,
+    changeInvoiceStatusUseCase: ChangeInvoiceStatusUseCase,
+    onExportInvoiceXml: (Invoice) -> Unit,
+    onExportCreditNoteXml: (String) -> Unit,
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -1097,10 +1175,16 @@ private fun TabsContent(
 
         Destination.INVOICES -> Column(modifier = Modifier.fillMaxSize()) {
             CreateInvoiceAction(onCreateInvoice)
-            InvoiceListScreen(
-                viewModel = invoiceListViewModel,
+            com.ledgerhub.presentation.invoices.InvoiceAdaptivePane(
+                invoiceListViewModel = invoiceListViewModel,
                 onInvoiceClick = onOpenInvoice,
                 onCreateCreditNote = onCreateCreditNote,
+                ledgerRepository = ledgerRepository,
+                creditNoteRepository = creditNoteRepository,
+                auditRepository = auditRepository,
+                changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+                onExportInvoiceXml = onExportInvoiceXml,
+                onExportCreditNoteXml = onExportCreditNoteXml,
             )
         }
 

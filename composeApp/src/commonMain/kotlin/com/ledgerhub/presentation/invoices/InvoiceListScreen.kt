@@ -70,6 +70,7 @@ internal fun InvoiceListView(
     onIntent: (InvoiceListIntent) -> Unit,
     onInvoiceClick: (String) -> Unit,
     onCreateCreditNote: (Invoice) -> Unit = {},
+    selectedInvoiceNumber: String? = null,
 ) {
     Column(
         modifier = Modifier
@@ -95,7 +96,13 @@ internal fun InvoiceListView(
             is InvoiceListContent.Error -> ErrorState { onIntent(InvoiceListIntent.Retry) }
             InvoiceListContent.Empty -> EmptyState()
             is InvoiceListContent.Success ->
-                InvoiceList(content.invoices, onInvoiceClick, onCreateCreditNote, uiState.creditNotesByInvoice)
+                InvoiceList(
+                    invoices = content.invoices,
+                    onInvoiceClick = onInvoiceClick,
+                    onCreateCreditNote = onCreateCreditNote,
+                    creditNotesByInvoice = uiState.creditNotesByInvoice,
+                    selectedInvoiceNumber = selectedInvoiceNumber,
+                )
         }
     }
 }
@@ -198,6 +205,7 @@ private fun InvoiceList(
     onInvoiceClick: (String) -> Unit,
     onCreateCreditNote: (Invoice) -> Unit,
     creditNotesByInvoice: Map<String, String>,
+    selectedInvoiceNumber: String? = null,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -207,11 +215,13 @@ private fun InvoiceList(
     ) {
         items(invoices, key = { it.number }) { invoice ->
             val alreadyCredited = creditNotesByInvoice[invoice.number]
+            val isSelected = invoice.number == selectedInvoiceNumber
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 InvoiceCard(
                     invoice = invoice,
                     onClick = { onInvoiceClick(invoice.number) },
                     creditNoteNumber = alreadyCredited,
+                    isSelected = isSelected,
                 )
                 // Émission d'un avoir directement depuis la liste (US-10) : seulement sur une
                 // facture finalisée qui ne porte pas déjà un avoir.
