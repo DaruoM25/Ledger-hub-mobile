@@ -53,3 +53,7 @@ iosApp/DerivedData/
 *.log
 screenshots/*.png
 tree_*.txt
+_quarantine/
+*contxt.md
+bundle.py
+ledgerhub-mobile-context.md
