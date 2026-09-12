@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.domain.invoice.TransactionMode
@@ -48,7 +49,7 @@ class InvoiceFormRegulationRobolectricTest {
         onNodeWithTag(InvoiceFormTags.CLIENT_SIRET)
             .performScrollTo()
             .assertIsDisplayed()
-        onNodeWithText("SIREN / SIRET du client *")
+        onNodeWithText("SIRET (14 chiffres) *")
             .assertIsDisplayed()
 
         // Remplir la raison sociale et une ligne pour isoler la validation du SIREN
@@ -110,9 +111,12 @@ class InvoiceFormRegulationRobolectricTest {
         assertEquals(TransactionMode.E_REPORTING, viewModel.uiState.value.transactionMode)
 
         // L'astérisque '*' est retiré du libellé
-        onNodeWithText("SIREN / SIRET du client")
+        onNodeWithTag(InvoiceFormTags.CLIENT_SIRET)
+            .performScrollTo()
             .assertIsDisplayed()
-        onNodeWithText("SIREN / SIRET du client *")
+        onNodeWithText("SIRET (14 chiffres)")
+            .assertIsDisplayed()
+        onNodeWithText("SIRET (14 chiffres) *")
             .assertDoesNotExist()
 
         // Remplir les champs obligatoires (hors SIRET)
@@ -149,7 +153,7 @@ class InvoiceFormRegulationRobolectricTest {
         // Clic sur le bouton de soumission dynamique e-Reporting
         onNodeWithTag(InvoiceFormTags.SUBMIT_BUTTON)
             .performScrollTo()
-            .assertTextContains("Transmettre en e-Reporting")
+            .assertTextContains("Transmettre en e-Reporting", substring = true)
             .performClick()
 
         // Le SIRET n'a généré aucune erreur bloquante
@@ -200,13 +204,15 @@ class InvoiceFormRegulationRobolectricTest {
         onNodeWithTag(InvoiceFormTags.DELIVERY_COUNTRY)
             .performScrollTo()
             .assertIsDisplayed()
-            .performTextInput("France")
+            .performTextClearance()
+        onNodeWithTag(InvoiceFormTags.DELIVERY_COUNTRY)
+            .performTextInput("Belgique")
 
         // Vérification de la persistance des valeurs saisies dans l'UiState
         assertEquals("42 Avenue des Champs-Élysées", viewModel.uiState.value.deliveryStreet)
         assertEquals("75008", viewModel.uiState.value.deliveryZip)
         assertEquals("Paris", viewModel.uiState.value.deliveryCity)
-        assertEquals("France", viewModel.uiState.value.deliveryCountry)
+        assertEquals("Belgique", viewModel.uiState.value.deliveryCountry)
 
         // Vérification de la non-régression de scroll : les boutons finaux restent atteignables
         onNodeWithTag(InvoiceFormTags.SAVE_DRAFT_BUTTON)
