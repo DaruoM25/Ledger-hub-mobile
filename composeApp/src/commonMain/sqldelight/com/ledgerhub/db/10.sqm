@@ -1,0 +1,10 @@
+-- Migration 10 -> 11 — US-27, Réforme 2026 : e-Invoicing B2B vs e-Reporting B2C/Intl, mentions fiscales et adresse de livraison.
+
+ALTER TABLE Invoice ADD COLUMN clientSiren TEXT NOT NULL DEFAULT '';
+ALTER TABLE Invoice ADD COLUMN natureOperation TEXT NOT NULL DEFAULT 'PRESTATION_SERVICES';
+ALTER TABLE Invoice ADD COLUMN optionTvaDebit INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE Invoice ADD COLUMN isEReporting INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE Invoice ADD COLUMN deliveryStreet TEXT NOT NULL DEFAULT '';
+ALTER TABLE Invoice ADD COLUMN deliveryZip TEXT NOT NULL DEFAULT '';
+ALTER TABLE Invoice ADD COLUMN deliveryCity TEXT NOT NULL DEFAULT '';
+ALTER TABLE Invoice ADD COLUMN deliveryCountry TEXT NOT NULL DEFAULT '';

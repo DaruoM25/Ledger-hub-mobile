@@ -18,7 +18,17 @@ data class InvoiceFormUiState(
     val dueDate: String = "",
     val clientName: String = "",
     val clientSiret: String = "",
+    val clientSiren: String = "",
     val clientEmail: String = "",
+    // ── Réforme fiscale 2026 (US-27) ──────────────────────────────────────────
+    val transactionMode: com.ledgerhub.domain.invoice.TransactionMode = com.ledgerhub.domain.invoice.TransactionMode.E_INVOICING,
+    val natureOperation: com.ledgerhub.domain.invoice.NatureOperation = com.ledgerhub.domain.invoice.NatureOperation.PRESTATION_SERVICES,
+    val optionTvaDebit: Boolean = false,
+    val hasDifferentDeliveryAddress: Boolean = false,
+    val deliveryStreet: String = "",
+    val deliveryZip: String = "",
+    val deliveryCity: String = "",
+    val deliveryCountry: String = "France",
     // ── Sélecteur client dynamique (US-11) ────────────────────────────────────
     /**
      * Texte tapé dans le champ de recherche client. Distinct de [clientName], qui reste la valeur
@@ -77,6 +87,9 @@ data class InvoiceFormUiState(
      */
     val complianceReport: ComplianceReport? = null,
 ) {
+    /** Indicateur dérivé : mode e-Reporting actif (B2C / International). */
+    val isEReporting: Boolean get() = transactionMode == com.ledgerhub.domain.invoice.TransactionMode.E_REPORTING
+
     /**
      * Une écriture est en cours. Propriété **dérivée** de [submissionStatus] et non champ stocké :
      * une seule source de vérité, impossible à désynchroniser de l'état réel de la soumission.

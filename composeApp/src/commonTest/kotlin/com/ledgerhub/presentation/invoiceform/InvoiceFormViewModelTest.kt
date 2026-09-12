@@ -2,7 +2,9 @@ package com.ledgerhub.presentation.invoiceform
 
 import com.ledgerhub.data.invoice.MockInvoiceRepository
 import com.ledgerhub.domain.invoice.InvoiceStatus
+import com.ledgerhub.domain.invoice.NatureOperation
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
+import com.ledgerhub.domain.invoice.TransactionMode
 import com.ledgerhub.domain.invoice.VatRate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -467,5 +469,72 @@ class InvoiceFormViewModelTest {
             line.visibleErrors(revealAll = false).keys,
         )
         assertTrue(line.errors.containsKey(InvoiceLineField.UNIT_PRICE)) // calculée, mais pas présentée
+    }
+
+    // ── Réforme 2026 (US-27) ───────────────────────────────────────────────────
+
+    @Test
+    fun b2bMode_blankSiren_producesFieldError() {
+        val viewModel = InvoiceFormViewModel()
+        viewModel.processIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_INVOICING))
+        viewModel.processIntent(InvoiceFormIntent.ClientSirenChanged(""))
+
+        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_SIREN])
+        assertFalse(viewModel.uiState.value.isSubmitEnabled)
+    }
+
+    @Test
+    fun eReportingMode_blankSiren_clearsFieldError() {
+        val viewModel = InvoiceFormViewModel()
+        // En B2B, SIREN vide = erreur
+        viewModel.processIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_INVOICING))
+        viewModel.processIntent(InvoiceFormIntent.ClientSirenChanged(""))
+        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_SIREN])
+
+        // En e-Reporting, SIREN facultatif = pas d'erreur
+        viewModel.processIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_REPORTING))
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_SIREN])
+    }
+
+    @Test
+    fun transactionModeSwitch_updatesIsEReporting() {
+        val viewModel = InvoiceFormViewModel()
+        assertEquals(TransactionMode.E_INVOICING, viewModel.uiState.value.transactionMode)
+        assertFalse(viewModel.uiState.value.isEReporting)
+
+        viewModel.processIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_REPORTING))
+        assertEquals(TransactionMode.E_REPORTING, viewModel.uiState.value.transactionMode)
+        assertTrue(viewModel.uiState.value.isEReporting)
+    }
+
+    @Test
+    fun us27_fiscalFieldsAndDeliveryAddress_carriedToSubmittedInvoice() = runTest {
+        val viewModel = InvoiceFormViewModel(
+            submitInvoiceUseCase = SubmitInvoiceUseCase(MockInvoiceRepository(simulatedDelayMillis = 0L)),
+            dispatcher = StandardTestDispatcher(testScheduler),
+        )
+
+        fillValidSingleLineForm(viewModel)
+        viewModel.processIntent(InvoiceFormIntent.TransactionModeChanged(TransactionMode.E_REPORTING))
+        viewModel.processIntent(InvoiceFormIntent.NatureOperationChanged(NatureOperation.MIXTE))
+        viewModel.processIntent(InvoiceFormIntent.ToggleOptionTvaDebit(true))
+        viewModel.processIntent(InvoiceFormIntent.ToggleDifferentDeliveryAddress(true))
+        viewModel.processIntent(InvoiceFormIntent.DeliveryStreetChanged("10 rue de la Paix"))
+        viewModel.processIntent(InvoiceFormIntent.DeliveryZipChanged("75002"))
+        viewModel.processIntent(InvoiceFormIntent.DeliveryCityChanged("Paris"))
+        viewModel.processIntent(InvoiceFormIntent.DeliveryCountryChanged("FRANCE"))
+
+        viewModel.processIntent(InvoiceFormIntent.ValidateAndIssue)
+        runCurrent()
+        advanceUntilIdle()
+
+        val submitted = assertNotNull(viewModel.uiState.value.submittedInvoice)
+        assertTrue(submitted.isEReporting)
+        assertEquals(NatureOperation.MIXTE, submitted.natureOperation)
+        assertTrue(submitted.optionTvaDebit)
+        assertEquals("10 rue de la Paix", submitted.deliveryAddress.street)
+        assertEquals("75002", submitted.deliveryAddress.zip)
+        assertEquals("Paris", submitted.deliveryAddress.city)
+        assertEquals("FRANCE", submitted.deliveryAddress.country)
     }
 }

@@ -8,9 +8,14 @@ package com.ledgerhub.presentation.invoiceform
 enum class InvoiceFormField {
     CLIENT_NAME,
     CLIENT_SIRET,
+    CLIENT_SIREN,
     CLIENT_EMAIL,
     INVOICE_NUMBER,
     ISSUE_DATE,
     DUE_DATE,
+    DELIVERY_STREET,
+    DELIVERY_ZIP,
+    DELIVERY_CITY,
+    DELIVERY_COUNTRY,
     // Les erreurs de ligne (libellé/quantité/prix) vivent dans InvoiceLineFormState.errors (par ligne).
 }
