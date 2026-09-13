@@ -25,6 +25,9 @@ import com.ledgerhub.domain.invoice.totalHtOf
 import com.ledgerhub.domain.invoice.totalTtcOf
 import com.ledgerhub.domain.invoice.totalVatOf
 import com.ledgerhub.domain.quote.Quote
+import com.ledgerhub.domain.degraded.DegradedModeNetworkState
+import com.ledgerhub.domain.degraded.DegradedChannel
+import com.ledgerhub.domain.degraded.EnqueueDegradedInvoiceUseCase
 import com.ledgerhub.presentation.components.QuickClientDraft
 import com.ledgerhub.presentation.components.QuickClientField
 import com.ledgerhub.presentation.components.validateQuickClient
@@ -79,6 +82,10 @@ class InvoiceFormViewModel(
      * ni création rapide (utile aux tests qui n'ont que faire du sélecteur).
      */
     private val clientRepository: ClientRepository? = null,
+    /** Cas d'usage d'enfilement en mode dégradé (US-29). */
+    private val enqueueDegradedInvoiceUseCase: EnqueueDegradedInvoiceUseCase? = null,
+    /** État initial du réseau pour la simulation (US-29). */
+    initialNetworkState: DegradedModeNetworkState = DegradedModeNetworkState.OPERATIONAL,
     /** Devis d'origine en cas de conversion — pré-remplit les coordonnées et les lignes. */
     sourceQuote: Quote? = null,
 ) {
@@ -106,15 +113,17 @@ class InvoiceFormViewModel(
                     }.ifEmpty { listOf(InvoiceLineFormState(vatRate = defaultVatRate)) },
                     sourceQuoteId = sourceQuote.number,
                     isClientDirectoryAvailable = clientRepository != null,
+                    networkState = initialNetworkState,
                 )
             } else {
                 InvoiceFormUiState(
                     issuer = issuer,
                     lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
                     isClientDirectoryAvailable = clientRepository != null,
+                    networkState = initialNetworkState,
                 )
             }
-        ),
+        )
     )
     val uiState: StateFlow<InvoiceFormUiState> = _uiState.asStateFlow()
 
@@ -127,6 +136,11 @@ class InvoiceFormViewModel(
         when (intent) {
             InvoiceFormIntent.SaveDraft -> submit(InvoiceStatus.DRAFT)
             InvoiceFormIntent.ValidateAndIssue -> submit(InvoiceStatus.DEPOSITED)
+            InvoiceFormIntent.SubmitDegraded -> submitDegraded()
+            is InvoiceFormIntent.NetworkStateChanged ->
+                _uiState.update { it.copy(networkState = intent.state) }
+            is InvoiceFormIntent.DegradedChannelChanged ->
+                _uiState.update { it.copy(degradedChannel = intent.channel) }
 
             // Le champ raison sociale est un sélecteur depuis US-11 : les deux intentions
             // décrivent le même geste.
@@ -389,10 +403,13 @@ class InvoiceFormViewModel(
                     )
                 }
 
-            // Écritures et gestes du sélecteur client : interceptés en amont par processIntent,
+            // Écritures et gestes du sélecteur client & mode dégradé : interceptés en amont par processIntent,
             // ils n'atteignent jamais cette branche.
             InvoiceFormIntent.SaveDraft,
             InvoiceFormIntent.ValidateAndIssue,
+            InvoiceFormIntent.SubmitDegraded,
+            is InvoiceFormIntent.NetworkStateChanged,
+            is InvoiceFormIntent.DegradedChannelChanged,
             InvoiceFormIntent.ComplianceScanRequested,
             is InvoiceFormIntent.ClientNameChanged,
             is InvoiceFormIntent.OnClientQueryChanged,
@@ -576,6 +593,11 @@ class InvoiceFormViewModel(
     private fun submit(targetStatus: InvoiceStatus) {
         if (_uiState.value.isSubmitting) return
 
+        if (targetStatus == InvoiceStatus.DEPOSITED && _uiState.value.networkState == DegradedModeNetworkState.OUTAGE) {
+            submitDegraded()
+            return
+        }
+
         // Une tentative d'écriture révèle toutes les erreurs, y compris sur les champs jamais
         // saisis : l'utilisateur doit voir ce qui bloque, même sans avoir touché au formulaire.
         val revalidated = revalidate(_uiState.value).copy(submitAttempted = true)
@@ -603,6 +625,65 @@ class InvoiceFormViewModel(
                         )
                     },
                 )
+            }
+        }
+    }
+
+    private fun submitDegraded() {
+        if (_uiState.value.isSubmitting) return
+
+        val revalidated = revalidate(_uiState.value).copy(submitAttempted = true)
+        val hasLineErrors = revalidated.lines.any { it.errors.isNotEmpty() }
+        if (revalidated.errors.isNotEmpty() || hasLineErrors) {
+            _uiState.value = revalidated
+            return
+        }
+
+        val invoice = buildInvoice(revalidated, InvoiceStatus.PENDING_REGULARIZATION)
+        _uiState.value = revalidated.copy(submissionStatus = SubmissionStatus.Loading)
+
+        val enqueue = enqueueDegradedInvoiceUseCase
+        if (enqueue != null) {
+            scope.launch {
+                val result = enqueue(invoice, revalidated.degradedChannel)
+                _uiState.update { current ->
+                    result.fold(
+                        onSuccess = {
+                            current.copy(
+                                submissionStatus = SubmissionStatus.Success,
+                                submittedInvoice = invoice.copy(status = InvoiceStatus.PENDING_REGULARIZATION),
+                            )
+                        },
+                        onFailure = { throwable ->
+                            current.copy(
+                                submissionStatus = SubmissionStatus.Error(
+                                    throwable.message ?: "Erreur lors de l'enregistrement en mode dégradé"
+                                )
+                            )
+                        },
+                    )
+                }
+            }
+        } else {
+            scope.launch {
+                val result = submitInvoiceUseCase(invoice.copy(status = InvoiceStatus.PENDING_REGULARIZATION))
+                _uiState.update { current ->
+                    result.fold(
+                        onSuccess = {
+                            current.copy(
+                                submissionStatus = SubmissionStatus.Success,
+                                submittedInvoice = invoice.copy(status = InvoiceStatus.PENDING_REGULARIZATION),
+                            )
+                        },
+                        onFailure = { throwable ->
+                            current.copy(
+                                submissionStatus = SubmissionStatus.Error(
+                                    throwable.message ?: "Erreur inconnue lors de la soumission"
+                                )
+                            )
+                        },
+                    )
+                }
             }
         }
     }

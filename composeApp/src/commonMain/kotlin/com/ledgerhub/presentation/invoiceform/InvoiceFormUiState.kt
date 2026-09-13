@@ -86,6 +86,9 @@ data class InvoiceFormUiState(
      * a lieu dans `revalidate()`, sur le chemin que toute modification emprunte déjà.
      */
     val complianceReport: ComplianceReport? = null,
+    // ── Mode Dégradé & Continuité Économique (US-29) ──────────────────────────
+    val networkState: com.ledgerhub.domain.degraded.DegradedModeNetworkState = com.ledgerhub.domain.degraded.DegradedModeNetworkState.OPERATIONAL,
+    val degradedChannel: com.ledgerhub.domain.degraded.DegradedChannel = com.ledgerhub.domain.degraded.DegradedChannel.PDF_SIMPLE,
 ) {
     /** Indicateur dérivé : mode e-Reporting actif (B2C / International). */
     val isEReporting: Boolean get() = transactionMode == com.ledgerhub.domain.invoice.TransactionMode.E_REPORTING

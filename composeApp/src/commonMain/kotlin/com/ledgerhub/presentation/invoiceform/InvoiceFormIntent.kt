@@ -111,4 +111,9 @@ sealed interface InvoiceFormIntent {
      * [Invoice.isEditable][com.ledgerhub.domain.invoice.Invoice.isEditable]).
      */
     data object ValidateAndIssue : InvoiceFormIntent
+
+    // ── Mode Dégradé & Continuité Économique (US-29) ──────────────────────────
+    data class NetworkStateChanged(val state: com.ledgerhub.domain.degraded.DegradedModeNetworkState) : InvoiceFormIntent
+    data class DegradedChannelChanged(val channel: com.ledgerhub.domain.degraded.DegradedChannel) : InvoiceFormIntent
+    data object SubmitDegraded : InvoiceFormIntent
 }

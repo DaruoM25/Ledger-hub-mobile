@@ -60,6 +60,7 @@ fun InvoiceAdaptivePane(
     changeInvoiceStatusUseCase: ChangeInvoiceStatusUseCase,
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
+    syncQueueViewModel: com.ledgerhub.presentation.degraded.SyncQueueViewModel? = null,
     modifier: Modifier = Modifier,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
@@ -71,6 +72,7 @@ fun InvoiceAdaptivePane(
             viewModel = invoiceListViewModel,
             onInvoiceClick = onInvoiceClick,
             onCreateCreditNote = onCreateCreditNote,
+            syncQueueViewModel = syncQueueViewModel,
         )
     } else {
         // Mode Dual-Pane Grand Écran / Tablette Paysage (>= 840 dp)
@@ -101,6 +103,7 @@ fun InvoiceAdaptivePane(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
+                val syncQueueState = syncQueueViewModel?.uiState?.collectAsState()?.value
                 InvoiceListView(
                     uiState = listUiState,
                     onIntent = invoiceListViewModel::processIntent,
@@ -109,6 +112,12 @@ fun InvoiceAdaptivePane(
                     },
                     onCreateCreditNote = onCreateCreditNote,
                     selectedInvoiceNumber = selectedInvoiceNumber,
+                    syncQueueUiState = syncQueueState,
+                    onSyncBatch = {
+                        syncQueueViewModel?.processBatch(onComplete = {
+                            invoiceListViewModel.processIntent(InvoiceListIntent.Load)
+                        })
+                    },
                 )
             }
 

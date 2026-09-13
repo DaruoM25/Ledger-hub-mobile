@@ -35,6 +35,7 @@ object InvoiceDetailTags {
 
 internal fun InvoiceStatus.label(): String = when (this) {
     InvoiceStatus.DRAFT -> "Brouillon"
+    InvoiceStatus.PENDING_REGULARIZATION -> "À régulariser"
     InvoiceStatus.DEPOSITED -> "Déposée"
     InvoiceStatus.APPROVED -> "Approuvée par l'administration"
     InvoiceStatus.PAID -> "Encaissée"
@@ -45,6 +46,7 @@ internal fun InvoiceStatus.label(): String = when (this) {
 
 internal fun InvoiceStatus.badgeColor(): Color = when (this) {
     InvoiceStatus.DRAFT -> Color(0xFF9E9E9E)
+    InvoiceStatus.PENDING_REGULARIZATION -> Color(0xFFD97706)
     InvoiceStatus.DEPOSITED -> Color(0xFF1565C0)
     InvoiceStatus.APPROVED -> Color(0xFF00A86B)
     InvoiceStatus.PAID -> Color(0xFF4CAF50)

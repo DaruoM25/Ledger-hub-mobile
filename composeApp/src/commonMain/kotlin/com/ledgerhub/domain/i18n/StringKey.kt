@@ -166,6 +166,7 @@ enum class StringKey {
     FILTER_PAID,
     FILTER_CANCELLED,
     FILTER_OVERDUE,
+    FILTER_PENDING_REGULARIZATION,
 
     // ── Statuts de facture ──────────────────────────────────────────────────
     STATUS_DRAFT,
@@ -179,6 +180,22 @@ enum class StringKey {
     STATUS_REFUSED,
     STATUS_PAID,
     STATUS_CANCELLED,
+    STATUS_PENDING_REGULARIZATION,
+
+    // ── Mode Dégradé & Continuité Économique (US-29) ────────────────────────
+    NETWORK_STATUS_OPERATIONAL,
+    NETWORK_STATUS_OUTAGE,
+    DEGRADED_MODE_NOTICE,
+    DEGRADED_MODE_SUBMIT_ACTION,
+    SYNC_BATCH_TITLE,
+    SYNC_BATCH_SUBTITLE,
+    SYNC_BATCH_ACTION,
+    SYNC_BATCH_PROGRESS,
+    SYNC_BATCH_SUCCESS,
+    SYNC_BATCH_EMPTY,
+    SYNC_CHANNEL_LABEL,
+    SYNC_CHANNEL_PDF,
+    SYNC_CHANNEL_PAPER,
 
     // ── Écrans "à venir" ────────────────────────────────────────────────────
     PLACEHOLDER_COMING_SOON,

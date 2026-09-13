@@ -5,6 +5,7 @@ import com.ledgerhub.domain.invoice.InvoiceStatus.CANCELLED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DEPOSITED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DRAFT
 import com.ledgerhub.domain.invoice.InvoiceStatus.PAID
+import com.ledgerhub.domain.invoice.InvoiceStatus.PENDING_REGULARIZATION
 import com.ledgerhub.domain.invoice.InvoiceStatus.REFUSED
 import com.ledgerhub.domain.invoice.InvoiceStatus.REJECTED
 import kotlin.test.Test
@@ -14,9 +15,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Machine d'états DGFIP 2026 — **matrice exhaustive 7 × 7**, pas un échantillon.
+ * Machine d'états DGFIP 2026 — **matrice exhaustive 8 × 8**, pas un échantillon.
  *
- * Les 49 cases sont énumérées explicitement : un statut ajouté au référentiel sans mise à jour
+ * Les 64 cases sont énumérées explicitement : un statut ajouté au référentiel sans mise à jour
  * de la table ferait échouer [everyPairIsCovered], et non passer un test silencieusement.
  */
 class InvoiceStatusTransitionTest {
@@ -26,8 +27,9 @@ class InvoiceStatusTransitionTest {
      * dérivée de l'implémentation, sans quoi le test ne vérifierait que sa propre copie.
      */
     private val expected: Map<Pair<InvoiceStatus, InvoiceStatus>, Boolean> = mapOf(
-        // Depuis DRAFT : seul le dépôt.
+        // Depuis DRAFT : dépôt nominal ou mode dégradé.
         (DRAFT to DRAFT) to false,
+        (DRAFT to PENDING_REGULARIZATION) to true,
         (DRAFT to DEPOSITED) to true,
         (DRAFT to APPROVED) to false,
         (DRAFT to PAID) to false,
@@ -35,8 +37,19 @@ class InvoiceStatusTransitionTest {
         (DRAFT to REFUSED) to false,
         (DRAFT to CANCELLED) to false,
 
+        // Depuis PENDING_REGULARIZATION (US-29) : régularisation télétransmise ou annulation par avoir.
+        (PENDING_REGULARIZATION to DRAFT) to false,
+        (PENDING_REGULARIZATION to PENDING_REGULARIZATION) to false,
+        (PENDING_REGULARIZATION to DEPOSITED) to true,
+        (PENDING_REGULARIZATION to APPROVED) to false,
+        (PENDING_REGULARIZATION to PAID) to false,
+        (PENDING_REGULARIZATION to REJECTED) to false,
+        (PENDING_REGULARIZATION to REFUSED) to false,
+        (PENDING_REGULARIZATION to CANCELLED) to true,
+
         // Depuis DEPOSITED : les cinq issues d'une facture déposée, approbation PPF comprise.
         (DEPOSITED to DRAFT) to false,
+        (DEPOSITED to PENDING_REGULARIZATION) to false,
         (DEPOSITED to DEPOSITED) to false,
         (DEPOSITED to APPROVED) to true,
         (DEPOSITED to PAID) to true,
@@ -46,6 +59,7 @@ class InvoiceStatusTransitionTest {
 
         // Depuis APPROVED : validée par l'administration, elle a circulé — plus de rejet possible.
         (APPROVED to DRAFT) to false,
+        (APPROVED to PENDING_REGULARIZATION) to false,
         (APPROVED to DEPOSITED) to false,
         (APPROVED to APPROVED) to false,
         (APPROVED to PAID) to true,
@@ -55,6 +69,7 @@ class InvoiceStatusTransitionTest {
 
         // Depuis PAID : encaissée, seul l'avoir peut encore intervenir.
         (PAID to DRAFT) to false,
+        (PAID to PENDING_REGULARIZATION) to false,
         (PAID to DEPOSITED) to false,
         (PAID to APPROVED) to false,
         (PAID to PAID) to false,
@@ -64,6 +79,7 @@ class InvoiceStatusTransitionTest {
 
         // Depuis REJECTED : jamais entrée dans le circuit légal, la correction est la procédure.
         (REJECTED to DRAFT) to true,
+        (REJECTED to PENDING_REGULARIZATION) to false,
         (REJECTED to DEPOSITED) to false,
         (REJECTED to APPROVED) to false,
         (REJECTED to PAID) to false,
@@ -73,6 +89,7 @@ class InvoiceStatusTransitionTest {
 
         // Depuis REFUSED : la facture a circulé, seul un avoir la corrige.
         (REFUSED to DRAFT) to false,
+        (REFUSED to PENDING_REGULARIZATION) to false,
         (REFUSED to DEPOSITED) to false,
         (REFUSED to APPROVED) to false,
         (REFUSED to PAID) to false,
@@ -82,6 +99,7 @@ class InvoiceStatusTransitionTest {
 
         // Depuis CANCELLED : terminal.
         (CANCELLED to DRAFT) to false,
+        (CANCELLED to PENDING_REGULARIZATION) to false,
         (CANCELLED to DEPOSITED) to false,
         (CANCELLED to APPROVED) to false,
         (CANCELLED to PAID) to false,
@@ -92,10 +110,10 @@ class InvoiceStatusTransitionTest {
 
     @Test
     fun everyPairIsCovered() {
-        // Garde-fou : un huitième statut rendrait la matrice incomplète et le signalerait ici.
+        // Garde-fou : un neuvième statut rendrait la matrice incomplète et le signalerait ici.
         val statuses = InvoiceStatus.entries
-        assertEquals(7, statuses.size, "Le référentiel PPF compte sept statuts")
-        assertEquals(49, expected.size, "La matrice doit énumérer les 49 combinaisons")
+        assertEquals(8, statuses.size, "Le référentiel compte huit statuts avec le mode dégradé")
+        assertEquals(64, expected.size, "La matrice doit énumérer les 64 combinaisons")
         statuses.forEach { from ->
             statuses.forEach { to ->
                 assertTrue(
@@ -122,7 +140,8 @@ class InvoiceStatusTransitionTest {
 
     @Test
     fun allowedFrom_listsExactlyTheAuthorisedTargets() {
-        assertEquals(setOf(DEPOSITED), InvoiceStatusTransition.allowedFrom(DRAFT))
+        assertEquals(setOf(DEPOSITED, PENDING_REGULARIZATION), InvoiceStatusTransition.allowedFrom(DRAFT))
+        assertEquals(setOf(DEPOSITED, CANCELLED), InvoiceStatusTransition.allowedFrom(PENDING_REGULARIZATION))
         assertEquals(
             setOf(APPROVED, PAID, REJECTED, REFUSED, CANCELLED),
             InvoiceStatusTransition.allowedFrom(DEPOSITED),
@@ -199,7 +218,7 @@ class InvoiceStatusTransitionTest {
         InvoiceStatus.entries.forEach { status ->
             assertEquals(
                 InvoiceStatusTransition.isAllowed(status, CANCELLED),
-                status in setOf(DEPOSITED, APPROVED, PAID, REFUSED),
+                status in setOf(DEPOSITED, APPROVED, PAID, REFUSED, PENDING_REGULARIZATION),
                 "Cohérence avoir/machine d'états pour $status",
             )
         }

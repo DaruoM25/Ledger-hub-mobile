@@ -153,6 +153,7 @@ object AppTranslations {
         StringKey.FILTER_PAID to "Payées",
         StringKey.FILTER_CANCELLED to "Annulées",
         StringKey.FILTER_OVERDUE to "En retard",
+        StringKey.FILTER_PENDING_REGULARIZATION to "À régulariser",
 
         StringKey.STATUS_DRAFT to "Brouillon",
         StringKey.STATUS_VALIDATED to "Validée",
@@ -163,6 +164,22 @@ object AppTranslations {
         StringKey.STATUS_REFUSED to "Refusée",
         StringKey.STATUS_PAID to "Payée",
         StringKey.STATUS_CANCELLED to "Annulée",
+        StringKey.STATUS_PENDING_REGULARIZATION to "À régulariser",
+
+        // ── Mode Dégradé & Continuité Économique (US-29) ────────────────────────
+        StringKey.NETWORK_STATUS_OPERATIONAL to "Réseau : Opérationnel",
+        StringKey.NETWORK_STATUS_OUTAGE to "Incident PPF",
+        StringKey.DEGRADED_MODE_NOTICE to "Incident PPF actif : la facture sera émise en format de secours (À régulariser).",
+        StringKey.DEGRADED_MODE_SUBMIT_ACTION to "Émettre en format de secours (À régulariser)",
+        StringKey.SYNC_BATCH_TITLE to "File de régularisation (Mode dégradé)",
+        StringKey.SYNC_BATCH_SUBTITLE to "Factures émises hors-ligne ou sous format de secours à télétransmettre",
+        StringKey.SYNC_BATCH_ACTION to "Régulariser par lot (Télétransmettre)",
+        StringKey.SYNC_BATCH_PROGRESS to "Télétransmission en cours vers le PPF…",
+        StringKey.SYNC_BATCH_SUCCESS to "Régularisation effectuée avec succès.",
+        StringKey.SYNC_BATCH_EMPTY to "Aucune facture en attente de régularisation.",
+        StringKey.SYNC_CHANNEL_LABEL to "Canal de secours",
+        StringKey.SYNC_CHANNEL_PDF to "PDF simple",
+        StringKey.SYNC_CHANNEL_PAPER to "Papier",
 
         StringKey.PLACEHOLDER_COMING_SOON to "Bientôt disponible",
 
@@ -577,6 +594,7 @@ object AppTranslations {
         StringKey.FILTER_PAID to "Paid",
         StringKey.FILTER_CANCELLED to "Cancelled",
         StringKey.FILTER_OVERDUE to "Overdue",
+        StringKey.FILTER_PENDING_REGULARIZATION to "Pending Regularisation",
 
         StringKey.STATUS_DRAFT to "Draft",
         StringKey.STATUS_VALIDATED to "Validated",
@@ -587,6 +605,22 @@ object AppTranslations {
         StringKey.STATUS_REFUSED to "Refused",
         StringKey.STATUS_PAID to "Paid",
         StringKey.STATUS_CANCELLED to "Cancelled",
+        StringKey.STATUS_PENDING_REGULARIZATION to "Pending Regularisation",
+
+        // ── Mode Dégradé & Continuité Économique (US-29) ────────────────────────
+        StringKey.NETWORK_STATUS_OPERATIONAL to "Network: Operational",
+        StringKey.NETWORK_STATUS_OUTAGE to "PPF Outage",
+        StringKey.DEGRADED_MODE_NOTICE to "Active PPF outage: the invoice will be issued in backup format (Pending regularisation).",
+        StringKey.DEGRADED_MODE_SUBMIT_ACTION to "Issue in backup format (Pending regularisation)",
+        StringKey.SYNC_BATCH_TITLE to "Regularisation Queue (Degraded Mode)",
+        StringKey.SYNC_BATCH_SUBTITLE to "Invoices issued offline or in backup format awaiting teletransmission",
+        StringKey.SYNC_BATCH_ACTION to "Regularise batch (Transmit)",
+        StringKey.SYNC_BATCH_PROGRESS to "Transmitting to PPF in progress…",
+        StringKey.SYNC_BATCH_SUCCESS to "Batch regularisation completed successfully.",
+        StringKey.SYNC_BATCH_EMPTY to "No invoices awaiting regularisation.",
+        StringKey.SYNC_CHANNEL_LABEL to "Backup channel",
+        StringKey.SYNC_CHANNEL_PDF to "Standard PDF",
+        StringKey.SYNC_CHANNEL_PAPER to "Paper",
 
         StringKey.PLACEHOLDER_COMING_SOON to "Coming soon",
 

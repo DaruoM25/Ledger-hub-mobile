@@ -1,0 +1,46 @@
+CREATE TABLE SyncQueue (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceId TEXT NOT NULL,
+    syncStatus TEXT NOT NULL,
+    retryCount INTEGER NOT NULL DEFAULT 0,
+    lastError TEXT,
+    originalChannel TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    syncedAt TEXT,
+    FOREIGN KEY (invoiceId) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX SyncQueue_invoiceId ON SyncQueue(invoiceId);
+CREATE INDEX SyncQueue_status ON SyncQueue(syncStatus, createdAt);
+
+selectAll:
+SELECT * FROM SyncQueue
+ORDER BY createdAt ASC;
+
+selectPending:
+SELECT * FROM SyncQueue
+WHERE syncStatus = 'pending_sync'
+ORDER BY createdAt ASC;
+
+selectByInvoiceId:
+SELECT * FROM SyncQueue
+WHERE invoiceId = ?;
+
+countPending:
+SELECT COUNT(*) FROM SyncQueue
+WHERE syncStatus = 'pending_sync';
+
+insertOrReplace:
+INSERT OR REPLACE INTO SyncQueue(
+    id, invoiceId, syncStatus, retryCount, lastError, originalChannel, createdAt, syncedAt
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updateStatus:
+UPDATE SyncQueue
+SET syncStatus = ?, retryCount = retryCount + 1, lastError = ?, syncedAt = ?
+WHERE id = ?;
+
+deleteByInvoiceId:
+DELETE FROM SyncQueue
+WHERE invoiceId = ?;

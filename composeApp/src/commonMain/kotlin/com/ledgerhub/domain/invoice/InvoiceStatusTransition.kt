@@ -5,6 +5,7 @@ import com.ledgerhub.domain.invoice.InvoiceStatus.CANCELLED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DEPOSITED
 import com.ledgerhub.domain.invoice.InvoiceStatus.DRAFT
 import com.ledgerhub.domain.invoice.InvoiceStatus.PAID
+import com.ledgerhub.domain.invoice.InvoiceStatus.PENDING_REGULARIZATION
 import com.ledgerhub.domain.invoice.InvoiceStatus.REFUSED
 import com.ledgerhub.domain.invoice.InvoiceStatus.REJECTED
 
@@ -21,6 +22,8 @@ import com.ledgerhub.domain.invoice.InvoiceStatus.REJECTED
  *   procédure attendue. À l'inverse [REFUSED], qui a circulé, ne se corrige que par un avoir.
  * - **[APPROVED]** est l'issue favorable du dépôt, exclusive de [REJECTED]. Elle ne réintroduit
  *   aucun retour en arrière : une facture approuvée a circulé, seul un avoir la corrige.
+ * - **[PENDING_REGULARIZATION]** (US-29) : émise en mode dégradé lors d'une indisponibilité PPF.
+ *   Elle transite vers [DEPOSITED] lors de la télétransmission groupée ou [CANCELLED] par avoir.
  * - **[CANCELLED]** n'est jamais atteint par une action d'interface : seule l'émission d'un avoir
  *   y conduit, dans la transaction atomique de
  *   [SqlDelightCreditNoteRepository][com.ledgerhub.data.creditnote.SqlDelightCreditNoteRepository].
@@ -29,7 +32,8 @@ import com.ledgerhub.domain.invoice.InvoiceStatus.REJECTED
 object InvoiceStatusTransition {
 
     private val TRANSITIONS: Map<InvoiceStatus, Set<InvoiceStatus>> = mapOf(
-        DRAFT to setOf(DEPOSITED),
+        DRAFT to setOf(DEPOSITED, PENDING_REGULARIZATION),
+        PENDING_REGULARIZATION to setOf(DEPOSITED, CANCELLED),
         DEPOSITED to setOf(APPROVED, PAID, REJECTED, REFUSED, CANCELLED),
         APPROVED to setOf(PAID, REFUSED, CANCELLED),
         PAID to setOf(CANCELLED),

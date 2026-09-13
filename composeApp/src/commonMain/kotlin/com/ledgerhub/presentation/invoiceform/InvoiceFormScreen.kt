@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -226,6 +227,7 @@ internal fun InvoiceFormContent(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .semantics { testTag = InvoiceFormTags.SCREEN }
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -533,6 +535,33 @@ internal fun InvoiceFormContent(
             onScan = { onIntent(InvoiceFormIntent.ComplianceScanRequested) },
         )
 
+        if (uiState.networkState == com.ledgerhub.domain.degraded.DegradedModeNetworkState.OUTAGE) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF3D2706),
+                    contentColor = Color(0xFFFDE68A),
+                ),
+                border = BorderStroke(1.dp, Color(0xFFD97706)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { testTag = com.ledgerhub.presentation.degraded.DegradedModeTags.DEGRADED_BANNER },
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("⚠️", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        tr(StringKey.DEGRADED_MODE_NOTICE),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFDE68A),
+                    )
+                }
+            }
+        }
+
         when (val status = uiState.submissionStatus) {
             SubmissionStatus.Loading -> LoadingIndicator()
             SubmissionStatus.Success -> StatusBanner(
@@ -561,19 +590,28 @@ internal fun InvoiceFormContent(
             Text("💾  ${tr(StringKey.ACTION_SAVE_DRAFT)}")
         }
 
-        val submitButtonLabel = if (uiState.transactionMode == TransactionMode.E_INVOICING) {
+        val isDegraded = uiState.networkState == com.ledgerhub.domain.degraded.DegradedModeNetworkState.OUTAGE
+        val submitButtonLabel = if (isDegraded) {
+            tr(StringKey.DEGRADED_MODE_SUBMIT_ACTION)
+        } else if (uiState.transactionMode == TransactionMode.E_INVOICING) {
             tr(StringKey.ACTION_SUBMIT_INVOICE_B2B)
         } else {
             tr(StringKey.ACTION_SUBMIT_INVOICE_EREPORTING)
         }
+        val submitButtonTag = if (isDegraded) {
+            com.ledgerhub.presentation.degraded.DegradedModeTags.DEGRADED_SUBMIT_BUTTON
+        } else {
+            InvoiceFormTags.SUBMIT_BUTTON
+        }
+        val submitButtonColor = if (isDegraded) Color(0xFFD97706) else MaterialTheme.colorScheme.primary
 
         Button(
             onClick = { onIntent(InvoiceFormIntent.ValidateAndIssue) },
             enabled = !uiState.isSubmitting,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth().semantics { testTag = InvoiceFormTags.SUBMIT_BUTTON },
+            colors = ButtonDefaults.buttonColors(containerColor = submitButtonColor),
+            modifier = Modifier.fillMaxWidth().semantics { testTag = submitButtonTag },
         ) {
-            Text("☁  $submitButtonLabel")
+            Text(if (isDegraded) "⚠️  $submitButtonLabel" else "☁  $submitButtonLabel")
         }
 
         Text(

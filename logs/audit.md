@@ -2961,3 +2961,77 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **Cause racine** | Défilement partiel lors du test d'instrumentation (le `performScrollTo` ciblait le jalon sans descendre jusqu'au spacer de fin de liste), tronquant le bas de la vue au niveau de la ligne de pliure de l'écran. |
 | **Correctif** | Ajout d'un tag sémantique `BOTTOM_SPACER` sur le `Spacer(32.dp)` de fin de liste et exécution du défilement complet avant la capture d'écran. |
 | **Validation** | Exécution réussie sur Samsung Galaxy S23+ (`BUILD SUCCESSFUL`) et capture d'écran 100% intègre. |
+
+---
+
+## Sprint 13 — US-29 : Mode Dégradé & Continuité Économique (DGFiP 2026)
+
+- **Date :** 2026-09-13
+- **Branche :** `feature/US-29-degraded-mode-continuity`
+- **Statut :** ✅ Clos — 1199/1199 tests unitaires & Robolectric verts, compilation Windows validée (`testDebugUnitTest` + `assembleDebug`)
+- **Objectif :** Dispositif de continuité d'activité fiscale DGFiP 2026 : émission de secours (`PENDING_REGULARIZATION`), file locale de synchronisation (`SyncQueue`), déduplication fiscale stricte, régularisation par lot vers le statut `DEPOSITED`, et sélecteur de simulation réseau Material 3 Dark Theme.
+
+### 1. Décisions d'Architecture & Conformité DGFiP 2026
+1. **Migration SQLDelight `12.sqm` & Table `SyncQueue`** :
+   - Création de la table `SyncQueue` avec index UNIQUE `SyncQueue_invoiceId` interdisant toute double mise en file d'attente d'une même pièce.
+   - Requêtes dédiées dans `SyncQueue.sq` (`selectAll`, `selectPending`, `selectByInvoiceId`, `countPending`, `insertOrReplace`, `updateStatus`, `deleteByInvoiceId`).
+2. **Statut Fiscal & Machine d'États** :
+   - Ajout du statut `PENDING_REGULARIZATION` dans `InvoiceStatus.kt` et `InvoiceStatusTransition.kt`.
+   - Transitions autorisées : `PENDING_REGULARIZATION -> DEPOSITED` (régularisation électronique) ou `CANCELLED` (annulation par avoir).
+3. **Cas d'Utilisation Domaine** :
+   - `EnqueueDegradedInvoiceUseCase` : validation, déduplication (`DuplicateDegradedInvoiceException`), persistance en `PENDING_REGULARIZATION` et enregistrement dans `SyncQueue`.
+   - `ProcessSyncQueueBatchUseCase` : traitement par lot de la file, transition atomique vers `DEPOSITED` et horodatage de synchronisation.
+4. **UX / UI Dark Mode M3** :
+   - `NetworkSimulationSelector` dans la TopAppBar : pastille réactive `🟢 Réseau : Opérationnel` / `⚠️ Incident PPF`.
+   - `InvoiceFormScreen` : adaptation en temps réel quand le simulateur réseau est en panne (bandeau d'information orange DGFiP, bouton `Émettre en mode dégradé`).
+   - `InvoiceListScreen` : puce de filtre `À régulariser` et `SyncBatchCard` sombre M3 avec bouton de télétransmission par lot et indicateur de progression.
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/12.sqm` | **[NEW]** Migration SQLite v12 -> v13 (`SyncQueue`). |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/SyncQueue.sq` | **[NEW]** Requêtes SQLDelight pour la file de synchronisation. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/InvoiceStatus.kt` | Ajout du statut `PENDING_REGULARIZATION`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/invoice/InvoiceStatusTransition.kt` | Matrice des transitions légales pour `PENDING_REGULARIZATION`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/degraded/DegradedModeNetworkState.kt` | **[NEW]** Modèle d'état réseau (`OPERATIONAL`, `OUTAGE`). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/degraded/SyncQueueEntry.kt` | **[NEW]** Modèle domaine d'entrée de file de synchronisation. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/degraded/SyncQueueRepository.kt` | **[NEW]** Contrat de repository de la file de synchronisation. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/degraded/EnqueueDegradedInvoiceUseCase.kt` | **[NEW]** Use-case d'enfilement et déduplication fiscale. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/degraded/ProcessSyncQueueBatchUseCase.kt` | **[NEW]** Use-case de régularisation par lot. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/degraded/SqlDelightSyncQueueRepository.kt` | **[NEW]** Implémentation SQLDelight de `SyncQueueRepository`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | Clés i18n mode dégradé, simulation, régularisation par lot. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | Traductions complètes FR et EN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/degraded/DegradedModeTags.kt` | **[NEW]** Tags sémantiques pour les tests. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/degraded/NetworkSimulationSelector.kt` | **[NEW]** Composant sélecteur réseau M3. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/degraded/SyncBatchCard.kt` | **[NEW]** Carte M3 de régularisation par lot. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/degraded/SyncQueueViewModel.kt` | **[NEW]** ViewModel de gestion de la file de synchro. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormViewModel.kt` | Gestion de l'émission sous `PENDING_REGULARIZATION`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormScreen.kt` | Bandeau ambré DGFiP et bouton d'émission dégradée. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceListScreen.kt` | Intégration du filtre `À régulariser` et de `SyncBatchCard`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceStatusUi.kt` | Rendu visuel ambré/orange pour `PENDING_REGULARIZATION`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Intégration du sélecteur réseau dans le header et injection des dépendances. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/degraded/EnqueueDegradedInvoiceUseCaseTest.kt` | **[NEW]** Tests unitaires d'enfilement et de déduplication. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/degraded/ProcessSyncQueueBatchUseCaseTest.kt` | **[NEW]** Tests unitaires de régularisation par lot. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/degraded/SyncQueueViewModelTest.kt` | **[NEW]** Tests du ViewModel de synchronisation. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormViewModelDegradedModeTest.kt` | **[NEW]** Tests de soumission en mode dégradé. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/degraded/DegradedModeRegulationRobolectricTest.kt` | **[NEW]** Tests Robolectric N3a. |
+| `composeApp/src/androidInstrumentedTest/kotlin/com/ledgerhub/presentation/degraded/Us29DegradedModeN3bInstrumentedTest.kt` | **[NEW]** Test instrumenté N3b pour qualification sur terminal Android. |
+
+### 3. Matrice de Qualification Pyramide QA
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests Domaine & Transitions (`InvoiceStatusTransitionTest`, `EnqueueDegradedInvoiceUseCaseTest`, `ProcessSyncQueueBatchUseCaseTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*DegradedInvoiceUseCaseTest*"` | **PASS (100% vert)** |
+| **N2** | Tests ViewModels (`SyncQueueViewModelTest`, `InvoiceFormViewModelDegradedModeTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*SyncQueueViewModelTest*" --tests "*InvoiceFormViewModelDegradedModeTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests Robolectric UI (`DegradedModeRegulationRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*DegradedModeRegulationRobolectricTest*"` | **PASS (100% vert)** |
+| **N3b** | Test Instrumenté Device Samsung S23+ (`Us29DegradedModeN3bInstrumentedTest`) | `./gradlew :composeApp:connectedDebugAndroidTest` | **PASS (100% vert, capture `screenshots/us-29/01_n3b_degraded_mode.png`)** |
+| **Global** | Suite complète de non-régression (1199 tests unitaires & Robolectric) + compilation APK | `./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --console=plain` | **PASS (100% vert, BUILD SUCCESSFUL)** |
+
+### 4. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | Échec de validation du formulaire dans `InvoiceFormViewModelDegradedModeTest` (`AssertionError`). |
+| **Cause racine** | Date d'échéance (`dueDate`) absente de la séquence d'intentions de test, entraînant un blocage par `revalidate()`. |
+| **Correctif** | Ajout de l'intention `DueDateChanged("2026-10-12")` dans la préparation du formulaire. |
+| **Validation** | Suite de tests 100% verte (1199 tests passés) et test N3b validé sur Samsung Galaxy S23+. |
+
+

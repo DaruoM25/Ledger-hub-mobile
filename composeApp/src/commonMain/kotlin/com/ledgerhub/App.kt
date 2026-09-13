@@ -157,6 +157,12 @@ import com.ledgerhub.domain.subscription.SubscriptionRepository
 import com.ledgerhub.domain.subscription.SubscriptionStatus
 import com.ledgerhub.presentation.subscription.PaywallScreen
 import com.ledgerhub.presentation.subscription.PaywallViewModel
+import com.ledgerhub.data.degraded.SqlDelightSyncQueueRepository
+import com.ledgerhub.domain.degraded.DegradedModeNetworkState
+import com.ledgerhub.domain.degraded.EnqueueDegradedInvoiceUseCase
+import com.ledgerhub.domain.degraded.ProcessSyncQueueBatchUseCase
+import com.ledgerhub.presentation.degraded.NetworkSimulationSelector
+import com.ledgerhub.presentation.degraded.SyncQueueViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -319,6 +325,29 @@ fun App(
             bankTransactionRepository = bankTransactionRepository,
             reconciliationRepository = reconciliationRepository,
         )
+    }
+
+    // Mode Dégradé & Continuité Économique (US-29)
+    val syncQueueRepository = remember(database) { SqlDelightSyncQueueRepository(database) }
+    val enqueueDegradedInvoiceUseCase = remember(invoiceRepository, syncQueueRepository) {
+        EnqueueDegradedInvoiceUseCase(invoiceRepository, syncQueueRepository)
+    }
+    val processSyncQueueBatchUseCase = remember(syncQueueRepository, invoiceRepository) {
+        ProcessSyncQueueBatchUseCase(syncQueueRepository, invoiceRepository)
+    }
+    val syncQueueViewModel = remember(syncQueueRepository, processSyncQueueBatchUseCase) {
+        SyncQueueViewModel(syncQueueRepository, processSyncQueueBatchUseCase)
+    }
+    DisposableEffect(syncQueueViewModel) {
+        onDispose { syncQueueViewModel.onCleared() }
+    }
+    var networkSimulationState by remember { mutableStateOf(DegradedModeNetworkState.OPERATIONAL) }
+    val onToggleNetworkSimulation = {
+        networkSimulationState = if (networkSimulationState == DegradedModeNetworkState.OPERATIONAL) {
+            DegradedModeNetworkState.OUTAGE
+        } else {
+            DegradedModeNetworkState.OPERATIONAL
+        }
     }
 
     // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
@@ -569,6 +598,8 @@ fun App(
                                         onOpenCommandPalette = onOpenCommandPalette,
                                         onOpenIntegrations = onOpenIntegrations,
                                         onOpenExportModal = onOpenExportModal,
+                                        networkState = networkSimulationState,
+                                        onToggleNetwork = onToggleNetworkSimulation,
                                     )
                                     Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                                         Card(
@@ -608,6 +639,9 @@ fun App(
                                                 eReportingRepository = eReportingRepository,
                                                 onOpenEReporting = onOpenEReporting,
                                                 subscriptionRepository = subscriptionRepository,
+                                                networkState = networkSimulationState,
+                                                enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
+                                                syncQueueViewModel = syncQueueViewModel,
                                             )
                                         }
                                     }
@@ -668,6 +702,9 @@ fun App(
                                                 eReportingRepository = eReportingRepository,
                                                 onOpenEReporting = onOpenEReporting,
                                                 subscriptionRepository = subscriptionRepository,
+                                                networkState = networkSimulationState,
+                                                enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
+                                                syncQueueViewModel = syncQueueViewModel,
                                             )
                                         }
                                     }
@@ -688,6 +725,8 @@ fun App(
                                             onOpenCommandPalette = onOpenCommandPalette,
                                             onOpenIntegrations = onOpenIntegrations,
                                             onOpenExportModal = onOpenExportModal,
+                                            networkState = networkSimulationState,
+                                            onToggleNetwork = onToggleNetworkSimulation,
                                         )
                                     },
                                     bottomBar = {
@@ -731,6 +770,9 @@ fun App(
                                             eReportingRepository = eReportingRepository,
                                             onOpenEReporting = onOpenEReporting,
                                             subscriptionRepository = subscriptionRepository,
+                                            networkState = networkSimulationState,
+                                            enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
+                                            syncQueueViewModel = syncQueueViewModel,
                                         )
                                     }
                                 }
@@ -892,6 +934,8 @@ private fun LedgerHeader(
     onOpenCommandPalette: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onOpenExportModal: () -> Unit,
+    networkState: DegradedModeNetworkState = DegradedModeNetworkState.OPERATIONAL,
+    onToggleNetwork: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -923,10 +967,7 @@ private fun LedgerHeader(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Cinq commandes sur la largeur d'un telephone : TOUTES reduites a leur glyphe, y
-            // compris la palette. Son badge « ⌘K » n'apprend un raccourci qu'a qui peut brancher
-            // un clavier — c'est-a-dire sur la sidebar tablette, qui la garde en toutes lettres.
-            // Le selecteur de langue doit rester visible : c'est ce que verifient les niveaux 3.
+            NetworkSimulationSelector(networkState = networkState, onToggle = onToggleNetwork, compact = true)
             ExportModalTrigger(onClick = onOpenExportModal, compact = true)
             IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
             CommandPaletteTrigger(onClick = onOpenCommandPalette, compact = true)
@@ -970,6 +1011,9 @@ private fun ShellContent(
     eReportingRepository: SqlDelightEReportingRepository,
     onOpenEReporting: () -> Unit,
     subscriptionRepository: SubscriptionRepository,
+    networkState: DegradedModeNetworkState = DegradedModeNetworkState.OPERATIONAL,
+    enqueueDegradedInvoiceUseCase: EnqueueDegradedInvoiceUseCase? = null,
+    syncQueueViewModel: SyncQueueViewModel? = null,
 ) {
     when (overlay) {
         is Overlay.Paywall -> {
@@ -1007,7 +1051,7 @@ private fun ShellContent(
         }
 
         Overlay.CreateInvoice -> {
-            val formViewModel = remember(taxSettings) {
+            val formViewModel = remember(taxSettings, networkState) {
                 InvoiceFormViewModel(
                     submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
                     issuer = taxSettings.issuerParty,
@@ -1015,6 +1059,8 @@ private fun ShellContent(
                     // Annuaire du sélecteur client (US-11) — même dépôt que l'écran Clients,
                     // donc une fiche créée à la volée y apparaît immédiatement.
                     clientRepository = clientRepository,
+                    enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
+                    initialNetworkState = networkState,
                 )
             }
             DisposableEffect(Unit) { onDispose { formViewModel.onCleared() } }
@@ -1051,13 +1097,15 @@ private fun ShellContent(
         }
 
         is Overlay.CreateInvoiceFromQuote -> {
-            val formViewModel = remember(overlay.quote.number, taxSettings) {
+            val formViewModel = remember(overlay.quote.number, taxSettings, networkState) {
                 InvoiceFormViewModel(
                     submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
                     issuer = taxSettings.issuerParty,
                     defaultVatRate = taxSettings.defaultVatRate,
                     clientRepository = clientRepository,
                     sourceQuote = overlay.quote,
+                    enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
+                    initialNetworkState = networkState,
                 )
             }
             DisposableEffect(overlay.quote.number) { onDispose { formViewModel.onCleared() } }
@@ -1126,6 +1174,7 @@ private fun ShellContent(
             changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
             onExportInvoiceXml = onExportInvoiceXml,
             onExportCreditNoteXml = onExportCreditNoteXml,
+            syncQueueViewModel = syncQueueViewModel,
         )
     }
 }
@@ -1155,6 +1204,7 @@ private fun TabsContent(
     changeInvoiceStatusUseCase: ChangeInvoiceStatusUseCase,
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
+    syncQueueViewModel: SyncQueueViewModel? = null,
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -1185,6 +1235,7 @@ private fun TabsContent(
                 changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
                 onExportInvoiceXml = onExportInvoiceXml,
                 onExportCreditNoteXml = onExportCreditNoteXml,
+                syncQueueViewModel = syncQueueViewModel,
             )
         }
 
@@ -1254,6 +1305,8 @@ private fun LedgerSidebar(
     onOpenCommandPalette: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onOpenExportModal: () -> Unit,
+    networkState: DegradedModeNetworkState = DegradedModeNetworkState.OPERATIONAL,
+    onToggleNetwork: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -1298,6 +1351,12 @@ private fun LedgerSidebar(
         // La sidebar a la place d'afficher le libelle en toutes lettres, contrairement a l'en-tete.
         ExportModalTrigger(
             onClick = onOpenExportModal,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+        NetworkSimulationSelector(
+            networkState = networkState,
+            onToggle = onToggleNetwork,
+            compact = false,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         )
         Destination.entries.forEach { entry ->

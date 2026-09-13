@@ -34,6 +34,11 @@ import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.presentation.i18n.tr
 import com.ledgerhub.presentation.invoices.components.InvoiceCard
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import com.ledgerhub.presentation.degraded.SyncBatchCard
+import com.ledgerhub.presentation.degraded.SyncQueueUiState
+import com.ledgerhub.presentation.degraded.SyncQueueViewModel
+
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
 object InvoiceListTags {
     const val SCREEN = "invoice_list_screen"
@@ -54,13 +59,21 @@ fun InvoiceListScreen(
     viewModel: InvoiceListViewModel,
     onInvoiceClick: (String) -> Unit,
     onCreateCreditNote: (Invoice) -> Unit = {},
+    syncQueueViewModel: SyncQueueViewModel? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val syncQueueState = syncQueueViewModel?.uiState?.collectAsState()?.value
     InvoiceListView(
         uiState = uiState,
         onIntent = viewModel::processIntent,
         onInvoiceClick = onInvoiceClick,
         onCreateCreditNote = onCreateCreditNote,
+        syncQueueUiState = syncQueueState,
+        onSyncBatch = {
+            syncQueueViewModel?.processBatch(onComplete = {
+                viewModel.processIntent(InvoiceListIntent.Load)
+            })
+        },
     )
 }
 
@@ -71,10 +84,13 @@ internal fun InvoiceListView(
     onInvoiceClick: (String) -> Unit,
     onCreateCreditNote: (Invoice) -> Unit = {},
     selectedInvoiceNumber: String? = null,
+    syncQueueUiState: SyncQueueUiState? = null,
+    onSyncBatch: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .semantics { testTag = InvoiceListTags.SCREEN }
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -84,6 +100,13 @@ internal fun InvoiceListView(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
+
+        if (syncQueueUiState != null) {
+            SyncBatchCard(
+                state = syncQueueUiState,
+                onSyncBatch = onSyncBatch,
+            )
+        }
 
         FilterRow(
             selected = uiState.statusFilter,

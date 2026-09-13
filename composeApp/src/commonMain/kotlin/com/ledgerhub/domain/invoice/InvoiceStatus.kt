@@ -41,7 +41,14 @@ enum class InvoiceStatus {
     REFUSED,
 
     /** Annulée par un avoir. État terminal. */
-    CANCELLED;
+    CANCELLED,
+
+    /**
+     * Émise en format de secours sous mode dégradé (US-29 / Continuité d'activité DGFiP 2026).
+     * En attente de régularisation électronique (télétransmission vers DEPOSITED) dès rétablissement
+     * de la connectivité avec le Portail Public de Facturation.
+     */
+    PENDING_REGULARIZATION;
 
     /** Aucun état n'est atteignable depuis un état terminal. */
     val isTerminal: Boolean get() = InvoiceStatusTransition.allowedFrom(this).isEmpty()

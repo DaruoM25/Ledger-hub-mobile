@@ -17,6 +17,7 @@ import com.ledgerhub.domain.invoice.InvoiceStatus
 enum class InvoiceStatusFilter(val label: String) {
     TOUTES("Toutes"),
     DRAFT("Brouillons"),
+    PENDING_REGULARIZATION("À régulariser"),
     DEPOSITED("Déposées"),
     APPROVED("Approuvées"),
     PAID("Encaissées"),
@@ -42,6 +43,7 @@ enum class InvoiceStatusFilter(val label: String) {
     fun matchesStatus(status: InvoiceStatus): Boolean = when (this) {
         TOUTES -> true
         DRAFT -> status == InvoiceStatus.DRAFT
+        PENDING_REGULARIZATION -> status == InvoiceStatus.PENDING_REGULARIZATION
         DEPOSITED -> status == InvoiceStatus.DEPOSITED
         APPROVED -> status == InvoiceStatus.APPROVED
         PAID -> status == InvoiceStatus.PAID

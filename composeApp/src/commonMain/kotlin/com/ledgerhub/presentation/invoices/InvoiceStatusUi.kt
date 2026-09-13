@@ -13,6 +13,7 @@ import com.ledgerhub.domain.invoice.InvoiceStatus
 /** Libellé français d'un statut. Conservé pour compat ; l'UI passe par [labelKey]. */
 fun InvoiceStatus.displayLabel(): String = when (this) {
     InvoiceStatus.DRAFT -> "Brouillon"
+    InvoiceStatus.PENDING_REGULARIZATION -> "À régulariser"
     InvoiceStatus.DEPOSITED -> "Déposée"
     InvoiceStatus.APPROVED -> "Approuvée par l'administration"
     InvoiceStatus.PAID -> "Encaissée"
@@ -24,6 +25,7 @@ fun InvoiceStatus.displayLabel(): String = when (this) {
 /** Clé de traduction du statut — résolue via `LocalAppLanguage` côté écran. */
 fun InvoiceStatus.labelKey(): StringKey = when (this) {
     InvoiceStatus.DRAFT -> StringKey.STATUS_DRAFT
+    InvoiceStatus.PENDING_REGULARIZATION -> StringKey.STATUS_PENDING_REGULARIZATION
     InvoiceStatus.DEPOSITED -> StringKey.STATUS_DEPOSITED
     InvoiceStatus.APPROVED -> StringKey.STATUS_APPROVED
     InvoiceStatus.PAID -> StringKey.STATUS_PAID
@@ -36,6 +38,7 @@ fun InvoiceStatus.labelKey(): StringKey = when (this) {
 fun InvoiceStatusFilter.labelKey(): StringKey = when (this) {
     InvoiceStatusFilter.TOUTES -> StringKey.FILTER_ALL
     InvoiceStatusFilter.DRAFT -> StringKey.FILTER_DRAFT
+    InvoiceStatusFilter.PENDING_REGULARIZATION -> StringKey.FILTER_PENDING_REGULARIZATION
     InvoiceStatusFilter.DEPOSITED -> StringKey.FILTER_DEPOSITED
     InvoiceStatusFilter.APPROVED -> StringKey.FILTER_APPROVED
     InvoiceStatusFilter.PAID -> StringKey.FILTER_PAID
@@ -53,6 +56,7 @@ fun InvoiceStatusFilter.labelKey(): StringKey = when (this) {
  */
 fun InvoiceStatus.tagColor(): Color = when (this) {
     InvoiceStatus.DRAFT -> Color(0xFF9E9E9E)
+    InvoiceStatus.PENDING_REGULARIZATION -> Color(0xFFD97706)
     InvoiceStatus.DEPOSITED -> Color(0xFF1565C0)
     InvoiceStatus.APPROVED -> Color(0xFF00A86B)
     InvoiceStatus.PAID -> Color(0xFF4CAF50)
@@ -68,6 +72,7 @@ fun InvoiceStatus.tagColor(): Color = when (this) {
  */
 fun InvoiceStatus.containerColor(): Color = when (this) {
     InvoiceStatus.DRAFT -> Color(0xFFF0F0F0)
+    InvoiceStatus.PENDING_REGULARIZATION -> Color(0xFFFEF3C7)
     InvoiceStatus.DEPOSITED -> Color(0xFFE3F0FC)
     InvoiceStatus.APPROVED -> Color(0xFFE0F5EC)
     InvoiceStatus.PAID -> Color(0xFFE8F5E9)
@@ -79,6 +84,7 @@ fun InvoiceStatus.containerColor(): Color = when (this) {
 /** Couleur du libellé sur [containerColor] — assombrie pour tenir le contraste AA en texte petit. */
 fun InvoiceStatus.onContainerColor(): Color = when (this) {
     InvoiceStatus.DRAFT -> Color(0xFF424242)
+    InvoiceStatus.PENDING_REGULARIZATION -> Color(0xFF92400E)
     InvoiceStatus.DEPOSITED -> Color(0xFF0D47A1)
     InvoiceStatus.APPROVED -> Color(0xFF00674B)
     InvoiceStatus.PAID -> Color(0xFF1B5E20)
@@ -93,6 +99,7 @@ fun InvoiceStatus.onContainerColor(): Color = when (this) {
  * complet reste par ailleurs exposé en `contentDescription`.
  */
 fun InvoiceStatus.glyph(): String? = when (this) {
+    InvoiceStatus.PENDING_REGULARIZATION -> "⏳"
     InvoiceStatus.REJECTED, InvoiceStatus.REFUSED -> "⚠"
     else -> null
 }

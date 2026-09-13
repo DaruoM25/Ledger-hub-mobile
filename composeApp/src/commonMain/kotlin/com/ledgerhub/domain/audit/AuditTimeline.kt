@@ -133,7 +133,7 @@ fun buildAuditTimeline(
  * plus — elle attend encore le retour du portail.
  */
 private fun InvoiceStatus.isReported(): Boolean = when (this) {
-    InvoiceStatus.DRAFT, InvoiceStatus.DEPOSITED -> false
+    InvoiceStatus.DRAFT, InvoiceStatus.PENDING_REGULARIZATION, InvoiceStatus.DEPOSITED -> false
     InvoiceStatus.APPROVED, InvoiceStatus.PAID,
     InvoiceStatus.REJECTED, InvoiceStatus.REFUSED,
     InvoiceStatus.CANCELLED,
@@ -147,5 +147,5 @@ private fun InvoiceStatus.reportedState(): AuditMilestoneState = when (this) {
     InvoiceStatus.REJECTED, InvoiceStatus.REFUSED -> AuditMilestoneState.REJECTED
     // L'annulation par avoir est un aboutissement comptable, pas un incident.
     InvoiceStatus.APPROVED, InvoiceStatus.PAID, InvoiceStatus.CANCELLED -> AuditMilestoneState.DONE
-    InvoiceStatus.DRAFT, InvoiceStatus.DEPOSITED -> AuditMilestoneState.PENDING
+    InvoiceStatus.DRAFT, InvoiceStatus.PENDING_REGULARIZATION, InvoiceStatus.DEPOSITED -> AuditMilestoneState.PENDING
 }
