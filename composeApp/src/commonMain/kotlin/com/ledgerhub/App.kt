@@ -163,6 +163,14 @@ import com.ledgerhub.domain.degraded.EnqueueDegradedInvoiceUseCase
 import com.ledgerhub.domain.degraded.ProcessSyncQueueBatchUseCase
 import com.ledgerhub.presentation.degraded.NetworkSimulationSelector
 import com.ledgerhub.presentation.degraded.SyncQueueViewModel
+import com.ledgerhub.data.support.SqlDelightFeatureFeedbackRepository
+import com.ledgerhub.data.support.SqlDelightSupportRepository
+import com.ledgerhub.domain.support.CreateSupportTicketUseCase
+import com.ledgerhub.domain.support.GetFeatureRequestsUseCase
+import com.ledgerhub.domain.support.SubmitFeatureRequestUseCase
+import com.ledgerhub.domain.support.VoteFeatureRequestUseCase
+import com.ledgerhub.presentation.support.SupportFeedbackScreen
+import com.ledgerhub.presentation.support.SupportFeedbackViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -220,6 +228,9 @@ private sealed interface Overlay {
 
     /** Écran Paywall & Monétisation (Sprint 2 — RevenueCat & Quotas). */
     data class Paywall(val reason: PremiumFeature? = null) : Overlay
+
+    /** Support & Feedback Loop (US-30). */
+    data object SupportFeedback : Overlay
 }
 
 /**
@@ -350,6 +361,28 @@ fun App(
         }
     }
 
+    // Support & Feedback Loop (US-30)
+    val supportRepository = remember(database) { SqlDelightSupportRepository(database) }
+    val featureFeedbackRepository = remember(database) { SqlDelightFeatureFeedbackRepository(database) }
+    val createSupportTicketUseCase = remember(supportRepository) { CreateSupportTicketUseCase(supportRepository) }
+    val getFeatureRequestsUseCase = remember(featureFeedbackRepository) { GetFeatureRequestsUseCase(featureFeedbackRepository) }
+    val submitFeatureRequestUseCase = remember(featureFeedbackRepository) { SubmitFeatureRequestUseCase(featureFeedbackRepository) }
+    val voteFeatureRequestUseCase = remember(featureFeedbackRepository) { VoteFeatureRequestUseCase(featureFeedbackRepository) }
+    val supportFeedbackViewModel = remember(supportRepository, featureFeedbackRepository) {
+        SupportFeedbackViewModel(
+            supportRepository = supportRepository,
+            createSupportTicketUseCase = createSupportTicketUseCase,
+            getFeatureRequestsUseCase = getFeatureRequestsUseCase,
+            submitFeatureRequestUseCase = submitFeatureRequestUseCase,
+            voteFeatureRequestUseCase = voteFeatureRequestUseCase,
+            currentUserId = CURRENT_USER_EMAIL_PLACEHOLDER,
+            currentUserEmail = CURRENT_USER_EMAIL_PLACEHOLDER,
+        )
+    }
+    DisposableEffect(supportFeedbackViewModel) {
+        onDispose { supportFeedbackViewModel.onCleared() }
+    }
+
     // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
     // encore vide au tout premier lancement. On relance explicitement la lecture s'il a semé —
     // sans quoi le tableau de bord et la liste restent à zéro jusqu'au redémarrage suivant.
@@ -379,6 +412,7 @@ fun App(
         }
     }
     var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
+    val onOpenSupportFeedback = { overlay = Overlay.SupportFeedback }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
     var language by remember { mutableStateOf(AppLanguage.FR) }
 
@@ -921,6 +955,48 @@ private fun EReportingAction(onClick: () -> Unit) {
 internal const val EREPORTING_TRIGGER_TAG = "ereporting_trigger"
 
 /**
+ * Point d'entrée de l'Aide & Boîte à Idées (US-30).
+ */
+@Composable
+private fun SupportFeedbackAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = SUPPORT_FEEDBACK_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("💡", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_SUPPORT_FEEDBACK),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(StringKey.SUPPORT_TRIGGER_SUBTITLE),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur Support & Idées (US-30). */
+internal const val SUPPORT_FEEDBACK_TRIGGER_TAG = "support_feedback_trigger"
+
+/**
  * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
  * l'US-02, côté mobile ; la bascule clair/sombre s'y ajoute en US-25).
  */
@@ -1014,8 +1090,17 @@ private fun ShellContent(
     networkState: DegradedModeNetworkState = DegradedModeNetworkState.OPERATIONAL,
     enqueueDegradedInvoiceUseCase: EnqueueDegradedInvoiceUseCase? = null,
     syncQueueViewModel: SyncQueueViewModel? = null,
+    supportFeedbackViewModel: SupportFeedbackViewModel? = null,
+    onOpenSupportFeedback: () -> Unit = {},
 ) {
     when (overlay) {
+        Overlay.SupportFeedback -> {
+            if (supportFeedbackViewModel != null) {
+                OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
+                    SupportFeedbackScreen(viewModel = supportFeedbackViewModel)
+                }
+            }
+        }
         is Overlay.Paywall -> {
             val paywallViewModel = remember(overlay.reason, subscriptionRepository) {
                 PaywallViewModel(
@@ -1175,6 +1260,7 @@ private fun ShellContent(
             onExportInvoiceXml = onExportInvoiceXml,
             onExportCreditNoteXml = onExportCreditNoteXml,
             syncQueueViewModel = syncQueueViewModel,
+            onOpenSupportFeedback = onOpenSupportFeedback,
         )
     }
 }
@@ -1205,6 +1291,7 @@ private fun TabsContent(
     onExportInvoiceXml: (Invoice) -> Unit,
     onExportCreditNoteXml: (String) -> Unit,
     syncQueueViewModel: SyncQueueViewModel? = null,
+    onOpenSupportFeedback: () -> Unit = {},
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -1246,6 +1333,7 @@ private fun TabsContent(
         // paramètres fiscaux, là où l'on règle déjà la conformité (US-26).
         Destination.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
             EReportingAction(onOpenEReporting)
+            SupportFeedbackAction(onOpenSupportFeedback)
             TaxSettingsScreen(viewModel = taxSettingsViewModel)
         }
     }

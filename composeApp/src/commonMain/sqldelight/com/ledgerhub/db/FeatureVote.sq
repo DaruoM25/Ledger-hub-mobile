@@ -1,0 +1,25 @@
+CREATE TABLE FeatureVote (
+    userId TEXT NOT NULL,
+    featureRequestId TEXT NOT NULL,
+    votedAt TEXT NOT NULL,
+    PRIMARY KEY (userId, featureRequestId),
+    FOREIGN KEY (featureRequestId) REFERENCES FeatureRequest(id) ON DELETE CASCADE
+);
+
+CREATE INDEX FeatureVote_user ON FeatureVote(userId);
+
+selectVote:
+SELECT * FROM FeatureVote WHERE userId = :userId AND featureRequestId = :featureRequestId;
+
+selectVotesByUser:
+SELECT * FROM FeatureVote WHERE userId = :userId;
+
+insertVote:
+INSERT INTO FeatureVote(userId, featureRequestId, votedAt)
+VALUES (?, ?, ?);
+
+deleteVote:
+DELETE FROM FeatureVote WHERE userId = :userId AND featureRequestId = :featureRequestId;
+
+countVotesByFeature:
+SELECT COUNT(*) FROM FeatureVote WHERE featureRequestId = :featureRequestId;

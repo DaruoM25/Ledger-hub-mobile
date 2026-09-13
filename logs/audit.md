@@ -3034,4 +3034,81 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **Correctif** | Ajout de l'intention `DueDateChanged("2026-10-12")` dans la préparation du formulaire. |
 | **Validation** | Suite de tests 100% verte (1199 tests passés) et test N3b validé sur Samsung Galaxy S23+. |
 
+---
+
+## Sprint 14 — US-30 : Support & Feedback Loop (Assistance Réglementaire 2026 & Boîte à Idées)
+
+- **Date :** 2026-09-13
+- **Branche :** `feature/US-30-support-feedback-loop`
+- **Statut :** ✅ Clos — 1218/1218 tests unitaires & Robolectric verts, compilation APK validée (`testDebugUnitTest` + `assembleDebug`)
+- **Objectif :** Dispositif d'assistance et de boucle de retour utilisateur : socle SQLDelight v14 (`SupportTicket`, `FeatureRequest`, `FeatureVote`), déduplication stricte des votes avec clé primaire composite `PRIMARY KEY(userId, featureRequestId)`, levée de `AlreadyVotedException`, gestion réactive MVI avec Optimistic Update et rollback automatique, et écran Compose Multiplatform M3 Dark Theme à onglets ("Aide Réglementaire 2026" / "Boîte à idées").
+
+### 1. Décisions d'Architecture & Choix Techniques
+1. **Migration SQLDelight `13.sqm` & Tables Dédiées** :
+   - Migration SQLite v13 -> v14 créant `SupportTicket`, `FeatureRequest` et `FeatureVote`.
+   - Indexation de performance sur `FeatureRequest_votes(voteCount DESC, createdAt DESC)` et contrainte d'intégrité référentielle en cascade sur les votes.
+   - Requêtes dédiées dans `SupportTicket.sq`, `FeatureRequest.sq` et `FeatureVote.sq`.
+   - Validation automatisée des migrations via `SchemaMigrationVerificationTest` et instantané `14.db`.
+2. **Couche Métier & Déduplication** :
+   - Modèles de domaine : `SupportTicket`, `SupportCategory` (Mentions obligatoires, Factur-X, e-Reporting, TVA, etc.), `FeatureRequest`, `FeatureCategory`, `FeatureVote`.
+   - Use-cases : `CreateSupportTicketUseCase` (contrôle de validité des champs et conformité réglementaire), `VoteFeatureRequestUseCase` (vérification de vote préalable et levée de `AlreadyVotedException`), `GetFeatureRequestsUseCase`, `SubmitFeatureRequestUseCase`.
+3. **MVI & Optimistic Update** :
+   - `SupportFeedbackViewModel` incrémente instantanément le compteur de votes dans le `StateFlow` et applique un rollback avec message d'erreur si la persistance rejette la transaction ou signale un vote dupliqué.
+4. **UI Compose Multiplatform M3 Dark Theme** :
+   - Écran `SupportFeedbackScreen` avec `PrimaryTabRow` sombre.
+   - Intégration de l'entrée "Support & Idées" dans les paramètres et les raccourcis de navigation globale (`App.kt`).
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/13.sqm` | **[NEW]** Migration SQLite v13 -> v14 (`SupportTicket`, `FeatureRequest`, `FeatureVote`). |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/SupportTicket.sq` | **[NEW]** Requêtes SQLDelight pour les tickets de support. |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/FeatureRequest.sq` | **[NEW]** Requêtes SQLDelight pour la boîte à idées. |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/FeatureVote.sq` | **[NEW]** Requêtes SQLDelight pour les votes et la déduplication. |
+| `composeApp/src/commonMain/sqldelight/databases/14.db` | **[NEW]** Instantané de schéma v14. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/SupportTicket.kt` | **[NEW]** Entités et énumérations du support réglementaire. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/FeatureRequest.kt` | **[NEW]** Entités et énumérations de la boîte à idées. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/FeatureVote.kt` | **[NEW]** Modèle de traçabilité des votes. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/SupportExceptions.kt` | **[NEW]** Exceptions de domaine (`AlreadyVotedException`, etc.). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/SupportRepository.kt` | **[NEW]** Contrat de repository support. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/FeatureFeedbackRepository.kt` | **[NEW]** Contrat de repository boîte à idées. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/CreateSupportTicketUseCase.kt` | **[NEW]** Cas d'utilisation de création de ticket. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/VoteFeatureRequestUseCase.kt` | **[NEW]** Cas d'utilisation de vote avec déduplication. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/GetFeatureRequestsUseCase.kt` | **[NEW]** Cas d'utilisation de consultation des idées. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/support/SubmitFeatureRequestUseCase.kt` | **[NEW]** Cas d'utilisation de soumission d'idée. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/support/SqlDelightSupportRepository.kt` | **[NEW]** Implémentation SQLDelight de `SupportRepository`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/support/SqlDelightFeatureFeedbackRepository.kt` | **[NEW]** Implémentation SQLDelight de `FeatureFeedbackRepository`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | Ajout des clés i18n support, feedback et catégories 2026. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | Traductions complètes FR et EN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/support/SupportFeedbackTags.kt` | **[NEW]** Tags sémantiques de test. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/support/SupportFeedbackUiState.kt` | **[NEW]** États et intentions MVI. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/support/SupportFeedbackViewModel.kt` | **[NEW]** ViewModel avec optimistic update et rollback. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/support/SupportFeedbackScreen.kt` | **[NEW]** Écran M3 Dark Theme à onglets. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Intégration de l'overlay et du déclencheur Support & Idées. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/support/CreateSupportTicketUseCaseTest.kt` | **[NEW]** Tests unitaires N1 création de ticket. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/support/VoteFeatureRequestUseCaseTest.kt` | **[NEW]** Tests unitaires N1 vote et déduplication. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/support/SupportFeedbackViewModelTest.kt` | **[NEW]** Tests unitaires N2 ViewModel et optimistic update. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/data/support/SqlDelightSupportRepositoryTest.kt` | **[NEW]** Tests unitaires persistance support SQLDelight. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/data/support/SqlDelightFeatureFeedbackRepositoryTest.kt` | **[NEW]** Tests unitaires persistance feedback SQLDelight. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/support/SupportFeedbackRobolectricTest.kt` | **[NEW]** Tests Robolectric N3a UI. |
+| `composeApp/src/androidInstrumentedTest/kotlin/com/ledgerhub/presentation/support/Us30SupportFeedbackN3bInstrumentedTest.kt` | **[NEW]** Test instrumenté N3b pour qualification sur terminal physique Android. |
+
+### 3. Matrice de Qualification Pyramide QA
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests Domaine & Repositories (`CreateSupportTicketUseCaseTest`, `VoteFeatureRequestUseCaseTest`, `SqlDelightSupportRepositoryTest`, `SqlDelightFeatureFeedbackRepositoryTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*Support*"` | **PASS (100% vert)** |
+| **N2** | Tests ViewModels (`SupportFeedbackViewModelTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*SupportFeedbackViewModelTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests Robolectric UI (`SupportFeedbackRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*SupportFeedbackRobolectricTest*"` | **PASS (100% vert)** |
+| **N3b** | Test Instrumenté Device Samsung S23+ (`Us30SupportFeedbackN3bInstrumentedTest`) | `./gradlew :composeApp:connectedDebugAndroidTest` | **PASS (100% vert, capture `screenshots/us-30/01_n3b_support_feedback.png`)** |
+| **Global** | Suite complète de non-régression (1218 tests unitaires & Robolectric) + compilation APK | `./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --console=plain` | **PASS (100% vert, BUILD SUCCESSFUL)** |
+
+### 4. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | Décompte dupliqué de tickets lors de l'assertion Robolectric (`AssertionError: expected:<1> but was:<2>`). |
+| **Cause racine** | Partage d'instance de liste mutable dans le fake de test combiné à l'ajout optimiste dans le ViewModel sans déduplication par identifiant. |
+| **Correctif** | Ajout d'une copie défensive `.toList()` dans le fake et sécurisation avec `.distinctBy { it.id }` dans `SupportFeedbackViewModel`. |
+| **Validation** | 1218/1218 tests unitaires & Robolectric passés et test instrumenté N3b validé sur Samsung Galaxy S23+. |
+
+
 

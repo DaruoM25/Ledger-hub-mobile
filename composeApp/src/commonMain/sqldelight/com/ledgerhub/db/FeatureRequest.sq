@@ -1,0 +1,39 @@
+CREATE TABLE FeatureRequest (
+    id TEXT NOT NULL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    authorId TEXT NOT NULL,
+    authorEmail TEXT NOT NULL,
+    voteCount INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'PROPOSED',
+    createdAt TEXT NOT NULL
+);
+
+CREATE INDEX FeatureRequest_votes ON FeatureRequest(voteCount DESC, createdAt DESC);
+CREATE INDEX FeatureRequest_category ON FeatureRequest(category);
+
+selectAllByPopularity:
+SELECT * FROM FeatureRequest ORDER BY voteCount DESC, createdAt DESC;
+
+selectById:
+SELECT * FROM FeatureRequest WHERE id = :id;
+
+selectByCategory:
+SELECT * FROM FeatureRequest WHERE category = :category ORDER BY voteCount DESC, createdAt DESC;
+
+insertOrReplace:
+INSERT OR REPLACE INTO FeatureRequest(id, title, description, category, authorId, authorEmail, voteCount, status, createdAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+incrementVoteCount:
+UPDATE FeatureRequest SET voteCount = voteCount + 1 WHERE id = :id;
+
+decrementVoteCount:
+UPDATE FeatureRequest SET voteCount = voteCount - 1 WHERE id = :id;
+
+updateStatus:
+UPDATE FeatureRequest SET status = :status WHERE id = :id;
+
+deleteById:
+DELETE FROM FeatureRequest WHERE id = :id;

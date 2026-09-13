@@ -1,0 +1,41 @@
+-- Migration 13 -> 14 — US-30 : Support & Feedback Loop (Aide Réglementaire 2026 & Boîte à Idées)
+
+CREATE TABLE SupportTicket (
+    id TEXT NOT NULL PRIMARY KEY,
+    userId TEXT NOT NULL,
+    userEmail TEXT NOT NULL,
+    category TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT
+);
+
+CREATE INDEX SupportTicket_user ON SupportTicket(userId, createdAt);
+CREATE INDEX SupportTicket_status ON SupportTicket(status, createdAt);
+
+CREATE TABLE FeatureRequest (
+    id TEXT NOT NULL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    authorId TEXT NOT NULL,
+    authorEmail TEXT NOT NULL,
+    voteCount INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'PROPOSED',
+    createdAt TEXT NOT NULL
+);
+
+CREATE INDEX FeatureRequest_votes ON FeatureRequest(voteCount DESC, createdAt DESC);
+CREATE INDEX FeatureRequest_category ON FeatureRequest(category);
+
+CREATE TABLE FeatureVote (
+    userId TEXT NOT NULL,
+    featureRequestId TEXT NOT NULL,
+    votedAt TEXT NOT NULL,
+    PRIMARY KEY (userId, featureRequestId),
+    FOREIGN KEY (featureRequestId) REFERENCES FeatureRequest(id) ON DELETE CASCADE
+);
+
+CREATE INDEX FeatureVote_user ON FeatureVote(userId);

@@ -1,0 +1,36 @@
+CREATE TABLE SupportTicket (
+    id TEXT NOT NULL PRIMARY KEY,
+    userId TEXT NOT NULL,
+    userEmail TEXT NOT NULL,
+    category TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT
+);
+
+CREATE INDEX SupportTicket_user ON SupportTicket(userId, createdAt);
+CREATE INDEX SupportTicket_status ON SupportTicket(status, createdAt);
+
+selectAll:
+SELECT * FROM SupportTicket ORDER BY createdAt DESC;
+
+selectByUser:
+SELECT * FROM SupportTicket WHERE userId = :userId ORDER BY createdAt DESC;
+
+selectById:
+SELECT * FROM SupportTicket WHERE id = :id;
+
+insertOrReplace:
+INSERT OR REPLACE INTO SupportTicket(id, userId, userEmail, category, subject, description, status, createdAt, updatedAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateStatus:
+UPDATE SupportTicket SET status = :status, updatedAt = :updatedAt WHERE id = :id;
+
+countOpenByUser:
+SELECT COUNT(*) FROM SupportTicket WHERE userId = :userId AND status != 'RESOLVED' AND status != 'CLOSED';
+
+deleteById:
+DELETE FROM SupportTicket WHERE id = :id;
