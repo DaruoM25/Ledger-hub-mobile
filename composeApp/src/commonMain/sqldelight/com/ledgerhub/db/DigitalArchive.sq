@@ -1,0 +1,33 @@
+CREATE TABLE DigitalArchive (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceNumber TEXT NOT NULL UNIQUE,
+    documentType TEXT NOT NULL DEFAULT 'INVOICE_FACTURX',
+    payloadHash TEXT NOT NULL,
+    archiveSize INTEGER NOT NULL,
+    sealedAt TEXT NOT NULL,
+    sealedBy TEXT NOT NULL DEFAULT 'SYSTEM',
+    status TEXT NOT NULL DEFAULT 'SEALED',
+    FOREIGN KEY (invoiceNumber) REFERENCES Invoice(number) ON DELETE CASCADE
+);
+
+CREATE INDEX DigitalArchive_sealedAt ON DigitalArchive(sealedAt DESC);
+
+insertOrReplace:
+INSERT OR REPLACE INTO DigitalArchive(id, invoiceNumber, documentType, payloadHash, archiveSize, sealedAt, sealedBy, status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAll:
+SELECT * FROM DigitalArchive
+ORDER BY sealedAt DESC;
+
+selectByInvoiceNumber:
+SELECT * FROM DigitalArchive
+WHERE invoiceNumber = ?;
+
+countSealedDocuments:
+SELECT COUNT(*) FROM DigitalArchive
+WHERE status = 'SEALED';
+
+deleteByInvoiceNumber:
+DELETE FROM DigitalArchive
+WHERE invoiceNumber = ?;

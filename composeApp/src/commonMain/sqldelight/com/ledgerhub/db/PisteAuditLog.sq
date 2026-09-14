@@ -1,0 +1,33 @@
+CREATE TABLE PisteAuditLog (
+    id TEXT NOT NULL PRIMARY KEY,
+    invoiceNumber TEXT,
+    action TEXT NOT NULL,
+    details TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    previousChecksum TEXT,
+    checksum TEXT NOT NULL
+);
+
+CREATE INDEX PisteAuditLog_timestamp ON PisteAuditLog(timestamp ASC);
+CREATE INDEX PisteAuditLog_invoice ON PisteAuditLog(invoiceNumber);
+
+insert:
+INSERT INTO PisteAuditLog(id, invoiceNumber, action, details, timestamp, previousChecksum, checksum)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+selectAllChronological:
+SELECT * FROM PisteAuditLog
+ORDER BY timestamp ASC, id ASC;
+
+selectLatestEntry:
+SELECT * FROM PisteAuditLog
+ORDER BY timestamp DESC, id DESC
+LIMIT 1;
+
+selectByInvoiceNumber:
+SELECT * FROM PisteAuditLog
+WHERE invoiceNumber = ?
+ORDER BY timestamp ASC, id ASC;
+
+countEntries:
+SELECT COUNT(*) FROM PisteAuditLog;

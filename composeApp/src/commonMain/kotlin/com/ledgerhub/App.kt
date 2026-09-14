@@ -174,6 +174,11 @@ import com.ledgerhub.presentation.support.SupportFeedbackViewModel
 import com.ledgerhub.domain.vat.CalculateVatMetricsUseCase
 import com.ledgerhub.presentation.vat.VatDashboardScreen
 import com.ledgerhub.presentation.vat.VatDashboardViewModel
+import com.ledgerhub.data.vault.SqlDelightVaultRepository
+import com.ledgerhub.domain.vault.GenerateInvoiceSealUseCase
+import com.ledgerhub.domain.vault.VerifyVaultIntegrityUseCase
+import com.ledgerhub.presentation.vault.VaultArchiveScreen
+import com.ledgerhub.presentation.vault.VaultArchiveViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -237,6 +242,9 @@ private sealed interface Overlay {
 
     /** Module Analytique TVA & Déclaration 3310-CA3 (US-31). */
     data object VatDashboard : Overlay
+
+    /** Coffre-fort Numérique & Piste d'Audit Fiable (US-32). */
+    data object VaultArchive : Overlay
 }
 
 /**
@@ -370,6 +378,7 @@ fun App(
     // Support & Feedback Loop (US-30)
     val supportRepository = remember(database) { SqlDelightSupportRepository(database) }
     val featureFeedbackRepository = remember(database) { SqlDelightFeatureFeedbackRepository(database) }
+    val vaultRepository = remember(database) { SqlDelightVaultRepository(database) }
     val createSupportTicketUseCase = remember(supportRepository) { CreateSupportTicketUseCase(supportRepository) }
     val getFeatureRequestsUseCase = remember(featureFeedbackRepository) { GetFeatureRequestsUseCase(featureFeedbackRepository) }
     val submitFeatureRequestUseCase = remember(featureFeedbackRepository) { SubmitFeatureRequestUseCase(featureFeedbackRepository) }
@@ -420,6 +429,7 @@ fun App(
     var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
     val onOpenSupportFeedback = { overlay = Overlay.SupportFeedback }
     val onOpenVatDashboard = { overlay = Overlay.VatDashboard }
+    val onOpenVaultArchive = { overlay = Overlay.VaultArchive }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
     var language by remember { mutableStateOf(AppLanguage.FR) }
 
@@ -683,8 +693,11 @@ fun App(
                                                 networkState = networkSimulationState,
                                                 enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                                                 syncQueueViewModel = syncQueueViewModel,
+                                                supportFeedbackViewModel = supportFeedbackViewModel,
+                                                vaultRepository = vaultRepository,
                                                 onOpenSupportFeedback = onOpenSupportFeedback,
                                                 onOpenVatDashboard = onOpenVatDashboard,
+                                                onOpenVaultArchive = onOpenVaultArchive,
                                             )
                                         }
                                     }
@@ -748,8 +761,11 @@ fun App(
                                                 networkState = networkSimulationState,
                                                 enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                                                 syncQueueViewModel = syncQueueViewModel,
+                                                supportFeedbackViewModel = supportFeedbackViewModel,
+                                                vaultRepository = vaultRepository,
                                                 onOpenSupportFeedback = onOpenSupportFeedback,
                                                 onOpenVatDashboard = onOpenVatDashboard,
+                                                onOpenVaultArchive = onOpenVaultArchive,
                                             )
                                         }
                                     }
@@ -818,8 +834,11 @@ fun App(
                                             networkState = networkSimulationState,
                                             enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                                             syncQueueViewModel = syncQueueViewModel,
+                                            supportFeedbackViewModel = supportFeedbackViewModel,
+                                            vaultRepository = vaultRepository,
                                             onOpenSupportFeedback = onOpenSupportFeedback,
                                             onOpenVatDashboard = onOpenVatDashboard,
+                                            onOpenVaultArchive = onOpenVaultArchive,
                                         )
                                     }
                                 }
@@ -1052,6 +1071,48 @@ private fun VatDashboardAction(onClick: () -> Unit) {
 internal const val VAT_DASHBOARD_TRIGGER_TAG = "vat_dashboard_trigger"
 
 /**
+ * Point d'entrée du Coffre-fort Numérique & Audit (US-32).
+ */
+@Composable
+private fun VaultArchiveAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = VAULT_ARCHIVE_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🔒", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_DIGITAL_VAULT),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(StringKey.VAULT_TRIGGER_SUBTITLE),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur Coffre-fort Numérique (US-32). */
+internal const val VAULT_ARCHIVE_TRIGGER_TAG = "vault_archive_trigger"
+
+/**
  * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
  * l'US-02, côté mobile ; la bascule clair/sombre s'y ajoute en US-25).
  */
@@ -1146,10 +1207,37 @@ private fun ShellContent(
     enqueueDegradedInvoiceUseCase: EnqueueDegradedInvoiceUseCase? = null,
     syncQueueViewModel: SyncQueueViewModel? = null,
     supportFeedbackViewModel: SupportFeedbackViewModel? = null,
+    vaultRepository: SqlDelightVaultRepository? = null,
     onOpenSupportFeedback: () -> Unit = {},
     onOpenVatDashboard: () -> Unit = {},
+    onOpenVaultArchive: () -> Unit = {},
 ) {
     when (overlay) {
+        Overlay.VaultArchive -> {
+            if (vaultRepository != null) {
+                val generateInvoiceSealUseCase = remember(vaultRepository, invoiceRepository) {
+                    GenerateInvoiceSealUseCase(vaultRepository, invoiceRepository)
+                }
+                val verifyVaultIntegrityUseCase = remember(vaultRepository, invoiceRepository) {
+                    VerifyVaultIntegrityUseCase(vaultRepository, invoiceRepository)
+                }
+                val vaultArchiveViewModel = remember(vaultRepository, generateInvoiceSealUseCase, verifyVaultIntegrityUseCase, invoiceRepository) {
+                    VaultArchiveViewModel(
+                        vaultRepository = vaultRepository,
+                        generateInvoiceSealUseCase = generateInvoiceSealUseCase,
+                        verifyVaultIntegrityUseCase = verifyVaultIntegrityUseCase,
+                        invoiceRepository = invoiceRepository,
+                    )
+                }
+                DisposableEffect(vaultArchiveViewModel) {
+                    onDispose { vaultArchiveViewModel.onCleared() }
+                }
+                VaultArchiveScreen(
+                    viewModel = vaultArchiveViewModel,
+                    onBack = onBack,
+                )
+            }
+        }
         Overlay.SupportFeedback -> {
             if (supportFeedbackViewModel != null) {
                 OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
@@ -1332,6 +1420,7 @@ private fun ShellContent(
             syncQueueViewModel = syncQueueViewModel,
             onOpenSupportFeedback = onOpenSupportFeedback,
             onOpenVatDashboard = onOpenVatDashboard,
+            onOpenVaultArchive = onOpenVaultArchive,
         )
     }
 }
@@ -1364,6 +1453,7 @@ private fun TabsContent(
     syncQueueViewModel: SyncQueueViewModel? = null,
     onOpenSupportFeedback: () -> Unit = {},
     onOpenVatDashboard: () -> Unit = {},
+    onOpenVaultArchive: () -> Unit = {},
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -1404,6 +1494,7 @@ private fun TabsContent(
         // L'e-Reporting n'a pas d'onglet à lui : son point d'entrée vit ici, au-dessus des
         // paramètres fiscaux, là où l'on règle déjà la conformité (US-26).
         Destination.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+            VaultArchiveAction(onOpenVaultArchive)
             VatDashboardAction(onOpenVatDashboard)
             EReportingAction(onOpenEReporting)
             SupportFeedbackAction(onOpenSupportFeedback)
