@@ -171,6 +171,9 @@ import com.ledgerhub.domain.support.SubmitFeatureRequestUseCase
 import com.ledgerhub.domain.support.VoteFeatureRequestUseCase
 import com.ledgerhub.presentation.support.SupportFeedbackScreen
 import com.ledgerhub.presentation.support.SupportFeedbackViewModel
+import com.ledgerhub.domain.vat.CalculateVatMetricsUseCase
+import com.ledgerhub.presentation.vat.VatDashboardScreen
+import com.ledgerhub.presentation.vat.VatDashboardViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -231,6 +234,9 @@ private sealed interface Overlay {
 
     /** Support & Feedback Loop (US-30). */
     data object SupportFeedback : Overlay
+
+    /** Module Analytique TVA & Déclaration 3310-CA3 (US-31). */
+    data object VatDashboard : Overlay
 }
 
 /**
@@ -413,6 +419,7 @@ fun App(
     }
     var overlay by remember { mutableStateOf<Overlay>(Overlay.None) }
     val onOpenSupportFeedback = { overlay = Overlay.SupportFeedback }
+    val onOpenVatDashboard = { overlay = Overlay.VatDashboard }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
     var language by remember { mutableStateOf(AppLanguage.FR) }
 
@@ -676,6 +683,8 @@ fun App(
                                                 networkState = networkSimulationState,
                                                 enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                                                 syncQueueViewModel = syncQueueViewModel,
+                                                onOpenSupportFeedback = onOpenSupportFeedback,
+                                                onOpenVatDashboard = onOpenVatDashboard,
                                             )
                                         }
                                     }
@@ -739,6 +748,8 @@ fun App(
                                                 networkState = networkSimulationState,
                                                 enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                                                 syncQueueViewModel = syncQueueViewModel,
+                                                onOpenSupportFeedback = onOpenSupportFeedback,
+                                                onOpenVatDashboard = onOpenVatDashboard,
                                             )
                                         }
                                     }
@@ -807,6 +818,8 @@ fun App(
                                             networkState = networkSimulationState,
                                             enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                                             syncQueueViewModel = syncQueueViewModel,
+                                            onOpenSupportFeedback = onOpenSupportFeedback,
+                                            onOpenVatDashboard = onOpenVatDashboard,
                                         )
                                     }
                                 }
@@ -997,6 +1010,48 @@ private fun SupportFeedbackAction(onClick: () -> Unit) {
 internal const val SUPPORT_FEEDBACK_TRIGGER_TAG = "support_feedback_trigger"
 
 /**
+ * Point d'entrée du Pilotage TVA & CA3 (US-31).
+ */
+@Composable
+private fun VatDashboardAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = VAT_DASHBOARD_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("📊", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_VAT_DASHBOARD),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(StringKey.VAT_TRIGGER_SUBTITLE),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur TVA & CA3 (US-31). */
+internal const val VAT_DASHBOARD_TRIGGER_TAG = "vat_dashboard_trigger"
+
+/**
  * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
  * l'US-02, côté mobile ; la bascule clair/sombre s'y ajoute en US-25).
  */
@@ -1092,6 +1147,7 @@ private fun ShellContent(
     syncQueueViewModel: SyncQueueViewModel? = null,
     supportFeedbackViewModel: SupportFeedbackViewModel? = null,
     onOpenSupportFeedback: () -> Unit = {},
+    onOpenVatDashboard: () -> Unit = {},
 ) {
     when (overlay) {
         Overlay.SupportFeedback -> {
@@ -1099,6 +1155,20 @@ private fun ShellContent(
                 OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
                     SupportFeedbackScreen(viewModel = supportFeedbackViewModel)
                 }
+            }
+        }
+        Overlay.VatDashboard -> {
+            val calculateVatMetricsUseCase = remember(invoiceRepository, creditNoteRepository) {
+                CalculateVatMetricsUseCase(invoiceRepository, creditNoteRepository)
+            }
+            val vatDashboardViewModel = remember(calculateVatMetricsUseCase) {
+                VatDashboardViewModel(calculateVatMetricsUseCase)
+            }
+            DisposableEffect(vatDashboardViewModel) {
+                onDispose { vatDashboardViewModel.onCleared() }
+            }
+            OverlayScaffold(title = tr(StringKey.INTEGRATIONS_BACK), onBack = onBack) {
+                VatDashboardScreen(viewModel = vatDashboardViewModel)
             }
         }
         is Overlay.Paywall -> {
@@ -1261,6 +1331,7 @@ private fun ShellContent(
             onExportCreditNoteXml = onExportCreditNoteXml,
             syncQueueViewModel = syncQueueViewModel,
             onOpenSupportFeedback = onOpenSupportFeedback,
+            onOpenVatDashboard = onOpenVatDashboard,
         )
     }
 }
@@ -1292,6 +1363,7 @@ private fun TabsContent(
     onExportCreditNoteXml: (String) -> Unit,
     syncQueueViewModel: SyncQueueViewModel? = null,
     onOpenSupportFeedback: () -> Unit = {},
+    onOpenVatDashboard: () -> Unit = {},
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -1332,6 +1404,7 @@ private fun TabsContent(
         // L'e-Reporting n'a pas d'onglet à lui : son point d'entrée vit ici, au-dessus des
         // paramètres fiscaux, là où l'on règle déjà la conformité (US-26).
         Destination.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+            VatDashboardAction(onOpenVatDashboard)
             EReportingAction(onOpenEReporting)
             SupportFeedbackAction(onOpenSupportFeedback)
             TaxSettingsScreen(viewModel = taxSettingsViewModel)

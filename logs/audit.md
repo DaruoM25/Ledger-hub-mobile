@@ -3110,5 +3110,69 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **Correctif** | Ajout d'une copie défensive `.toList()` dans le fake et sécurisation avec `.distinctBy { it.id }` dans `SupportFeedbackViewModel`. |
 | **Validation** | 1218/1218 tests unitaires & Robolectric passés et test instrumenté N3b validé sur Samsung Galaxy S23+. |
 
+---
+
+## Sprint 2 — US-31 : Module Analytique TVA & Déclaration 3310-CA3
+- **Date :** 2026-09-14
+- **Statut :** ✅ Clos — suite complète verte (1227/1227 tests unitaires/Robolectric), compilation APK `assembleDebug` validée
+
+### 1. Synthèse des Réalisations & Architecture Fiscale 2026
+1. **Règles d'Exigibilité TVA 2026 & Calcul Arithmétique Entier** :
+   - Use-case central `CalculateVatMetricsUseCase` appliquant strictement les règles d'exigibilité fiscale 2026 :
+     * Prestations de services (`PRESTATION_SERVICES` ou `MIXTE`) : TVA en attente d'encaissement tant que `status != PAID`.
+     * Livraison de biens (`LIVRAISON_BIENS`) ou Option sur les débits (`optionTvaDebit == true`) : TVA exigible immédiatement dès le dépôt (`DEPOSITED`, `APPROVED`, etc.).
+     * Déduction directe des avoirs (`CreditNote`) sur l'assiette collectée.
+   - Calculs 100% en centimes entiers (`Long` via `Money`) avec arrondi légal *round half up* (`Money.vatFor(rateBasisPoints)`).
+2. **État Préparatoire Déclaration 3310-CA3** :
+   - Génération des 4 lignes officielles de la déclaration de TVA brute :
+     * Ligne 01 : Taux 20.0 % (2000 bps)
+     * Ligne 02 : Taux 10.0 % (1000 bps)
+     * Ligne 03 : Taux 5.5 % (550 bps)
+     * Ligne 04 : Taux 2.1 % (210 bps)
+   - Calcul du solde net de TVA (`totalVatCollectedExigible - totalVatDeductible`) et détermination dynamique de la TVA nette due ou du Crédit de TVA.
+3. **UI Compose Multiplatform M3 Dark Theme** :
+   - Écran `VatDashboardScreen` avec sélecteur de périodes fiscales (Toutes, Mois, Trimestre, Année), KPI Cards (TVA Collectée, TVA en attente, TVA Déductible, Solde net / Crédit), section interactive de simulation de TVA déductible et tableau de bord 3310-CA3.
+   - Intégration du déclencheur "Pilotage TVA & CA3" dans les Paramètres et routage overlay dans `App.kt`.
+4. **Pyramide QA Complète** :
+   - N1 (Domain Tests) : `CalculateVatMetricsUseCaseTest`.
+   - N2 (ViewModel Tests) : `VatDashboardViewModelTest`.
+   - N3a (Robolectric UI Tests) : `VatDashboardRobolectricTest`.
+   - N3b (Instrumented Screenshot Test) : `VatDashboardDeviceScreenshotTest`.
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/vat/VatMetrics.kt` | **[NEW]** Modèles de domaine TVA, état 3310-CA3 et filtres de période. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/vat/CalculateVatMetricsUseCase.kt` | **[NEW]** Moteur de calcul fiscal et application des règles d'exigibilité. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | Ajout des clés i18n du module TVA et déclaration CA3. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | Traductions complètes FR/EN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/vat/VatDashboardTags.kt` | **[NEW]** Tags sémantiques pour les tests d'automatisation. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/vat/VatDashboardUiState.kt` | **[NEW]** États UI et intents MVI. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/vat/VatDashboardViewModel.kt` | **[NEW]** ViewModel réactif avec coroutines multithreadées. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/vat/VatDashboardScreen.kt` | **[NEW]** Écran Compose Multiplatform M3 Dark Theme. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Intégration de l'overlay `VatDashboard` et du déclencheur dans les Paramètres. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/vat/CalculateVatMetricsUseCaseTest.kt` | **[NEW]** Tests unitaires N1 KMP. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/vat/VatDashboardViewModelTest.kt` | **[NEW]** Tests réactifs N2 ViewModel. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/vat/VatDashboardRobolectricTest.kt` | **[NEW]** Tests Robolectric N3a UI. |
+| `composeApp/src/androidInstrumentedTest/kotlin/com/ledgerhub/presentation/vat/VatDashboardDeviceScreenshotTest.kt` | **[NEW]** Test instrumenté N3b pour qualification terminal physique. |
+
+### 3. Matrice de Qualification Pyramide QA
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests Domaine Fiscal (`CalculateVatMetricsUseCaseTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*CalculateVatMetricsUseCaseTest*"` | **PASS (100% vert)** |
+| **N2** | Tests ViewModels (`VatDashboardViewModelTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*VatDashboardViewModelTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests Robolectric UI (`VatDashboardRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*VatDashboardRobolectricTest*"` | **PASS (100% vert)** |
+| **N3b** | Test Instrumenté Device (`VatDashboardDeviceScreenshotTest`) | `composeApp/src/androidInstrumentedTest/...` | **Prêt pour exécution ciblée S23+** |
+| **Global** | Suite complète de non-régression (1227 tests unitaires & Robolectric) + compilation APK | `./gradlew :composeApp:testDebugUnitTest :composeApp:assembleDebug --console=plain` | **PASS (1227/1227 tests verts, BUILD SUCCESSFUL)** |
+
+### 4. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | `AssertionError` lors du premier run de tests unitaires sur `VatDashboardViewModelTest` (`isLoading == true`). |
+| **Cause racine** | `VatDashboardViewModel` utilisait `Dispatchers.Default` en dur dans son use-case asynchrone, empêchant le `StandardTestDispatcher` du test unitaire d'avancer le scheduler de façon synchrone. |
+| **Correctif** | Injection du `CoroutineDispatcher` dans le constructeur de `VatDashboardViewModel` avec `Dispatchers.Default` par défaut et injection de `testDispatcher` dans les suites de tests. |
+| **Validation** | 1227/1227 tests unitaires & Robolectric passés avec succès (`BUILD SUCCESSFUL`). |
+
+
 
 
