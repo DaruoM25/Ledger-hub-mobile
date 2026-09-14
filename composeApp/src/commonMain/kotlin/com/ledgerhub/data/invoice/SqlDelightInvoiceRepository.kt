@@ -158,10 +158,7 @@ class SqlDelightInvoiceRepository(
      */
     override suspend fun fetchInvoices(): Result<List<Invoice>> = runCatching {
         database.invoiceQueries.selectByUserEmail(userEmail).executeAsList().mapNotNull { row ->
-            runCatching { row.toDomain() }.getOrElse { throwable ->
-                println("[LedgerHub] Facture ${row.number} ignorée — enregistrement illisible : ${throwable.message}")
-                null
-            }
+            runCatching { row.toDomain() }.getOrNull()
         }
     }
 

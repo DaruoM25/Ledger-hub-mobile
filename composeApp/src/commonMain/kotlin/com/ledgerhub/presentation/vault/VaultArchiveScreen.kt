@@ -28,7 +28,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -122,7 +122,7 @@ fun VaultArchiveScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Divider(color = LedgerHubTheme.palette.Border)
+                    HorizontalDivider(color = LedgerHubTheme.palette.Border)
                     Text(
                         text = "• Documents vérifiés : ${report.verifiedDocuments} / ${report.totalDocuments}",
                         style = MaterialTheme.typography.bodySmall,
@@ -269,7 +269,7 @@ internal fun VaultArchiveContent(
             }
         }
 
-        Divider(color = LedgerHubTheme.palette.Border)
+        HorizontalDivider(color = LedgerHubTheme.palette.Border)
 
         // Document List Section
         Text(

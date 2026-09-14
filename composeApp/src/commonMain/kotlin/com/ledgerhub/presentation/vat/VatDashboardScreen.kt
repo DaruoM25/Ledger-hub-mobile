@@ -22,9 +22,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -388,7 +388,7 @@ private fun VatCa3TableSection(ca3Lines: List<VatCa3Line>) {
                 )
             }
 
-            Divider(color = LedgerHubTheme.palette.Border, thickness = 1.dp)
+            HorizontalDivider(color = LedgerHubTheme.palette.Border, thickness = 1.dp)
 
             // Lignes du tableau CA3
             var totalTaxDueCents = 0L
@@ -397,7 +397,7 @@ private fun VatCa3TableSection(ca3Lines: List<VatCa3Line>) {
                 VatCa3LineRow(line = line)
             }
 
-            Divider(color = LedgerHubTheme.palette.Border, thickness = 1.dp)
+            HorizontalDivider(color = LedgerHubTheme.palette.Border, thickness = 1.dp)
 
             // Total TVA Brute Due
             Row(

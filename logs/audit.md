@@ -3310,6 +3310,28 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **Correctif** | Ajout de l'instruction explicite `Unit` à la fin des blocs `runCatching`. |
 | **Validation** | 1243/1243 tests unitaires & Robolectric passés avec succès (`BUILD SUCCESSFUL`). |
 
+---
+
+## Phase d'Assainissement — Sécurité, Résidus & Dépréciations KMP (Phase 2)
+- **Date :** 2026-09-14
+- **Statut :** ✅ Clos — suite complète verte (1243/1243 tests), assemblage APK Debug validé
+- **Objectif :** Nettoyage des logs verbeux pouvant exposer des données en clair, suppression du répertoire obsolète `androidTest/`, migration des dépréciations Compose M3 (`Divider` -> `HorizontalDivider`).
+
+### 1. Fichiers Modifiés & Nettoyés
+| Fichier | Action & Rôle |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/invoice/SqlDelightInvoiceRepository.kt` | Suppression du `println` résiduel de déchiffrement/mapping de facture (`row.number`). |
+| `composeApp/src/androidTest/` | **[DELETED]** Suppression complète du répertoire de test obsolète pour éliminer les avertissements KMP/AGP. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/vat/VatDashboardScreen.kt` | Remplacement de `Divider` déprécié par `HorizontalDivider` M3. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/vault/VaultArchiveScreen.kt` | Remplacement de `Divider` déprécié par `HorizontalDivider` M3 et purge des imports inutilisés. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesScreen.kt` | Nettoyage des imports inutilisés (`Divider`). |
+
+### 2. Validation & Non-Régression
+- **Tests unitaires et Robolectric :** `./gradlew :composeApp:testDebugUnitTest` → **1243/1243 tests verts (100%)**.
+- **Assemblage APK :** `./gradlew :composeApp:assembleDebug` → **BUILD SUCCESSFUL**.
+- **Exposition Logcat :** Aucune fuite de métadonnées de facture ni identifiants sensibles en clair.
+
+
 
 
 
