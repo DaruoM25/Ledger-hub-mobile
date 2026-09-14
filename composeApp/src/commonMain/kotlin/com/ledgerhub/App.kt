@@ -179,6 +179,10 @@ import com.ledgerhub.domain.vault.GenerateInvoiceSealUseCase
 import com.ledgerhub.domain.vault.VerifyVaultIntegrityUseCase
 import com.ledgerhub.presentation.vault.VaultArchiveScreen
 import com.ledgerhub.presentation.vault.VaultArchiveViewModel
+import com.ledgerhub.data.inbox.SqlDelightInboxRepository
+import com.ledgerhub.domain.inbox.ProcessReceivedInvoiceUseCase
+import com.ledgerhub.presentation.inbox.IncomingInvoicesScreen
+import com.ledgerhub.presentation.inbox.IncomingInvoicesViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -245,6 +249,9 @@ private sealed interface Overlay {
 
     /** Coffre-fort Numérique & Piste d'Audit Fiable (US-32). */
     data object VaultArchive : Overlay
+
+    /** Boîte de Réception Factures Fournisseurs & Anti-Doublon (US-33). */
+    data object IncomingInvoices : Overlay
 }
 
 /**
@@ -379,6 +386,7 @@ fun App(
     val supportRepository = remember(database) { SqlDelightSupportRepository(database) }
     val featureFeedbackRepository = remember(database) { SqlDelightFeatureFeedbackRepository(database) }
     val vaultRepository = remember(database) { SqlDelightVaultRepository(database) }
+    val inboxRepository = remember(database) { SqlDelightInboxRepository(database) }
     val createSupportTicketUseCase = remember(supportRepository) { CreateSupportTicketUseCase(supportRepository) }
     val getFeatureRequestsUseCase = remember(featureFeedbackRepository) { GetFeatureRequestsUseCase(featureFeedbackRepository) }
     val submitFeatureRequestUseCase = remember(featureFeedbackRepository) { SubmitFeatureRequestUseCase(featureFeedbackRepository) }
@@ -430,6 +438,7 @@ fun App(
     val onOpenSupportFeedback = { overlay = Overlay.SupportFeedback }
     val onOpenVatDashboard = { overlay = Overlay.VatDashboard }
     val onOpenVaultArchive = { overlay = Overlay.VaultArchive }
+    val onOpenIncomingInvoices = { overlay = Overlay.IncomingInvoices }
     // Langue active — propagée à tout l'arbre via LocalAppLanguage (WS2). Défaut : français.
     var language by remember { mutableStateOf(AppLanguage.FR) }
 
@@ -695,9 +704,11 @@ fun App(
                                                 syncQueueViewModel = syncQueueViewModel,
                                                 supportFeedbackViewModel = supportFeedbackViewModel,
                                                 vaultRepository = vaultRepository,
+                                                inboxRepository = inboxRepository,
                                                 onOpenSupportFeedback = onOpenSupportFeedback,
                                                 onOpenVatDashboard = onOpenVatDashboard,
                                                 onOpenVaultArchive = onOpenVaultArchive,
+                                                onOpenIncomingInvoices = onOpenIncomingInvoices,
                                             )
                                         }
                                     }
@@ -763,9 +774,11 @@ fun App(
                                                 syncQueueViewModel = syncQueueViewModel,
                                                 supportFeedbackViewModel = supportFeedbackViewModel,
                                                 vaultRepository = vaultRepository,
+                                                inboxRepository = inboxRepository,
                                                 onOpenSupportFeedback = onOpenSupportFeedback,
                                                 onOpenVatDashboard = onOpenVatDashboard,
                                                 onOpenVaultArchive = onOpenVaultArchive,
+                                                onOpenIncomingInvoices = onOpenIncomingInvoices,
                                             )
                                         }
                                     }
@@ -836,9 +849,11 @@ fun App(
                                             syncQueueViewModel = syncQueueViewModel,
                                             supportFeedbackViewModel = supportFeedbackViewModel,
                                             vaultRepository = vaultRepository,
+                                            inboxRepository = inboxRepository,
                                             onOpenSupportFeedback = onOpenSupportFeedback,
                                             onOpenVatDashboard = onOpenVatDashboard,
                                             onOpenVaultArchive = onOpenVaultArchive,
+                                            onOpenIncomingInvoices = onOpenIncomingInvoices,
                                         )
                                     }
                                 }
@@ -1113,6 +1128,48 @@ private fun VaultArchiveAction(onClick: () -> Unit) {
 internal const val VAULT_ARCHIVE_TRIGGER_TAG = "vault_archive_trigger"
 
 /**
+ * Point d'entrée de la Boîte de Réception Factures Fournisseurs (US-33).
+ */
+@Composable
+private fun IncomingInvoicesAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = INCOMING_INVOICES_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("📥", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_INBOX_INVOICES),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(StringKey.INBOX_TRIGGER_SUBTITLE),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur Factures Reçues (US-33). */
+internal const val INCOMING_INVOICES_TRIGGER_TAG = "incoming_invoices_trigger"
+
+/**
  * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
  * l'US-02, côté mobile ; la bascule clair/sombre s'y ajoute en US-25).
  */
@@ -1208,11 +1265,30 @@ private fun ShellContent(
     syncQueueViewModel: SyncQueueViewModel? = null,
     supportFeedbackViewModel: SupportFeedbackViewModel? = null,
     vaultRepository: SqlDelightVaultRepository? = null,
+    inboxRepository: SqlDelightInboxRepository? = null,
     onOpenSupportFeedback: () -> Unit = {},
     onOpenVatDashboard: () -> Unit = {},
     onOpenVaultArchive: () -> Unit = {},
+    onOpenIncomingInvoices: () -> Unit = {},
 ) {
     when (overlay) {
+        Overlay.IncomingInvoices -> {
+            if (inboxRepository != null) {
+                val processReceivedInvoiceUseCase = remember(inboxRepository) {
+                    ProcessReceivedInvoiceUseCase(inboxRepository)
+                }
+                val incomingInvoicesViewModel = remember(inboxRepository, processReceivedInvoiceUseCase) {
+                    IncomingInvoicesViewModel(
+                        inboxRepository = inboxRepository,
+                        processReceivedInvoiceUseCase = processReceivedInvoiceUseCase,
+                    )
+                }
+                IncomingInvoicesScreen(
+                    viewModel = incomingInvoicesViewModel,
+                    onBack = onBack,
+                )
+            }
+        }
         Overlay.VaultArchive -> {
             if (vaultRepository != null) {
                 val generateInvoiceSealUseCase = remember(vaultRepository, invoiceRepository) {
@@ -1421,6 +1497,7 @@ private fun ShellContent(
             onOpenSupportFeedback = onOpenSupportFeedback,
             onOpenVatDashboard = onOpenVatDashboard,
             onOpenVaultArchive = onOpenVaultArchive,
+            onOpenIncomingInvoices = onOpenIncomingInvoices,
         )
     }
 }
@@ -1454,6 +1531,7 @@ private fun TabsContent(
     onOpenSupportFeedback: () -> Unit = {},
     onOpenVatDashboard: () -> Unit = {},
     onOpenVaultArchive: () -> Unit = {},
+    onOpenIncomingInvoices: () -> Unit = {},
 ) {
     when (destination) {
         Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
@@ -1494,9 +1572,10 @@ private fun TabsContent(
         // L'e-Reporting n'a pas d'onglet à lui : son point d'entrée vit ici, au-dessus des
         // paramètres fiscaux, là où l'on règle déjà la conformité (US-26).
         Destination.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+            EReportingAction(onOpenEReporting)
+            IncomingInvoicesAction(onOpenIncomingInvoices)
             VaultArchiveAction(onOpenVaultArchive)
             VatDashboardAction(onOpenVatDashboard)
-            EReportingAction(onOpenEReporting)
             SupportFeedbackAction(onOpenSupportFeedback)
             TaxSettingsScreen(viewModel = taxSettingsViewModel)
         }

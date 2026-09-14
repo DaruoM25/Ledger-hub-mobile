@@ -3241,6 +3241,76 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **Correctif** | Utilisation de `assertExists()` pour valider la présence de l'élément dans la hiérarchie sémantique dans `VaultArchiveRobolectricTest.kt`. |
 | **Validation** | 1236/1236 tests unitaires & Robolectric exécutés avec succès (`BUILD SUCCESSFUL`). |
 
+---
+
+## Sprint 18 — US-33 : Boîte de Réception Factures Fournisseurs & Détection Intelligente des Doublons (Inbox & Collision Prevention)
+- **Date :** 2026-09-14
+- **Statut :** ✅ Clos — suite complète verte (1243/1243 tests unitaires & Robolectric), qualification physique N3b sur Samsung Galaxy S23+ réussie (`01_n3b_incoming_invoices.png`), compilation APK validée.
+
+### 1. Synthèse de Réalisation & Périmètre Métier
+1. **Migration de Schéma SQLDelight (v15 -> v16)** :
+   - Création de `15.sqm` générant la table `ReceivedInvoice` (`id`, `supplierName`, `supplierSiren`, `supplierSiret`, `invoiceNumber`, `issueDate`, `dueDate`, `totalHtCents`, `totalVatCents`, `totalTtcCents`, `rawPayload`, `fileHash`, `status`, `duplicateReason`, `receivedAt`).
+   - Création des index sur `(supplierSiren, invoiceNumber, totalTtcCents)` et sur `fileHash`.
+   - Requêtes dédiées `ReceivedInvoice.sq` pour l'enregistrement, la détection des collisions, le filtrage et la mise à jour de statut.
+2. **Domain & Déduplication Stricte au Centime** :
+   - `ProcessReceivedInvoiceUseCase` : Moteur de détection anti-doublon à double niveau :
+     * Détection par empreinte de fichier SHA-256 (`fileHash`).
+     * Détection métier sur le triptyque `(supplierSiren, invoiceNumber, totalTtc)` avec comparaison monétaire exacte au centime entier (`Money`).
+   - En cas de collision : bascule immédiate en statut `DUPLICATE_ALERT`, blocage strict de l'approbation pour paiement (`IllegalStateException`) et conservation du motif d'alerte explicite.
+3. **UI Compose Multiplatform M3 Dark Theme** :
+   - `IncomingInvoicesScreen` avec :
+     * Bannière critique rouge d'alerte doublon ("1 ALERTE CRITIQUE : DOUBLON DÉTECTÉ - Cette facture correspond à une pièce déjà enregistrée. Le paiement est bloqué.").
+     * Grille de KPIs (Factures Reçues, Alertes Doublons, Factures Validées).
+     * Onglets de filtrage interactifs (Toutes, Alertes Doublons, Approuvées).
+     * Cartes de factures reçues avec badges d'état et détails des motifs d'alerte.
+     * Dialogue de détail avec bouton d'approbation désactivé en cas de doublon.
+   - Intégration du déclencheur d'accès "Factures Reçues (Inbox)" dans l'onglet Paramètres et routage overlay `Overlay.IncomingInvoices` dans `App.kt`.
+4. **Pyramide QA Complète & Preuve N3b** :
+   - N1 (Domain Tests) : `ProcessReceivedInvoiceUseCaseTest` (validation de l'enregistrement, détection doublon hash, détection doublon triptyque et blocage approbation).
+   - N2 (ViewModel Tests) : `IncomingInvoicesViewModelTest` (gestion des flux réactifs MVI, KPIs et filtres).
+   - N3a (Robolectric UI Tests) : `IncomingInvoicesRobolectricTest` (rendu complet M3 Dark Theme).
+   - N3b (Device Screenshot Test) : `IncomingInvoicesDeviceScreenshotTest` (exécuté sur Samsung Galaxy S23+, capture rapatriée dans `screenshots/us-33/01_n3b_incoming_invoices.png`).
+
+### 2. Fichiers Modifiés & Créés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/15.sqm` | **[NEW]** Migration SQLDelight v16 créant la table `ReceivedInvoice`. |
+| `composeApp/src/commonMain/sqldelight/com/ledgerhub/db/ReceivedInvoice.sq` | **[NEW]** Requêtes SQLDelight pour l'inbox et la détection de doublons. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/inbox/ReceivedInvoice.kt` | **[NEW]** Modèles domaine pour les factures reçues et statuts de cycle de vie. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/inbox/InboxRepository.kt` | **[NEW]** Contrat du repository de stockage de l'inbox. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/inbox/SqlDelightInboxRepository.kt` | **[NEW]** Implémentation SQLDelight multithreadée du repository Inbox. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/inbox/ProcessReceivedInvoiceUseCase.kt` | **[NEW]** Moteur de calcul, déduplication et contrôle de paiement. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | Ajout des clés i18n pour l'inbox et les alertes doublons. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | Traductions complètes FR/EN. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesTags.kt` | **[NEW]** Tags sémantiques Compose. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesUiState.kt` | **[NEW]** États UI et intents MVI. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesViewModel.kt` | **[NEW]** ViewModel réactif avec coroutines multithreadées. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesScreen.kt` | **[NEW]** Écran Compose Multiplatform M3 Dark Theme. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Intégration de l'overlay `IncomingInvoices` et du déclencheur dans les Paramètres. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/inbox/ProcessReceivedInvoiceUseCaseTest.kt` | **[NEW]** Tests unitaires N1 KMP. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesViewModelTest.kt` | **[NEW]** Tests réactifs N2 ViewModel. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesRobolectricTest.kt` | **[NEW]** Tests Robolectric N3a UI. |
+| `composeApp/src/androidInstrumentedTest/kotlin/com/ledgerhub/presentation/inbox/IncomingInvoicesDeviceScreenshotTest.kt` | **[NEW]** Test instrumenté N3b pour qualification terminal physique. |
+| `screenshots/us-33/01_n3b_incoming_invoices.png` | **[NEW]** Capture de preuve de qualification sur Samsung Galaxy S23+. |
+
+### 3. Matrice de Qualification Pyramide QA
+| Niveau | Suite de Tests | Commande | Résultat |
+|---|---|---|---|
+| **N1** | Tests Domaine & Déduplication (`ProcessReceivedInvoiceUseCaseTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*ProcessReceivedInvoiceUseCaseTest*"` | **PASS (100% vert)** |
+| **N2** | Tests ViewModels (`IncomingInvoicesViewModelTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*IncomingInvoicesViewModelTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests Robolectric UI (`IncomingInvoicesRobolectricTest`) | `./gradlew :composeApp:testDebugUnitTest --tests "*IncomingInvoicesRobolectricTest*"` | **PASS (100% vert)** |
+| **N3b** | Test Instrumenté Device (`IncomingInvoicesDeviceScreenshotTest`) | `composeApp/src/androidInstrumentedTest/...` | **PASS (Capture enregistrée et rapatriée)** |
+| **Global** | Suite complète de non-régression (1243 tests unitaires & Robolectric) | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1243/1243 tests verts, BUILD SUCCESSFUL)** |
+
+### 4. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | `Type mismatch: expected Result<Unit>, actual Result<Any>` dans `SqlDelightInboxRepository.kt`. |
+| **Cause racine** | Le bloc `runCatching` dans `saveReceivedInvoice` et `updateStatus` renvoyait la valeur de retour de l'instruction d'insertion/mise à jour SQLDelight au lieu de `Unit`. |
+| **Correctif** | Ajout de l'instruction explicite `Unit` à la fin des blocs `runCatching`. |
+| **Validation** | 1243/1243 tests unitaires & Robolectric passés avec succès (`BUILD SUCCESSFUL`). |
+
+
 
 
 

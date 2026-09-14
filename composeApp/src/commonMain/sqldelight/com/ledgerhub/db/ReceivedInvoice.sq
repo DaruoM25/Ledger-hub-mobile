@@ -1,0 +1,55 @@
+CREATE TABLE ReceivedInvoice (
+    id TEXT NOT NULL PRIMARY KEY,
+    supplierName TEXT NOT NULL,
+    supplierSiren TEXT NOT NULL,
+    supplierSiret TEXT NOT NULL,
+    invoiceNumber TEXT NOT NULL,
+    issueDate TEXT NOT NULL,
+    dueDate TEXT NOT NULL,
+    totalHtCents INTEGER NOT NULL,
+    totalVatCents INTEGER NOT NULL,
+    totalTtcCents INTEGER NOT NULL,
+    rawPayload TEXT NOT NULL DEFAULT '',
+    fileHash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'RECEIVED',
+    duplicateReason TEXT,
+    receivedAt TEXT NOT NULL
+);
+
+CREATE INDEX ReceivedInvoice_supplier_invoice_ttc ON ReceivedInvoice(supplierSiren, invoiceNumber, totalTtcCents);
+CREATE INDEX ReceivedInvoice_fileHash ON ReceivedInvoice(fileHash);
+CREATE INDEX ReceivedInvoice_receivedAt ON ReceivedInvoice(receivedAt DESC);
+
+insertOrReplace:
+INSERT OR REPLACE INTO ReceivedInvoice(
+    id, supplierName, supplierSiren, supplierSiret, invoiceNumber,
+    issueDate, dueDate, totalHtCents, totalVatCents, totalTtcCents,
+    rawPayload, fileHash, status, duplicateReason, receivedAt
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateStatus:
+UPDATE ReceivedInvoice
+SET status = ?, duplicateReason = ?
+WHERE id = ?;
+
+selectAll:
+SELECT * FROM ReceivedInvoice
+ORDER BY receivedAt DESC;
+
+selectById:
+SELECT * FROM ReceivedInvoice
+WHERE id = ?;
+
+selectByFileHash:
+SELECT * FROM ReceivedInvoice
+WHERE fileHash = ?
+LIMIT 1;
+
+findDuplicateTriptych:
+SELECT * FROM ReceivedInvoice
+WHERE supplierSiren = ? AND invoiceNumber = ? AND totalTtcCents = ? AND id != ?
+LIMIT 1;
+
+countReceivedInvoices:
+SELECT COUNT(*) FROM ReceivedInvoice;

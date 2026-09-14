@@ -1,0 +1,23 @@
+-- Migration 15 -> 16 — US-33 : Réception des factures fournisseurs & Détection des doublons
+
+CREATE TABLE ReceivedInvoice (
+    id TEXT NOT NULL PRIMARY KEY,
+    supplierName TEXT NOT NULL,
+    supplierSiren TEXT NOT NULL,
+    supplierSiret TEXT NOT NULL,
+    invoiceNumber TEXT NOT NULL,
+    issueDate TEXT NOT NULL,
+    dueDate TEXT NOT NULL,
+    totalHtCents INTEGER NOT NULL,
+    totalVatCents INTEGER NOT NULL,
+    totalTtcCents INTEGER NOT NULL,
+    rawPayload TEXT NOT NULL DEFAULT '',
+    fileHash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'RECEIVED',
+    duplicateReason TEXT,
+    receivedAt TEXT NOT NULL
+);
+
+CREATE INDEX ReceivedInvoice_supplier_invoice_ttc ON ReceivedInvoice(supplierSiren, invoiceNumber, totalTtcCents);
+CREATE INDEX ReceivedInvoice_fileHash ON ReceivedInvoice(fileHash);
+CREATE INDEX ReceivedInvoice_receivedAt ON ReceivedInvoice(receivedAt DESC);
