@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -64,6 +66,8 @@ object AuthTags {
     const val EMAIL_FIELD = "login_email_field"
     const val PASSWORD_FIELD = "login_password_field"
     const val SUBMIT_BUTTON = "login_submit_button"
+    const val LOGIN_BUTTON = SUBMIT_BUTTON
+    const val REGISTER_BUTTON = SUBMIT_BUTTON
     const val REGISTER_LINK = "login_register_link"
     const val ERROR_MESSAGE = "login_error_message"
     const val LOADING_INDICATOR = "login_loading_indicator"
@@ -133,8 +137,8 @@ fun AuthScreen(
  * Thème sombre « slate » propre à l'authentification (voir [LedgerHubColors]), appliqué localement
  * via un [MaterialTheme] imbriqué : cet écran précède la navigation, donc le thème global de l'app.
  *
- * La carte défile ([verticalScroll]) : le formulaire d'inscription porte quatre champs, un badge et
- * un bouton, ce qui dépasse la hauteur utile d'un téléphone une fois le clavier ouvert.
+ * La carte défile ([verticalScroll]) avec gestion du clavier virtuel ([imePadding]) : le formulaire
+ * d'inscription porte plusieurs champs, un badge et un bouton CTA atteignables en toute circonstance.
  */
 @Composable
 internal fun AuthContent(
@@ -157,195 +161,209 @@ internal fun AuthContent(
                 .fillMaxSize()
                 .background(LedgerHubTheme.palette.Background)
                 .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
                 .semantics { testTag = AuthTags.SCREEN },
             contentAlignment = Alignment.Center,
         ) {
             Column(
                 modifier = Modifier
-                    .widthIn(max = 400.dp)
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
-                    .background(LedgerHubTheme.palette.Surface, RoundedCornerShape(20.dp))
-                    .padding(28.dp),
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .size(56.dp)
-                        .background(LedgerHubTheme.palette.Accent, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center,
+                        .widthIn(max = 420.dp)
+                        .fillMaxWidth()
+                        .background(LedgerHubTheme.palette.Surface, RoundedCornerShape(20.dp))
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("📄", fontSize = 26.sp)
-                }
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(LedgerHubTheme.palette.Accent, RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("📄", fontSize = 26.sp)
+                    }
 
-                ModeTabs(
-                    isRegistering = uiState.isRegistering,
-                    onSelect = { onIntent(AuthIntent.ModeChanged(it)) },
-                )
+                    ModeTabs(
+                        isRegistering = uiState.isRegistering,
+                        onSelect = { onIntent(AuthIntent.ModeChanged(it)) },
+                    )
 
-                Text(
-                    text = if (uiState.isRegistering) {
-                        tr(StringKey.AUTH_REGISTER_TITLE)
-                    } else {
-                        tr(StringKey.AUTH_LOGIN_TITLE)
-                    },
-                    modifier = Modifier.padding(top = 12.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = if (uiState.isRegistering) {
-                        tr(StringKey.AUTH_REGISTER_SUBTITLE)
-                    } else {
-                        tr(StringKey.AUTH_LOGIN_SUBTITLE)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LedgerHubTheme.palette.SecondaryText,
-                    textAlign = TextAlign.Center,
-                )
+                    Text(
+                        text = if (uiState.isRegistering) {
+                            tr(StringKey.AUTH_REGISTER_TITLE)
+                        } else {
+                            tr(StringKey.AUTH_LOGIN_TITLE)
+                        },
+                        modifier = Modifier.padding(top = 12.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = if (uiState.isRegistering) {
+                            tr(StringKey.AUTH_REGISTER_SUBTITLE)
+                        } else {
+                            tr(StringKey.AUTH_LOGIN_SUBTITLE)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LedgerHubTheme.palette.SecondaryText,
+                        textAlign = TextAlign.Center,
+                    )
 
-                if (uiState.isRegistering) {
-                    SiretSection(uiState = uiState, onIntent = onIntent)
-                }
+                    if (uiState.isRegistering) {
+                        SiretSection(uiState = uiState, onIntent = onIntent)
+                    }
 
-                AuthField(
-                    label = tr(StringKey.AUTH_EMAIL_LABEL),
-                    value = uiState.email,
-                    placeholder = tr(StringKey.AUTH_EMAIL_PLACEHOLDER),
-                    tag = AuthTags.EMAIL_FIELD,
-                    enabled = !uiState.isLoading,
-                    isError = uiState.emailError != null,
-                    errorMessage = uiState.emailError,
-                    errorTag = AuthTags.EMAIL_ERROR,
-                    modifier = Modifier.padding(top = if (uiState.isRegistering) 12.dp else 20.dp),
-                    onValueChange = { onIntent(AuthIntent.EmailChanged(it)) },
-                )
-                AuthField(
-                    label = tr(StringKey.AUTH_PASSWORD_LABEL),
-                    value = uiState.password,
-                    placeholder = "••••••••",
-                    tag = AuthTags.PASSWORD_FIELD,
-                    enabled = !uiState.isLoading,
-                    isError = uiState.passwordError != null,
-                    errorMessage = uiState.passwordError,
-                    errorTag = AuthTags.PASSWORD_ERROR,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.padding(top = 12.dp),
-                    onValueChange = { onIntent(AuthIntent.PasswordChanged(it)) },
-                )
-
-                if (uiState.isRegistering) {
                     AuthField(
-                        label = "Confirmer le mot de passe",
-                        value = uiState.passwordConfirmation,
-                        placeholder = "••••••••",
-                        tag = AuthTags.CONFIRM_PASSWORD_FIELD,
+                        label = tr(StringKey.AUTH_EMAIL_LABEL),
+                        value = uiState.email,
+                        placeholder = tr(StringKey.AUTH_EMAIL_PLACEHOLDER),
+                        tag = AuthTags.EMAIL_FIELD,
                         enabled = !uiState.isLoading,
-                        isError = uiState.passwordConfirmationError != null,
-                        errorMessage = uiState.passwordConfirmationError,
-                        errorTag = AuthTags.CONFIRM_PASSWORD_ERROR,
+                        isError = uiState.emailError != null,
+                        errorMessage = uiState.emailError,
+                        errorTag = AuthTags.EMAIL_ERROR,
+                        modifier = Modifier.padding(top = if (uiState.isRegistering) 12.dp else 20.dp),
+                        onValueChange = { onIntent(AuthIntent.EmailChanged(it)) },
+                    )
+                    AuthField(
+                        label = tr(StringKey.AUTH_PASSWORD_LABEL),
+                        value = uiState.password,
+                        placeholder = "••••••••",
+                        tag = AuthTags.PASSWORD_FIELD,
+                        enabled = !uiState.isLoading,
+                        isError = uiState.passwordError != null,
+                        errorMessage = uiState.passwordError,
+                        errorTag = AuthTags.PASSWORD_ERROR,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.padding(top = 12.dp),
-                        onValueChange = { onIntent(AuthIntent.PasswordConfirmationChanged(it)) },
+                        onValueChange = { onIntent(AuthIntent.PasswordChanged(it)) },
                     )
-                }
 
-                if (!uiState.isRegistering) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(
-                            onClick = onForgotPasswordClick,
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = 48.dp)
-                                .semantics { testTag = AuthTags.FORGOT_PASSWORD_BUTTON },
+                    if (uiState.isRegistering) {
+                        AuthField(
+                            label = "Confirmer le mot de passe",
+                            value = uiState.passwordConfirmation,
+                            placeholder = "••••••••",
+                            tag = AuthTags.CONFIRM_PASSWORD_FIELD,
+                            enabled = !uiState.isLoading,
+                            isError = uiState.passwordConfirmationError != null,
+                            errorMessage = uiState.passwordConfirmationError,
+                            errorTag = AuthTags.CONFIRM_PASSWORD_ERROR,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.padding(top = 12.dp),
+                            onValueChange = { onIntent(AuthIntent.PasswordConfirmationChanged(it)) },
+                        )
+                    }
+
+                    if (!uiState.isRegistering) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
                         ) {
-                            Text(
-                                text = tr(StringKey.AUTH_FORGOT_PASSWORD_LINK),
-                                color = LedgerHubTheme.palette.Accent,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            TextButton(
+                                onClick = onForgotPasswordClick,
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .semantics { testTag = AuthTags.FORGOT_PASSWORD_BUTTON },
+                            ) {
+                                Text(
+                                    text = tr(StringKey.AUTH_FORGOT_PASSWORD_LINK),
+                                    color = LedgerHubTheme.palette.Accent,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
-                }
 
-                if (uiState.errorMessage != null) {
-                    Text(
-                        text = uiState.errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 8.dp).semantics {
-                            testTag = AuthTags.ERROR_MESSAGE
-                            contentDescription = uiState.errorMessage
-                        },
-                    )
-                }
-
-                Button(
-                    onClick = { onIntent(AuthIntent.Submit) },
-                    enabled = if (uiState.isRegistering) uiState.isRegisterEnabled else uiState.isSubmitEnabled,
-                    colors = ButtonDefaults.buttonColors(containerColor = LedgerHubTheme.palette.Accent),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 20.dp)
-                        .semantics { testTag = AuthTags.SUBMIT_BUTTON },
-                ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .semantics { testTag = AuthTags.LOADING_INDICATOR },
-                            color = Color.White,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
+                    if (uiState.errorMessage != null) {
                         Text(
-                            if (uiState.isRegistering) {
-                                tr(StringKey.AUTH_REGISTER_SUBMIT)
-                            } else {
-                                tr(StringKey.AUTH_LOGIN_SUBMIT)
+                            text = uiState.errorMessage,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 8.dp).semantics {
+                                testTag = AuthTags.ERROR_MESSAGE
+                                contentDescription = uiState.errorMessage
                             },
                         )
                     }
-                }
 
-                if (!uiState.isRegistering) {
-                    Row(modifier = Modifier.padding(top = 12.dp)) {
-                        Text(
-                            text = tr(StringKey.AUTH_NO_ACCOUNT_PROMPT),
-                            color = LedgerHubTheme.palette.SecondaryText,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(
-                            text = tr(StringKey.AUTH_REGISTER_LINK),
-                            color = LedgerHubTheme.palette.Accent,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable { onIntent(AuthIntent.ModeChanged(true)) }
-                                .semantics { testTag = AuthTags.REGISTER_LINK },
-                        )
+                    Button(
+                        onClick = { onIntent(AuthIntent.Submit) },
+                        enabled = if (uiState.isRegistering) uiState.isRegisterEnabled else uiState.isSubmitEnabled,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LedgerHubTheme.palette.Accent,
+                            disabledContainerColor = LedgerHubTheme.palette.Accent.copy(alpha = 0.5f),
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(top = 20.dp)
+                            .semantics { testTag = AuthTags.SUBMIT_BUTTON },
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .semantics { testTag = AuthTags.LOADING_INDICATOR },
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text(
+                                if (uiState.isRegistering) {
+                                    tr(StringKey.AUTH_REGISTER_SUBMIT)
+                                } else {
+                                    tr(StringKey.AUTH_LOGIN_SUBMIT)
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
                     }
-                }
 
-                Text(
-                    text = tr(StringKey.AUTH_DISCLAIMER),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = LedgerHubTheme.palette.SecondaryText,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 20.dp),
-                )
+                    if (!uiState.isRegistering) {
+                        Row(modifier = Modifier.padding(top = 12.dp)) {
+                            Text(
+                                text = tr(StringKey.AUTH_NO_ACCOUNT_PROMPT),
+                                color = LedgerHubTheme.palette.SecondaryText,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                text = tr(StringKey.AUTH_REGISTER_LINK),
+                                color = LedgerHubTheme.palette.Accent,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable { onIntent(AuthIntent.ModeChanged(true)) }
+                                    .semantics { testTag = AuthTags.REGISTER_LINK },
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = tr(StringKey.AUTH_DISCLAIMER),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LedgerHubTheme.palette.SecondaryText,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 20.dp),
+                    )
+                }
             }
         }
     }
 }
 
-/** Bascule Connexion / Inscription — deux libellés, l'actif souligné d'un trait d'accent. */
+/** Bascule Connexion / Inscription — deux libellés avec indicateur Accent centré. */
 @Composable
 private fun ModeTabs(isRegistering: Boolean, onSelect: (Boolean) -> Unit) {
     Row(
@@ -372,26 +390,28 @@ private fun ModeTab(label: String, tag: String, selected: Boolean, onClick: () -
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            // `width(IntrinsicSize.Max)` et non une largeur libre : le soulignement ci-dessous
-            // demande `fillMaxWidth`, ce qui étirait l'onglet à toute la largeur disponible — le
-            // premier onglet prenait la ligne entière et le second était mesuré à zéro, donc
-            // invisible et intouchable. La largeur intrinsèque la borne au texte.
+            // IntrinsicSize.Max garantit que l'indicateur s'aligne exactement sur la largeur du libellé
             .width(IntrinsicSize.Max)
+            .defaultMinSize(minHeight = 48.dp)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { testTag = tag },
+        verticalArrangement = Arrangement.Center,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) Color.White else LedgerHubTheme.palette.SecondaryText,
-            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            color = if (selected) Color.White else Color(0xFF94A3B8),
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
         )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(2.dp)
-                .background(if (selected) LedgerHubTheme.palette.Accent else Color.Transparent),
+                .height(3.dp)
+                .background(
+                    if (selected) LedgerHubTheme.palette.Accent else Color.Transparent,
+                    shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp),
+                ),
         )
     }
 }

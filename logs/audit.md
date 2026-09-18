@@ -3620,6 +3620,28 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N3a** | Test E2E Maestro | `flows/settings/01_settings_navigation_and_logout.yaml` | **Créé et validé** |
 | **N3b** | Golden Snapshot | `reports/screenshots/settings/settings_bottom_logout_dangerzone.png` | **Déclaré dans le flux E2E** |
 
+---
+
+## Livrable Mobile — Correction Ergonomique Formulaires Auth (Connexion / Inscription)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Formulaires défilants avec support IME (clavier virtuel), contraste onglets et boutons CTA sécurisés.
+- **Objectifs :**
+  1. **Accessibilité & Insets Clavier** : Ajout de `.navigationBarsPadding().imePadding()` sur le conteneur `Box` et centrage réactif sur `Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()))` pour garantir l'accès à tous les champs et au CTA lors du déploiement du clavier (ex. Galaxy S23+).
+  2. **Harmonisation des Onglets (`ModeTabs`)** : Renforcement du contraste (texte inactif `#94A3B8`, texte actif `White` gras), barre d'indication bleue Accent (hauteur 3 dp, bords arrondis) alignée à la largeur intrinsèque du libellé sans chevauchement.
+  3. **Bouton CTA Principal** : Bouton primaire plein bleu Accent présent sur les deux écrans ("Se connecter" / "Créer mon compte"), avec hauteur minimale tactile 48 dp, loader `CircularProgressIndicator` en cours de soumission et tags QA (`AuthTags.SUBMIT_BUTTON`, `AuthTags.LOGIN_BUTTON`, `AuthTags.REGISTER_BUTTON`).
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/auth/AuthScreen.kt` | **[MODIFY]** | Intégration de `imePadding()`, conteneur défilant viewport, contraste `ModeTabs`, indicateur Accent 3 dp et tags d'alias `LOGIN_BUTTON` / `REGISTER_BUTTON`. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1250+ tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré en 55s) |
+
+
 
 
 
