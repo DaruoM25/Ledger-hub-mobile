@@ -1,0 +1,39 @@
+﻿appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Suite E2E : Navigation Paramètres & Déconnexion / Zone de Danger (N3a / N3b)
+# ==============================================================================
+
+# Lancement de l'application
+- launchApp:
+    clearState: false
+
+# Navigation vers l'onglet Paramètres (Settings) via la BottomBar
+- tapOn:
+    id: "bottom_bar_item_settings"
+
+# Attente de l'affichage de l'écran des paramètres
+- extendedWaitUntil:
+    visible:
+      id: "settings_screen"
+    timeout: 10000
+
+# Défilement vertical vers le bas jusqu'au bouton de déconnexion
+- scrollUntilVisible:
+    element:
+      id: "settings_logout_button"
+    direction: DOWN
+    timeout: 10000
+
+# Assertion de visibilité du bouton de déconnexion
+- assertVisible:
+    id: "settings_logout_button"
+
+# Assertion de visibilité de la carte Zone de Danger et du bouton de suppression de compte
+- assertVisible:
+    id: "settings_danger_zone_card"
+- assertVisible:
+    id: "settings_delete_account_button"
+
+# Prise de snapshot doré N3b après défilement jusqu'en bas
+- takeScreenshot: reports/screenshots/settings/settings_bottom_logout_dangerzone.png

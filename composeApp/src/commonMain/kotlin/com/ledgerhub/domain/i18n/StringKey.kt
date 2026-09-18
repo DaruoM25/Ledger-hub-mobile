@@ -16,6 +16,7 @@ enum class StringKey {
     APP_NAME,
     SIDEBAR_COMPLIANCE,
     ACTION_CREATE_INVOICE,
+    ACTION_CREATE_QUOTE,
     OVERLAY_BACK_DASHBOARD,
     OVERLAY_BACK_INVOICES,
 
@@ -59,7 +60,7 @@ enum class StringKey {
     COL_DATE,
     COL_TTC,
 
-    // ── Devis à relancer (US-12) ────────────────────────────────────────────
+    // ── Écran Devis & Devis à relancer (US-12) ──────────────────────────────
     QUOTES_FOLLOWUP_TITLE,
     QUOTES_FOLLOWUP_SUBTITLE,
     QUOTES_FOLLOWUP_EMPTY,
@@ -68,6 +69,13 @@ enum class StringKey {
     QUOTE_EXPIRED,
     QUOTE_DUE_TODAY,
     QUOTE_DAYS_LEFT,
+    QUOTES_EMPTY,
+    QUOTES_LOADING,
+    QUOTE_VALIDITY_LABEL,
+    QUOTE_EDIT_ACTION,
+    QUOTE_CONVERT_ACTION,
+    QUOTE_CONVERTING,
+    QUOTE_CONVERTED_PREFIX,
 
     // ── Formulaire de facture ───────────────────────────────────────────────
     FORM_TITLE,
@@ -159,6 +167,8 @@ enum class StringKey {
     FACTURX_BADGE,
     FILTER_ALL,
     FILTER_DRAFT,
+    FILTER_SENT,
+    FILTER_ACCEPTED,
     FILTER_DEPOSITED,
     FILTER_APPROVED,
     FILTER_REJECTED,
@@ -170,10 +180,11 @@ enum class StringKey {
 
     // ── Statuts de facture ──────────────────────────────────────────────────
     STATUS_DRAFT,
-    // STATUS_VALIDATED / STATUS_SENT restent utilisés par les devis (QuoteStatus), dont le
+    // STATUS_VALIDATED / STATUS_SENT / STATUS_ACCEPTED restent utilisés par les devis (QuoteStatus), dont le
     // cycle de vie est distinct de celui, réglementaire, des factures.
     STATUS_VALIDATED,
     STATUS_SENT,
+    STATUS_ACCEPTED,
     STATUS_DEPOSITED,
     STATUS_APPROVED,
     STATUS_REJECTED,

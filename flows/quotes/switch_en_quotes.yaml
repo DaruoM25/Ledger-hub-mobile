@@ -1,0 +1,6 @@
+appId: com.ledgerhub.app.debug
+---
+- tapOn:
+    id: "bottom_bar_item_quotes"
+- tapOn:
+    id: "lang_toggle_en"

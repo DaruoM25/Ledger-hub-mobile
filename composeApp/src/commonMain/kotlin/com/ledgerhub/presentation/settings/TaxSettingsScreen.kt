@@ -82,6 +82,8 @@ object TaxSettingsTags {
 fun TaxSettingsScreen(
     viewModel: TaxSettingsViewModel,
     onAccountDeleted: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    scrollable: Boolean = true,
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -91,13 +93,20 @@ fun TaxSettingsScreen(
         }
     }
 
-    TaxSettingsView(uiState = uiState, onIntent = viewModel::processIntent)
+    TaxSettingsView(
+        uiState = uiState,
+        onIntent = viewModel::processIntent,
+        modifier = modifier,
+        scrollable = scrollable,
+    )
 }
 
 @Composable
 internal fun TaxSettingsView(
     uiState: TaxSettingsUiState,
     onIntent: (TaxSettingsIntent) -> Unit = {},
+    modifier: Modifier = Modifier,
+    scrollable: Boolean = true,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -111,13 +120,22 @@ internal fun TaxSettingsView(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val columnModifier = if (scrollable) {
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .semantics { testTag = TaxSettingsTags.SCREEN }
+            .padding(20.dp)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .semantics { testTag = TaxSettingsTags.SCREEN }
+            .padding(20.dp)
+    }
+
+    Box(modifier = modifier) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .semantics { testTag = TaxSettingsTags.SCREEN }
-                .padding(20.dp),
+            modifier = columnModifier,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

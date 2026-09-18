@@ -6,15 +6,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +55,7 @@ import com.ledgerhub.presentation.theme.statusColors
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest / Robolectric). */
 object DashboardTags {
     const val SCREEN = "dashboard_screen"
+    const val CREATE_INVOICE_BUTTON = "dashboard_create_invoice_button"
     const val LOADING_INDICATOR = "dashboard_loading_indicator"
     const val LOAD_ERROR = "dashboard_load_error"
     const val KPI_GRID = "dashboard_kpi_grid"
@@ -80,12 +85,14 @@ object DashboardTags {
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = remember { DashboardViewModel() },
+    onCreateInvoice: (() -> Unit)? = null,
     onQuotesPendingClick: (() -> Unit)? = null,
     onQuotesFollowUpClick: (() -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     DashboardContent(
         uiState = uiState,
+        onCreateInvoice = onCreateInvoice,
         onQuotesPendingClick = onQuotesPendingClick,
         onQuotesFollowUpClick = onQuotesFollowUpClick,
     )
@@ -94,6 +101,7 @@ fun DashboardScreen(
 @Composable
 internal fun DashboardContent(
     uiState: DashboardUiState,
+    onCreateInvoice: (() -> Unit)? = null,
     onQuotesPendingClick: (() -> Unit)? = null,
     onQuotesFollowUpClick: (() -> Unit)? = null,
 ) {
@@ -102,20 +110,38 @@ internal fun DashboardContent(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .semantics { testTag = DashboardTags.SCREEN }
-            .padding(20.dp),
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                tr(StringKey.NAV_OVERVIEW),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                tr(StringKey.DASHBOARD_SUBTITLE),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    tr(StringKey.NAV_OVERVIEW),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(StringKey.DASHBOARD_SUBTITLE),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (onCreateInvoice != null) {
+                Button(
+                    onClick = onCreateInvoice,
+                    modifier = Modifier.semantics { testTag = DashboardTags.CREATE_INVOICE_BUTTON },
+                ) {
+                    Text("＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}")
+                }
+            }
         }
 
         when {
@@ -167,11 +193,11 @@ private fun KpiGrid(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             KpiCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 tag = DashboardTags.COLLECTED_CARD,
                 title = tr(StringKey.KPI_REVENUE_TITLE),
                 value = formatMoney(uiState.collectedRevenueCents, lang),
@@ -180,7 +206,7 @@ private fun KpiGrid(
                 accent = MaterialTheme.colorScheme.primaryContainer,
             )
             KpiCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 tag = DashboardTags.PENDING_CARD,
                 title = tr(StringKey.KPI_PENDING_TITLE),
                 value = formatMoney(uiState.pendingRevenueCents, lang),
@@ -190,11 +216,11 @@ private fun KpiGrid(
             )
         }
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             KpiCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 tag = DashboardTags.ISSUED_CARD,
                 title = tr(StringKey.KPI_ISSUED_TITLE),
                 value = uiState.issuedCount.toString(),
@@ -203,7 +229,7 @@ private fun KpiGrid(
                 accent = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
             )
             KpiCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 tag = DashboardTags.KPI_QUOTES_PENDING,
                 title = tr(StringKey.KPI_QUOTES_PENDING_TITLE),
                 value = formatMoney(uiState.pendingQuotesTotalCents, lang),
@@ -242,7 +268,8 @@ private fun KpiCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 132.dp)
+                .fillMaxHeight()
+                .heightIn(min = 120.dp)
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

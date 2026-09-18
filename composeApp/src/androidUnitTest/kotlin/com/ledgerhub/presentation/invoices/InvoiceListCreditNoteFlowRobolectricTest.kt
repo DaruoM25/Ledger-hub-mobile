@@ -114,4 +114,27 @@ class InvoiceListCreditNoteFlowRobolectricTest {
         onNodeWithTag(CreditNoteFormTags.DRAFT_BADGE).performScrollTo().assertIsDisplayed()
         onNodeWithText("Annule la facture FAC-2026-0137 du 2026-07-12").assertIsDisplayed()
     }
+
+    @Test
+    fun invoicesHeader_displaysTitleAndCreateInvoicePillButton() = runComposeUiTest {
+        var createInvoiceClicked = false
+        setContent {
+            InvoiceListView(
+                uiState = InvoiceListUiState(
+                    isLoading = false,
+                    invoices = listOf(finalizedInvoice),
+                ),
+                onIntent = {},
+                onInvoiceClick = {},
+                onCreateInvoice = { createInvoiceClicked = true },
+            )
+        }
+
+        onNodeWithText("Factures").assertIsDisplayed()
+        onNodeWithTag(InvoiceListTags.CREATE_BUTTON).assertIsDisplayed()
+        onNodeWithText("＋  Créer une facture").assertIsDisplayed()
+
+        onNodeWithTag(InvoiceListTags.CREATE_BUTTON).performClick()
+        assert(createInvoiceClicked)
+    }
 }

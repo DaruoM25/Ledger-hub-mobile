@@ -1,5 +1,6 @@
 package com.ledgerhub.presentation.quotes
 
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.invoice.Invoice
 import com.ledgerhub.domain.quote.Quote
 import com.ledgerhub.domain.quote.QuoteStatus
@@ -11,6 +12,14 @@ enum class QuoteStatusFilter(val label: String) {
     SENT("Envoyés"),
     ACCEPTED("Acceptés"),
     REJECTED("Refusés"),
+}
+
+fun QuoteStatusFilter.labelKey(): StringKey = when (this) {
+    QuoteStatusFilter.TOUS -> StringKey.FILTER_ALL
+    QuoteStatusFilter.DRAFT -> StringKey.FILTER_DRAFT
+    QuoteStatusFilter.SENT -> StringKey.FILTER_SENT
+    QuoteStatusFilter.ACCEPTED -> StringKey.FILTER_ACCEPTED
+    QuoteStatusFilter.REJECTED -> StringKey.FILTER_REJECTED
 }
 
 fun QuoteStatusFilter.matches(status: QuoteStatus): Boolean = when (this) {

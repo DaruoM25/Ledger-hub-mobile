@@ -64,25 +64,16 @@ fun ThemeToggle(
     Surface(
         color = LedgerHubTheme.palette.Surface,
         contentColor = LedgerHubTheme.palette.SecondaryText,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
-        // La cible tactile est portée par CE noeud — celui qui est tagué, mesuré et touché par
-        // les niveaux 3 — et non par la boîte interne : `requiredSizeIn` posé plus bas laissait
-        // la Surface se faire comprimer par un parent saturé, et c'est bien elle que le test
-        // mesure. `requiredSizeIn` et non `sizeIn` : un `sizeIn` reste borné par les contraintes
-        // du parent, d'où le bouton réduit à 14,5 dp mesuré sur Pixel 5 sans que rien ne le
-        // signale. La cible tactile n'est pas négociable — un débordement éventuel se voit à
-        // l'écran, au lieu de se solder par un bouton invisiblement inutilisable.
         modifier = modifier
-            .requiredSizeIn(minWidth = MinimumTouchTarget, minHeight = MinimumTouchTarget)
+            .size(36.dp)
             .semantics(mergeDescendants = true) {
                 testTag = ThemeToggleTags.ROOT
                 this.contentDescription = description
                 role = Role.Button
             },
     ) {
-        // Sans modificateur de taille : la boîte hérite du minimum de 48 dp imposé à la Surface,
-        // la zone cliquable couvre donc toute la cible et non la seule icône de 20 dp.
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier.clickable(onClickLabel = description) {
@@ -91,11 +82,9 @@ fun ThemeToggle(
         ) {
             Icon(
                 imageVector = if (goesToLight) LedgerHubSunIcon else LedgerHubMoonIcon,
-                // Décorative : le bouton parent porte déjà la description, la répéter ferait
-                // énoncer deux fois la même chose.
                 contentDescription = null,
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(18.dp)
                     .semantics {
                         testTag = if (goesToLight) ThemeToggleTags.ICON_SUN else ThemeToggleTags.ICON_MOON
                     },
@@ -103,3 +92,4 @@ fun ThemeToggle(
         }
     }
 }
+

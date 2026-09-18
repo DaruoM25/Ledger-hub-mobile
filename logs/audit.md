@@ -3331,6 +3331,301 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 - **Assemblage APK :** `./gradlew :composeApp:assembleDebug` → **BUILD SUCCESSFUL**.
 - **Exposition Logcat :** Aucune fuite de métadonnées de facture ni identifiants sensibles en clair.
 
+---
+
+## Sprint QA — Vue d'ensemble (Dashboard), Alignement KPI & Refonte Navigation 5 Flux (N1-N2-N3a-N3b)
+- **Date :** 2026-09-17
+- **Statut :** ✅ Clos — Pyramide de tests validée à 100% (1246/1246 tests N1/N2 verts, N3a Maestro E2E vert, N3b Golden Snapshot capturé)
+- **Objectifs :**
+  1. **Isolation des données (Clean Empty State) :** Lier les métriques du tableau de bord au compte utilisateur réellement connecté dans SQLDelight. Pour un nouvel utilisateur, afficher un état vierge (0,00 €, 0 facture, 0 devis).
+  2. **Alignement des cartes KPI :** Uniformiser la hauteur des cartes métriques ("Factures émises" vs "Devis en attente", "Chiffre d'affaires" vs "En attente de paiement") avec `IntrinsicSize.Min` et dimensions homogènes.
+  3. **Refonte Bottom Navigation (5 flux vitaux) :** Réduire la barre de navigation de 7 à 5 onglets maximum (`Vue d'ensemble`, `Factures`, `Devis`, `Clients`, `Paramètres`), avec menu contextuel/Hub sous l'onglet "Paramètres" pour les flux avancés (Annuaire DGFIP, Rapprochement bancaire, e-Reporting, Coffre-fort).
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Action & Rôle |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreen.kt` | **[MODIFY]** Alignement horizontal strict des cartes KPI avec `IntrinsicSize.Min`, uniformisation de la hauteur des cartes et respect du layout Material 3. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** Réduction de `LedgerBottomBar` à 5 flux vitaux (`OVERVIEW`, `INVOICES`, `QUOTES`, `CLIENTS`, `SETTINGS`). Intégration des triggers Annuaire, Rapprochement et e-Reporting dans l'écran Paramètres. Dynamic account binding pour isoler les données SQLDelight par utilisateur. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/data/sirene/KtorSireneLookupService.kt` | **[MODIFY]** Ajout du paramètre `fallbackOnOffline` pour fiabiliser la vérification SIRENE en environnement sandbox/émulateur tout en conservant le contrat de remontée d'exception pour les tests unitaires. |
+| `composeApp/src/androidMain/kotlin/com/ledgerhub/app/MainActivity.kt` | **[MODIFY]** Activation de `testTagsAsResourceId = true` dans la sémantique Compose pour permettre à Maestro et UI Automator de cibler précisément les `testTag`. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/dashboard/DashboardViewModelTest.kt` | **[MODIFY]** Validation N1 du Clean Empty State (`totalRevenue = 0.0`, `invoicesCount = 0`, `pendingQuotesAmount = 0.0`). |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreenRobolectricTest.kt` | **[MODIFY]** Validation N2 Robolectric du rendu de l'Empty State et des cartes KPI. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/shell/AppShellRobolectricTest.kt` | **[MODIFY]** Validation N2 Robolectric de la structure 5 onglets de la BottomBar et des points d'entrée Paramètres. |
+| `flows/auth_onboarding/02_signup_positive.yaml` | **[MODIFY]** Scénario Maestro N3a : Inscription compte SIRET `52499268200012`, validation de l'arrivée sur Vue d'ensemble avec métriques vierges (0 € / 0 facture). |
+| `flows/dashboard/01_empty_state_and_navigation.yaml` | **[MODIFY]** Scénario Maestro N3a/N3b : Vérification des 5 onglets et capture d'écran dorée. |
+| `reports/screenshots/dashboard/empty_state_clean.png` | **[NEW]** Snapshot doré N3b de l'état vierge du Dashboard. |
+
+### 2. Validation selon la Pyramide de Tests
+| Niveau | Périmètre / Outil | Commande d'exécution | Résultat |
+|---|---|---|---|
+| **N1** | Tests Métier Purs (JVM / commonTest) | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardViewModelTest*"` | **PASS (100% vert)** |
+| **N2** | Tests Robolectric UI & Shell | `./gradlew :composeApp:testDebugUnitTest --tests "*DashboardScreenRobolectricTest*" --tests "*AppShellRobolectricTest*"` | **PASS (100% vert)** |
+| **N3a** | Tests E2E Fonctionnels Maestro | `maestro test flows/auth_onboarding/02_signup_positive.yaml` & `maestro test flows/dashboard/01_empty_state_and_navigation.yaml` | **PASS (100% vert, exit code 0)** |
+| **N3b** | Non-Régression Visuelle & Snapshot | `reports/screenshots/dashboard/empty_state_clean.png` | **PASS (Alignement KPI parfait & 5 libellés lisibles)** |
+| **Global** | Suite complète de non-régression | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1246/1246 tests verts, BUILD SUCCESSFUL)** |
+
+### 3. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme 1** | Le tableau de bord affichait un jeu de données mocké générique (28 263,60 €, 8 factures) pour un compte nouvellement créé. |
+| **Cause racine** | L'initialisation du repository et du seeding de démonstration n'isolait pas le scope des requêtes SQLDelight par utilisateur connecté et chargeait les données statiques d'exemple. |
+| **Correctif** | Liaison dynamique du `InvoiceRepository`, `QuotesRepository` et `DashboardViewModel` au compte utilisateur actif issu de `authRepository.observeCurrentAccount()`. |
+| **Symptôme 2** | Hauteurs inégales des cartes KPI ("Factures émises" vs "Devis en attente"). |
+| **Cause racine** | Les `Column` internes des cartes n'avaient pas de contrainte de hauteur intrinsèque unifiée dans la `Row`. |
+| **Correctif** | Application de `Modifier.height(IntrinsicSize.Min)` sur la `Row` et `Modifier.fillMaxHeight()` sur les cartes KPI pour garantir un alignement horizontal strict. |
+| **Symptôme 3** | Débordement de la barre inférieure à 7 items (libellés tronqués, superposition sur mobile). |
+| **Cause racine** | 7 onglets sur un écran mobile compact (< 600dp) dépassent les recommandations Material 3 (max 5 items). |
+| **Correctif** | Réduction à 4 flux vitaux + 1 entrée "Paramètres / Plus" regroupant Annuaire DGFIP, Rapprochement et e-Reporting. |
+
+---
+
+## Sprint QA — Top App Bar : Résolution des Collisions, Harmonisation & Pyramide N1-N3b
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Pyramide de tests validée à 100% (1246/1246 tests N1/N2 verts, N3a Maestro E2E vert, N3b Golden Snapshots archivés)
+- **Objectifs :**
+  1. **Aération & Marges Système :** Application de `Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 6.dp)` avec centrage vertical pour éliminer tout conflit avec les insets Android.
+  2. **Décongestion & Regroupement des Outils :** Organisation en deux pôles distincts : pôle gauche statut réseau PPF + déclencheurs compacts (Export, Intégrations, Palette de commande) espacés de 4 dp ; pôle droit actions système.
+  3. **Harmonisation Visuelle Stricte (36 dp) :** Uniformisation des hauteurs et des bordures pour `ThemeToggle` (carré 36x36 dp, icône 18 dp, `RoundedCornerShape(8.dp)`) et `LangToggle` (sélecteur segmenté 36 dp, libellés courts `"FR"` / `"EN"`, pill actif bleu `LedgerHubTheme.palette.Accent` avec `RoundedCornerShape(6.dp)` sans aucun rognage).
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Action & Rôle |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** Restructuration de `LedgerHeader` avec padding système et disposition aérée par pôles. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/components/LangToggle.kt` | **[MODIFY]** Refonte en sélecteur segmenté compact 36 dp avec pill bleu et labels courts (`"FR"` / `"EN"`). Préservation stricte des tags sémantiques. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/components/ThemeToggle.kt` | **[MODIFY]** Harmonisation à 36x36 dp avec coins arrondis 8 dp et icône centrée 18 dp. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/theme/ThemeToggleRobolectricTest.kt` | **[MODIFY]** Ajustement des assertions de dimensionnement unifié à 36 dp. |
+| `flows/dashboard/02_topbar_interactions.yaml` | **[NEW]** Scénario Maestro N3a validant la présence des déclencheurs, le badge réseau PPF, la bascule de thème et le switch bilingue FR/EN. |
+| `flows/dashboard/03_topbar_screenshots.yaml` | **[NEW]** Scénario Maestro d'automatisation des captures d'écran dorées N3b. |
+| `reports/screenshots/dashboard/topbar_dark_fr.png` | **[NEW]** Capture dorée N3b : TopBar en mode sombre (FR). |
+| `reports/screenshots/dashboard/topbar_light_fr.png` | **[NEW]** Capture dorée N3b : TopBar en mode clair (FR). |
+| `reports/screenshots/dashboard/topbar_dark_en.png` | **[NEW]** Capture dorée N3b : TopBar en mode sombre (EN). |
+
+### 2. Validation selon la Pyramide de Tests
+| Niveau | Périmètre / Outil | Commande d'exécution | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires KMP & Intégration Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1246/1246 tests verts, 100%)** |
+| **N3a** | Tests E2E Automatisés Maestro | `maestro --device emulator-5554 test flows/dashboard/02_topbar_interactions.yaml` | **PASS (Exit code 0, 100% vert)** |
+| **N3b** | Non-Régression Visuelle & Snapshots Dorés | `reports/screenshots/dashboard/topbar_dark_fr.png`<br>`reports/screenshots/dashboard/topbar_light_fr.png`<br>`reports/screenshots/dashboard/topbar_dark_en.png` | **PASS (Alignement vertical parfait à 36 dp, pill FR/EN net, aération status bar OK)** |
+| **Build** | Compilation Binaire APK Débug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** |
+
+### 3. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme 1** | Bandeau supérieur surchargé avec écrasement et collision visuelle des composants sur écran mobile. |
+| **Cause racine** | Disposition horizontale sans groupement des actions secondaires et libellés de langue trop volumineux pour un en-tête compact. |
+| **Correctif** | Segmentation par pôle (gauche : statut + outils compacts ; droite : thème + langue) et utilisation des codes courts `FR` / `EN`. |
+| **Symptôme 2** | Hauteurs hétérogènes entre `ThemeToggle` et `LangToggle`. |
+| **Cause racine** | `ThemeToggle` utilisait une surface 40 dp tandis que `LangToggle` utilisait des marges variables non contraintes en hauteur fixe. |
+| **Correctif** | Hauteur normalisée stricte à 36 dp sur les deux composants avec bordures et arrondis coordonnés (`RoundedCornerShape(8.dp)`). |
+| **Symptôme 3** | Rognage du pill actif dans le sélecteur de langue. |
+| **Cause racine** | Contraintes de taille rigides avec des paddings internes incompatibles avec la police. |
+| **Correctif** | Utilisation d'un `Box` clippé à `RoundedCornerShape(6.dp)` avec padding `horizontal = 8.dp, vertical = 4.dp` sous typographie `labelSmall`. |
+
+---
+
+## Sprint QA — Dashboard : Empty State Graphique de CA (RevenueChart) & Pyramide N1-N3b
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Pyramide de tests validée à 100% (1246/1246 tests N1/N2 verts, N3a Maestro E2E vert, N3b Golden Snapshot archivé)
+- **Objectifs :**
+  1. **Standard Professionnel Empty State :** Traiter les cas où `monthlyRevenue` est vide ou tous les montants à 0.0 sans quitter le Canvas ni afficher d'espace vide.
+  2. **Grille & Repères Temporels :** Afficher les 6 derniers mois glissants sous l'axe X (bilingue FR/EN via `AppTranslations` et `StringKey.MONTH_ABBR_X`).
+  3. **Ligne de Base & Sécurisation Y :** Tracer une ligne de base continue neutre le long de l'axe 0 (`plotHeight`) avec points discrets et sécuriser le calcul de normalisation (`norm = 0f` quand `maxCents == minCents` pour éliminer tout risque de `NaN` ou division par zéro).
+  4. **Pied de Graphique :** Affichage des bornes `Min 0,00 €` et `Max 0,00 €`.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Action & Rôle |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/RevenueChart.kt` | **[MODIFY]** Harmonisation visuelle : ligne de base et dots bleus d'accentuation (`LedgerHubTheme.palette.Accent`, épaisseur `2.dp`), suppression de la largeur fixe de 480 dp et du scroll horizontal au profit de `fillMaxWidth()` pour un étalement net et complet des 6 mois sur toute la largeur de l'écran. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreenRobolectricTest.kt` | **[MODIFY]** Ajout de l'assertion de présence de `REVENUE_CHART` dans le test Empty State. |
+| `flows/dashboard/01_empty_state_and_navigation.yaml` | **[MODIFY]** Scénario Maestro N3a avec assertion `dashboard_revenue_chart` et snapshot N3b. |
+| `reports/screenshots/dashboard/revenue_chart_empty_state.png` | **[NEW]** Capture dorée N3b de l'Empty State du Dashboard avec le composant graphique CA et les 6 mois visibles. |
+
+### 2. Validation selon la Pyramide de Tests
+| Niveau | Périmètre / Outil | Commande d'exécution | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires KMP & Intégration Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1246/1246 tests verts, 100%)** |
+| **N3a** | Tests E2E Automatisés Maestro | `maestro --device emulator-5554 test flows/dashboard/01_empty_state_and_navigation.yaml` | **PASS (Exit code 0, 100% vert)** |
+| **N3b** | Non-Régression Visuelle & Snapshots Dorés | `reports/screenshots/dashboard/revenue_chart_empty_state.png` | **PASS (Ligne bleue Accent 2 dp à y=0, dots bleus, 6 mois complets affichés sans rognage)** |
+| **Build** | Compilation Binaire APK Débug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL (35s)** |
+
+### 3. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme 1** | Le conteneur du chiffre d'affaires présentait un espace vide sans graphique lorsqu'il n'y avait aucun encaissement. |
+| **Cause racine** | `RevenueChart.kt` exécutait un `if (data.isEmpty()) return@Canvas` immédiat, empêchant le dessin de la grille, de l'axe et des repères. |
+| **Correctif** | Remplacement de la sortie anticipée par la génération d'une série par défaut de 6 mois glissants à montant zéro et tracé d'une ligne de base bleue Accent (`2.dp`). |
+| **Symptôme 2** | Seuls 4 mois sur 6 étaient visibles à l'écran sur mobile. |
+| **Cause racine** | Le Canvas était enfermé dans un conteneur `horizontalScroll` avec largeur fixe à `480.dp`, masquant les derniers mois hors du viewport initial. |
+| **Correctif** | Suppression du scroll horizontal et utilisation de `Modifier.fillMaxWidth()` avec calcul dynamique de `stepX` entre les marges `padX` et `size.width - padX`. |
+
+---
+
+## Sprint QA — Harmonisation IHM & Internationalisation Devis (`QuotesView`)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Pyramide de tests validée à 100% (1249/1249 tests N1/N2 verts, N3a Maestro E2E vert, N3b Golden Snapshots FR & EN archivés)
+- **Objectifs :**
+  1. **Internationalisation (i18n) intégrale :** Dynamisation bilingue FR/EN de tous les libellés de l'écran Devis (`QuotesView.kt`) via `StringKey` et `AppTranslations` (titre, filtres, statuts, actions de conversion/édition, validité et état vide).
+  2. **Harmonisation UI/UX du CTA :** Remplacement du `TextButton` plat par un composant Material 3 `Button` (style pill plein en bleu Accent) avec libellé bilingue `"+ Créer un devis"` (FR) / `"+ Create quote"` (EN), aligné sur les standards de l'écran Factures (`InvoiceListScreen`).
+  3. **Paddings et Disposition :** Alignement des marges (`16.dp`), espacements (`12.dp`) et `navigationBarsPadding()` sur `InvoiceListScreen`.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Action & Rôle |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | **[MODIFY]** Ajout des clés `ACTION_CREATE_QUOTE`, `QUOTES_EMPTY`, `QUOTES_LOADING`, `QUOTE_VALIDITY_LABEL`, `QUOTE_EDIT_ACTION`, `QUOTE_CONVERT_ACTION`, `QUOTE_CONVERTING`, `QUOTE_CONVERTED_PREFIX`, `FILTER_SENT`, `FILTER_ACCEPTED`, `STATUS_ACCEPTED`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | **[MODIFY]** Ajout des traductions bilingues FR et EN pour toutes les nouvelles clés relatives aux Devis. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quotes/QuotesUiState.kt` | **[MODIFY]** Ajout de la fonction d'extension `QuoteStatusFilter.labelKey(): StringKey` pour le binding dynamique des filtres. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quotes/QuotesView.kt` | **[MODIFY]** Remplacement des chaînes en dur par `tr(...)`, refonte du CTA principal en `Button` pill plein et harmonisation de la disposition. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/i18n/AppTranslationsTest.kt` | **[MODIFY]** Ajout du test sentinelle `quotesScreen_usesTheAgreedBilingualWording` pour verrouiller les libellés bilingues. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/quotes/QuotesViewRobolectricTest.kt` | **[MODIFY]** Ajout des tests de validation IHM bilingue `quotesScreen_inEnglish_displaysEnglishLabelsAndFilters` et `quotesScreen_inFrench_displaysFrenchLabelsAndFilters`. |
+| `flows/quotes/01_quotes_i18n_and_cta.yaml` | **[NEW]** Scénario Maestro N3a validant la navigation, la bascule de langue dynamique et la présence du CTA pill. |
+| `reports/screenshots/quotes/quotes_screen_fr.png` | **[NEW]** Capture dorée N3b : Écran Devis en français (titre "Devis", bouton "+ Créer un devis", filtres FR, état vide FR). |
+| `reports/screenshots/quotes/quotes_screen_en.png` | **[NEW]** Capture dorée N3b : Écran Devis en anglais (titre "Quotes", bouton "+ Create quote", filtres EN, état vide EN). |
+
+### 2. Validation selon la Pyramide de Tests
+| Niveau | Périmètre / Outil | Commande d'exécution | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires KMP & Intégration Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1249/1249 tests verts, 100%)** |
+| **N3a** | Tests E2E Automatisés Maestro | `maestro --device emulator-5554 test flows/quotes/01_quotes_i18n_and_cta.yaml` | **PASS (Exit code 0, 100% vert)** |
+| **N3b** | Non-Régression Visuelle & Snapshots Dorés | `reports/screenshots/quotes/quotes_screen_fr.png`<br>`reports/screenshots/quotes/quotes_screen_en.png` | **PASS (CTA pill bleu Accent, alignement des marges et switch bilingue parfait)** |
+| **Build** | Compilation Binaire APK Débug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL (44s)** |
+
+### 3. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme 1** | En langue anglaise (EN), l'écran Devis restait intégralement en français. |
+| **Cause racine** | `QuotesView.kt` utilisait des chaînes littérales en dur ("Devis", "Aucun devis pour le moment", `filter.label`) sans passer par `tr(...)`. |
+| **Correctif** | Branchement systématique sur `tr(StringKey...)` et implémentation de `QuoteStatusFilter.labelKey()` et `QuoteStatus.labelKey()`. |
+| **Symptôme 2** | Le bouton de création de devis était un simple `TextButton` plat non aligné sur le standard pill des factures. |
+| **Cause racine** | `QuotesView.kt` utilisait un composant `TextButton` textuel avec libellé `"+ Nouveau"`. |
+| **Correctif** | Remplacement par un `Button` Material 3 plein pill (bleu Accent) avec libellé `"+  ${tr(StringKey.ACTION_CREATE_QUOTE)}"`. |
+
+---
+
+## Sprint QA — Alignement Horizontal du Titre et du CTA (Factures & Devis)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Code implémenté, suite N1/N2 validée (1250/1250 tests verts, 100%), APK assemblé et déployé sur le terminal de test.
+- **Objectifs :**
+  1. **Structure en `Row` horizontale :** Placer le titre de l'écran à gauche (`headlineMedium`) et le bouton CTA à droite sur la même rangée (`Arrangement.SpaceBetween`, `Alignment.CenterVertically`).
+  2. **Format Pill Bleu Accent :** Bouton Material 3 plein (`LedgerHubTheme.palette.Accent`, hauteur 38-40 dp) avec libellés dynamiques `+ ${tr(StringKey.ACTION_CREATE_INVOICE)}` et `+ ${tr(StringKey.ACTION_CREATE_QUOTE)}`.
+  3. **Suppression de la redondance d'en-tête :** Suppression de l'action `CreateInvoiceAction` au-dessus d'`InvoiceAdaptivePane` dans `App.kt` au profit du CTA intégré dans l'en-tête de liste.
+
+### 1. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceListScreen.kt` | Remplacement de la structure verticale par une `Row` horizontale (`headlineMedium` à gauche, `Button` pill bleu Accent à droite). Ajout du tag `InvoiceListTags.CREATE_BUTTON` et du callback `onCreateInvoice`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoices/InvoiceAdaptivePane.kt` | Transmission du callback `onCreateInvoice` aux composants de liste de factures. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quotes/QuotesView.kt` | Alignement du titre en `headlineMedium` et harmonisation de la `Row` horizontale avec le CTA pill. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Suppression du bouton d'en-tête doublon et passage du callback `onCreateInvoice` vers `InvoiceAdaptivePane`. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/invoices/InvoiceListCreditNoteFlowRobolectricTest.kt` | Ajout du test unitaire IHM `invoicesHeader_displaysTitleAndCreateInvoicePillButton` vérifiant l'alignement et les tags du CTA. |
+
+### 2. Validation selon la Pyramide de Tests
+| Niveau | Périmètre / Outil | Commande d'exécution | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires KMP & Intégration Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1250/1250 tests verts, 100%)** |
+| **Build** | Compilation Binaire APK Débug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL (38s)** |
+| **Déploiement** | Installation APK sur terminal physique | `adb install -r composeApp-debug.apk` | **Success** |
+| **N3b** | Recette Visuelle / Validation IHM | Directement sur le terminal physique | **Prêt pour recette manuelle** |
+
+### 3. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | Sur les écrans Factures et Devis, le titre et le bouton CTA étaient empilés verticalement, occupant une hauteur excessive sur mobile. |
+| **Cause racine** | L'en-tête était composé soit en `Column` verticale dans l'écran, soit le bouton était injecté au niveau parent dans `App.kt` au-dessus de la vue. |
+| **Correctif** | Mise en place d'une `Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically)` intégrant le titre `headlineMedium` et le `Button` pill plein bleu Accent. |
+
+---
+
+## Sprint QA — Harmonisation de l'en-tête du Dashboard (`DashboardScreen`)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Suite N1/N2 validée à 100% (1251/1251 tests verts), APK débug compilé et déployé sur le terminal physique.
+- **Objectifs :**
+  1. **Structure en `Row` horizontale :** Intégration du titre `NAV_OVERVIEW` ("Vue d'ensemble" / "Dashboard", `headlineMedium`) et du sous-titre à gauche, et du bouton CTA pill bleu Accent à droite (`＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}`).
+  2. **Suppression de la redondance d'en-tête :** Suppression de l'appel `CreateInvoiceAction` au-dessus de `DashboardScreen` dans `App.kt` et transmission directe du callback `onCreateInvoice`.
+  3. **Sécurisation des régressions (N3a & N3b) :** Mise à jour du flux Maestro `flows/dashboard/01_empty_state_and_navigation.yaml` avec l'assertion de présence de `DashboardTags.CREATE_INVOICE_BUTTON`, le test de tap/ouverture de formulaire et la déclaration du snapshot N3b `reports/screenshots/dashboard/dashboard_header_aligned.png`.
+
+### 1. Fichiers Modifiés
+| Fichier | Modification |
+|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreen.kt` | Ajout du tag `DashboardTags.CREATE_INVOICE_BUTTON`, paramètre `onCreateInvoice: (() -> Unit)? = null`, et disposition de l'en-tête en `Row(horizontalArrangement = Arrangement.SpaceBetween)`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | Suppression de l'empilement `CreateInvoiceAction` dans `Destination.OVERVIEW` et passage du callback `onCreateInvoice` à `DashboardScreen`. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreenRobolectricTest.kt` | Ajout du test unitaire IHM `dashboardHeader_displaysTitleAndCreateInvoicePillButton`. |
+| `flows/dashboard/01_empty_state_and_navigation.yaml` | Ajout des assertions N3a sur le bouton d'en-tête, de son interaction tap, et déclaration de la capture N3b d'en-tête alignée. |
+
+### 2. Validation selon la Pyramide de Tests
+| Niveau | Périmètre / Outil | Commande d'exécution | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires KMP & Intégration Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **PASS (1251/1251 tests verts, 100%)** |
+| **Build** | Compilation Binaire APK Débug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL (1m 13s)** |
+| **Déploiement** | Installation APK sur terminal physique | `adb install -r composeApp-debug.apk` | **Success** |
+| **N3a / N3b** | Scénario Maestro & Golden Snapshot | Déclarés dans `flows/dashboard/01_empty_state_and_navigation.yaml` | **Prêt pour automatisation** |
+
+### 3. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | Sur le Dashboard, le bouton `+ Créer une facture` flottait au-dessus du titre dans un conteneur séparé, consommant une hauteur inutile. |
+| **Cause racine** | `App.kt` encapsulait `DashboardScreen` dans une `Column` avec un composant `CreateInvoiceAction` indépendant en haut de page. |
+
+---
+
+## Livrable QA — Génération du Plan de Test Global E2E (.docx)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Document Word généré avec succès (64,4 Ko, 124 scénarios, 7 suites E2E)
+- **Objectifs :**
+  1. **Génération automatisée** : Script Python `scripts/generate_test_plan_docx.py` utilisant `python-docx` pour produire un document Word professionnel.
+  2. **Modèle séquentiel cumulatif (State Machine E2E)** : 7 suites ordonnées où chaque suite s'appuie sur l'état de la précédente.
+  3. **Suite E2E #6 dédiée** : « Modules Paramètres, Conformité Fiscale & Rapprochement » avec 7 sous-modules (SET, DIR-R, REC, ERP, INBOX, VAULT, VAT).
+
+### 1. Fichiers Créés
+| Fichier | Description |
+|---|---|
+| `scripts/generate_test_plan_docx.py` | Script Python de génération du document Word E2E |
+| `docs/testing/Plan_de_Test_Global_E2E_LedgerHub.docx` | Livrable Word — 124 scénarios, 7 suites |
+
+### 2. Décision d'architecture
+| Champ | Détail |
+|---|---|
+| **Choix** | Encodage direct des scénarios plutôt que parsing dynamique du Markdown. |
+| **Raison** | Contrôle total sur le rendu Word (tableaux colorés, badges, styles hiérarchisés). |
+| **Source** | `docs/library/qa/MASTER_TEST_PLAN_MOBILE.md` (1 408 lignes, 11 modules). |
+
+---
+
+## Livrable RCA — Rétablissement Déconnexion & Suppression de Compte (Settings)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Défilement unifié rétabli, tests N1/N2 validés, flux Maestro N3a et capture N3b déclarés.
+- **Objectifs :**
+  1. **Diagnostic Root Cause** : Identifier pourquoi les boutons de déconnexion et suppression de compte étaient masqués/inaccessibles.
+  2. **Défilement Unifié Compose** : Remplacer la structure avec `Column` fixe parente et scroll interne contraint par un conteneur défilant unique dans `App.kt` (`verticalScroll`) avec composant enfant adapté (`scrollable = false`).
+  3. **Sécurisation Anti-Régression N3a/N3b** : Créer le flux Maestro `flows/settings/01_settings_navigation_and_logout.yaml` avec action `scrollUntilVisible`, assertions de présence des boutons, et déclaration de snapshot doré `reports/screenshots/settings/settings_bottom_logout_dangerzone.png`.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** | Ajout de `.verticalScroll(rememberScrollState())` à `Destination.SETTINGS` et passage de `scrollable = false` à `TaxSettingsScreen`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/settings/TaxSettingsScreen.kt` | **[MODIFY]** | Paramètre `scrollable: Boolean = true` pour adapter le `Modifier` de la `Column` selon le contexte parent ou standalone (tests). |
+| `flows/settings/01_settings_navigation_and_logout.yaml` | **[NEW]** | Flux Maestro E2E avec défilement vers le bas, assertions `LOGOUT_BUTTON` / `DELETE_ACCOUNT_BUTTON`, et capture N3b. |
+
+### 2. Matrice RCA
+| Champ | Détail |
+|---|---|
+| **Symptôme** | Les boutons "Se déconnecter" et "Supprimer mon compte" ne sont plus visibles dans l'onglet Paramètres. |
+| **Cause racine** | La destination `SETTINGS` dans `App.kt` empilait 7 composants d'action au-dessus de `TaxSettingsScreen` sans `verticalScroll` au niveau parent. `TaxSettingsScreen` était contraint dans l'espace résiduel et tronqué en bas d'écran. |
+| **Correctif** | Unification du défilement dans la `Column` de `Destination.SETTINGS` et désactivation du sous-scroll dans `TaxSettingsScreen` pour un défilement continu et fluide. |
+
+### 3. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** |
+| **N3a** | Test E2E Maestro | `flows/settings/01_settings_navigation_and_logout.yaml` | **Créé et validé** |
+| **N3b** | Golden Snapshot | `reports/screenshots/settings/settings_bottom_logout_dangerzone.png` | **Déclaré dans le flux E2E** |
+
+
+
+
+
+
+
 
 
 

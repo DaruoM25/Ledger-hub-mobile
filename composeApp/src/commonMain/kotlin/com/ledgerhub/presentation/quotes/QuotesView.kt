@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,8 +35,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.i18n.StringKey
 import com.ledgerhub.domain.quote.Quote
 import com.ledgerhub.domain.quote.QuoteStatus
+import com.ledgerhub.presentation.i18n.tr
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
 object QuotesTags {
@@ -56,11 +60,11 @@ object QuotesTags {
 }
 
 /** Libellé et couleur du badge de statut réglementaire d'un devis. */
-internal fun QuoteStatus.label(): String = when (this) {
-    QuoteStatus.DRAFT -> "Brouillon"
-    QuoteStatus.SENT -> "Envoyé"
-    QuoteStatus.ACCEPTED -> "Accepté"
-    QuoteStatus.REJECTED -> "Refusé"
+internal fun QuoteStatus.labelKey(): StringKey = when (this) {
+    QuoteStatus.DRAFT -> StringKey.STATUS_DRAFT
+    QuoteStatus.SENT -> StringKey.STATUS_SENT
+    QuoteStatus.ACCEPTED -> StringKey.STATUS_ACCEPTED
+    QuoteStatus.REJECTED -> StringKey.STATUS_REJECTED
 }
 
 internal fun QuoteStatus.badgeColor(): Color = when (this) {
@@ -97,22 +101,27 @@ internal fun QuotesContent(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
+            .navigationBarsPadding()
             .semantics { testTag = QuotesTags.SCREEN }
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Devis", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            TextButton(
+            Text(
+                tr(StringKey.NAV_QUOTES),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Button(
                 onClick = onCreateQuote,
                 modifier = Modifier.semantics { testTag = QuotesTags.CREATE_BUTTON },
             ) {
-                Text("＋ Nouveau", style = MaterialTheme.typography.labelMedium)
+                Text("＋  ${tr(StringKey.ACTION_CREATE_QUOTE)}")
             }
         }
 
@@ -130,7 +139,7 @@ internal fun QuotesContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                Text("Chargement des devis…")
+                Text(tr(StringKey.QUOTES_LOADING))
             }
 
             uiState.loadErrorMessage != null -> Text(
@@ -143,8 +152,10 @@ internal fun QuotesContent(
             )
 
             uiState.filteredQuotes.isEmpty() -> Text(
-                text = "Aucun devis pour le moment",
-                modifier = Modifier.semantics { testTag = QuotesTags.EMPTY_STATE },
+                text = tr(StringKey.QUOTES_EMPTY),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { testTag = QuotesTags.EMPTY_STATE },
             )
 
             else -> LazyColumn(
@@ -200,7 +211,7 @@ private fun QuotesFilterRow(
             FilterChip(
                 selected = isSelected,
                 onClick = { onFilterSelected(filter) },
-                label = { Text("${filter.label} ($count)", style = MaterialTheme.typography.labelSmall) },
+                label = { Text("${tr(filter.labelKey())} ($count)", style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.semantics { testTag = QuotesTags.filterChipTag(filter) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -243,24 +254,27 @@ private fun QuoteRow(
                             modifier = Modifier.semantics { testTag = QuotesTags.editButtonTag(quote.number) },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         ) {
-                            Text("Modifier", style = MaterialTheme.typography.labelSmall)
+                            Text(tr(StringKey.QUOTE_EDIT_ACTION), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     StatusBadge(quoteNumber = quote.number, status = quote.status)
                 }
             }
-            Text("Validité : ${quote.validityDate}", style = MaterialTheme.typography.bodySmall)
+            Text("${tr(StringKey.QUOTE_VALIDITY_LABEL)} ${quote.validityDate}", style = MaterialTheme.typography.bodySmall)
             Text("TTC : ${quote.totalTtc.cents / 100}.${(quote.totalTtc.cents % 100).toString().padStart(2, '0')} €")
 
             when {
-                convertedInvoiceNumber != null -> Text(
-                    text = "Convertie en facture $convertedInvoiceNumber",
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.semantics {
-                        testTag = QuotesTags.convertedInvoiceTag(quote.number)
-                        contentDescription = "Convertie en facture $convertedInvoiceNumber"
-                    },
-                )
+                convertedInvoiceNumber != null -> {
+                    val convertedText = "${tr(StringKey.QUOTE_CONVERTED_PREFIX)} $convertedInvoiceNumber"
+                    Text(
+                        text = convertedText,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.semantics {
+                            testTag = QuotesTags.convertedInvoiceTag(quote.number)
+                            contentDescription = convertedText
+                        },
+                    )
+                }
 
                 isConverting -> Row(
                     modifier = Modifier.semantics { testTag = QuotesTags.conversionLoadingTag(quote.number) },
@@ -268,14 +282,14 @@ private fun QuoteRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    Text("Conversion en facture…")
+                    Text(tr(StringKey.QUOTE_CONVERTING))
                 }
 
                 quote.isConvertibleToInvoice -> Button(
                     onClick = onConvert,
                     modifier = Modifier.semantics { testTag = QuotesTags.convertButtonTag(quote.number) },
                 ) {
-                    Text("Convertir en facture")
+                    Text(tr(StringKey.QUOTE_CONVERT_ACTION))
                 }
             }
         }
@@ -284,19 +298,21 @@ private fun QuoteRow(
 
 @Composable
 private fun StatusBadge(quoteNumber: String, status: QuoteStatus) {
+    val statusLabel = tr(status.labelKey())
     Surface(
         color = status.badgeColor(),
         contentColor = Color.White,
         shape = RoundedCornerShape(50),
         modifier = Modifier.semantics {
             testTag = QuotesTags.statusBadgeTag(quoteNumber)
-            contentDescription = status.label()
+            contentDescription = statusLabel
         },
     ) {
         Text(
-            text = status.label(),
+            text = statusLabel,
             modifier = Modifier.padding(PaddingValues(horizontal = 10.dp, vertical = 4.dp)),
             style = MaterialTheme.typography.labelMedium,
         )
     }
 }
+

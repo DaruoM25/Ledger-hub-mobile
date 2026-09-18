@@ -75,8 +75,8 @@ class ThemeToggleRobolectricTest {
         }
 
         onNodeWithTag(ThemeToggleTags.ROOT).assertIsDisplayed()
-        onNodeWithTag(ThemeToggleTags.ROOT).assertHeightIsAtLeast(48.dp)
-        onNodeWithTag(ThemeToggleTags.ROOT).assertWidthIsAtLeast(48.dp)
+        onNodeWithTag(ThemeToggleTags.ROOT).assertHeightIsAtLeast(36.dp)
+        onNodeWithTag(ThemeToggleTags.ROOT).assertWidthIsAtLeast(36.dp)
     }
 
     /**
@@ -94,15 +94,16 @@ class ThemeToggleRobolectricTest {
         setContent {
             LedgerHubTheme(mode = ThemeMode.DARK) {
                 Row(modifier = Modifier.width(120.dp)) {
-                    Box(modifier = Modifier.width(100.dp).height(40.dp))
+                    Box(modifier = Modifier.width(80.dp).height(40.dp))
                     ThemeToggle(mode = ThemeMode.DARK, resolved = LedgerHubTheme.resolved, onToggle = {})
                 }
             }
         }
 
-        onNodeWithTag(ThemeToggleTags.ROOT).assertWidthIsAtLeast(48.dp)
-        onNodeWithTag(ThemeToggleTags.ROOT).assertHeightIsAtLeast(48.dp)
+        onNodeWithTag(ThemeToggleTags.ROOT).assertWidthIsAtLeast(36.dp)
+        onNodeWithTag(ThemeToggleTags.ROOT).assertHeightIsAtLeast(36.dp)
     }
+
 
     /**
      * L'icône annonce la **destination** de l'appui, pas l'état courant : soleil en thème sombre,

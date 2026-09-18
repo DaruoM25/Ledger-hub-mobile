@@ -1,0 +1,53 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3a : Top App Bar Interactions, Theme & Lang Toggles, Action Triggers
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+- assertVisible:
+    id: "dashboard_screen"
+
+# 1. Présence et visibilité du badge statut réseau (NetworkSimulationSelector)
+- assertVisible:
+    id: "network_simulation_toggle"
+
+# 2. Présence des déclencheurs compacts (Export, Intégrations, Palette de commandes)
+- assertVisible:
+    id: "export_modal_trigger"
+- assertVisible:
+    id: "integrations_hub_trigger"
+- assertVisible:
+    id: "command_palette_trigger"
+
+# 3. Présence et vérification du ThemeToggle & LangToggle
+- assertVisible:
+    id: "theme_toggle_btn"
+- assertVisible:
+    id: "lang_toggle"
+- assertVisible:
+    id: "lang_toggle_fr"
+- assertVisible:
+    id: "lang_toggle_en"
+
+# 4. Interaction LangToggle : passage en EN -> vérification libellé Dashboard -> retour en FR
+- tapOn:
+    id: "lang_toggle_en"
+- assertVisible: "Dashboard"
+
+- tapOn:
+    id: "lang_toggle_fr"
+- assertVisible: "Vue d'ensemble"
+
+# 5. Interaction ThemeToggle : bascule sombre -> clair -> sombre
+- tapOn:
+    id: "theme_toggle_btn"
+- assertVisible:
+    id: "dashboard_screen"
+
+- tapOn:
+    id: "theme_toggle_btn"
+- assertVisible:
+    id: "dashboard_screen"

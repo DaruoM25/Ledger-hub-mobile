@@ -1,0 +1,68 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3a/N3b : Navigation 5 Onglets, En-tête Alignée, CTA Facture & Snapshots
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+- assertVisible:
+    id: "dashboard_screen"
+
+# 1. Vérification de l'en-tête alignée et du CTA Créer une facture (N3a)
+- assertVisible:
+    id: "dashboard_create_invoice_button"
+
+# Capture d'écran dorée N3b En-tête Alignée Dashboard
+- takeScreenshot: reports/screenshots/dashboard/dashboard_header_aligned
+
+- assertVisible:
+    id: "dashboard_revenue_chart"
+
+# Capture d'écran dorée N3b Empty State & Alignement KPI & Graphique CA
+- takeScreenshot: reports/screenshots/dashboard/revenue_chart_empty_state
+
+# 2. Vérification du tap sur le CTA et ouverture de l'écran de création (N3a)
+- tapOn:
+    id: "dashboard_create_invoice_button"
+- assertVisible:
+    id: "invoice_form_screen"
+- back
+- assertVisible:
+    id: "dashboard_screen"
+
+# 3. Vérification des 5 flux vitaux de navigation
+- tapOn:
+    id: "bottom_bar_item_invoices"
+- assertVisible:
+    id: "invoice_list_screen"
+
+- tapOn:
+    id: "bottom_bar_item_quotes"
+- assertVisible:
+    id: "quotes_screen"
+
+- tapOn:
+    id: "bottom_bar_item_clients"
+- assertVisible:
+    id: "clients_screen"
+
+- tapOn:
+    id: "bottom_bar_item_settings"
+- assertVisible:
+    id: "directory_trigger"
+- assertVisible:
+    id: "reconciliation_trigger"
+- assertVisible:
+    id: "ereporting_trigger"
+
+- tapOn:
+    id: "bottom_bar_item_overview"
+- assertVisible:
+    id: "dashboard_screen"
+- assertVisible:
+    id: "dashboard_create_invoice_button"
+- assertVisible:
+    id: "dashboard_revenue_chart"
+

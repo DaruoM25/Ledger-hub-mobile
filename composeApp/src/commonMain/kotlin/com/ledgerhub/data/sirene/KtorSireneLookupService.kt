@@ -45,24 +45,32 @@ import kotlinx.serialization.json.Json
 class KtorSireneLookupService(
     private val httpClient: HttpClient = createPlatformHttpClient(),
     private val baseUrl: String = SEARCH_ENDPOINT,
+    private val fallbackOnOffline: Boolean = false,
 ) : SireneLookupService {
 
     override suspend fun lookup(siret: String): SireneLookupResult {
-        val response = httpClient.get(baseUrl) {
-            parameter("q", siret)
-            // Une seule fiche est consommée : demander la page minimale évite de télécharger
-            // vingt établissements pour n'en lire qu'un.
-            parameter("page", "1")
-            parameter("per_page", "1")
+        val response = try {
+            httpClient.get(baseUrl) {
+                parameter("q", siret)
+                parameter("page", "1")
+                parameter("per_page", "1")
+            }
+        } catch (t: Throwable) {
+            if (fallbackOnOffline) {
+                return MockSireneLookupService(simulatedDelayMillis = 200L).lookup(siret)
+            }
+            throw t
         }
 
-        // 404 : l'API ne connaît pas la route ou le numéro. Traité comme un SIRET absent, jamais
-        // comme une panne — voir le KDoc de la classe.
         if (response.status == HttpStatusCode.NotFound) return SireneLookupResult.NotFound
 
-        check(response.status.value in 200..299) {
-            "Le répertoire SIRENE a répondu ${response.status.value}"
+        if (response.status.value !in 200..299) {
+            if (fallbackOnOffline) {
+                return MockSireneLookupService(simulatedDelayMillis = 200L).lookup(siret)
+            }
+            error("Le répertoire SIRENE a répondu avec le code HTTP ${response.status.value}.")
         }
+
 
         val payload = JSON.decodeFromString(SearchResponse.serializer(), response.bodyAsText())
         val first = payload.results.firstOrNull() ?: return SireneLookupResult.NotFound

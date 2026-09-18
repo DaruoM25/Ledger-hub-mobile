@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,8 +16,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ledgerhub.App
@@ -48,6 +52,7 @@ class MainActivity : ComponentActivity() {
         }.getOrNull()
 
         setContent {
+
             if (database == null) {
                 StartupFailureScreen(
                     message = "La base de données locale n'a pas pu être ouverte.\n\n" +
@@ -55,10 +60,20 @@ class MainActivity : ComponentActivity() {
                         "(Paramètres ▸ Applications ▸ LedgerHub ▸ Stockage).",
                 )
             } else {
-                App(database, AndroidDocumentExporter(applicationContext))
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics {
+                            @OptIn(ExperimentalComposeUiApi::class)
+                            testTagsAsResourceId = true
+                        },
+                ) {
+                    App(database, AndroidDocumentExporter(applicationContext))
+                }
             }
         }
     }
+
 
     private companion object {
         /** `adb logcat -s LedgerHub` suffit alors à voir la cause réelle d'un démarrage raté. */

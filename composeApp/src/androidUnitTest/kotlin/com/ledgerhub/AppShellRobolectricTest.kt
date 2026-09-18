@@ -2,8 +2,10 @@ package com.ledgerhub
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertContentDescriptionContains
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -68,14 +70,36 @@ class AppShellRobolectricTest {
     }
 
     @Test
-    fun bottomBar_navigatesToDgfipDirectory() = runComposeUiTest {
+    fun bottomBar_containsExactlyFiveVitalTabs() = runComposeUiTest {
         setContent { App(database = newDatabase(), startAuthenticated = true) }
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
         }
 
-        onNodeWithText("Annuaire DGFIP").performClick()
+        onNodeWithTag(BOTTOM_BAR_TAG).assertIsDisplayed()
+        onNodeWithTag(bottomBarItemTag(Destination.OVERVIEW)).assertIsDisplayed()
+        onNodeWithTag(bottomBarItemTag(Destination.INVOICES)).assertIsDisplayed()
+        onNodeWithTag(bottomBarItemTag(Destination.QUOTES)).assertIsDisplayed()
+        onNodeWithTag(bottomBarItemTag(Destination.CLIENTS)).assertIsDisplayed()
+        onNodeWithTag(bottomBarItemTag(Destination.SETTINGS)).assertIsDisplayed()
+    }
+
+    @Test
+    fun settingsTab_navigatesToDgfipDirectory() = runComposeUiTest {
+        setContent { App(database = newDatabase(), startAuthenticated = true) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.SCREEN).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithText("Paramètres").performClick()
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DIRECTORY_TRIGGER_TAG).fetchSemanticsNodes().isNotEmpty()
+        }
+        onNodeWithTag(DIRECTORY_TRIGGER_TAG).assertIsDisplayed()
+        onNodeWithTag(DIRECTORY_TRIGGER_TAG).performClick()
 
         waitUntil(timeoutMillis = 5_000) {
             onAllNodesWithTag(DirectoryTags.SCREEN).fetchSemanticsNodes().isNotEmpty()

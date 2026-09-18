@@ -117,4 +117,37 @@ class DashboardViewModelTest {
         assertEquals(0L, state.pendingQuotesTotalCents)
         assertFalse(state.hasQuotesToFollowUp)
     }
+
+    @Test
+    fun loadDashboard_withEmptyRepositories_exposesZeroMetricsAndCleanEmptyState() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val vm = DashboardViewModel(
+            invoiceRepository = object : com.ledgerhub.domain.invoice.InvoiceRepository {
+                override suspend fun submitInvoice(invoice: com.ledgerhub.domain.invoice.Invoice) = Result.success(Unit)
+                override suspend fun fetchInvoices(): Result<List<com.ledgerhub.domain.invoice.Invoice>> = Result.success(emptyList())
+            },
+            creditNoteRepository = MockCreditNoteRepository(simulatedDelayMillis = 0L),
+            quoteRepository = object : com.ledgerhub.domain.quote.QuoteRepository {
+                override suspend fun submitQuote(quote: com.ledgerhub.domain.quote.Quote) = Result.success(Unit)
+                override suspend fun fetchQuotes(): Result<List<com.ledgerhub.domain.quote.Quote>> = Result.success(emptyList())
+            },
+            dispatcher = dispatcher,
+            clock = clock,
+        )
+
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertFalse(state.isLoading)
+        assertEquals(null, state.loadErrorMessage)
+        assertEquals(0L, state.collectedRevenueCents)
+        assertEquals(0L, state.pendingRevenueCents)
+        assertEquals(0L, state.overdueRevenueCents)
+        assertEquals(0, state.issuedCount)
+        assertEquals(0L, state.pendingQuotesTotalCents)
+        assertEquals(0, state.pendingQuotesCount)
+        assertTrue(state.monthlyRevenue.isEmpty())
+        assertTrue(state.recentDocuments.isEmpty())
+        assertTrue(state.quotesToFollowUp.isEmpty())
+    }
 }

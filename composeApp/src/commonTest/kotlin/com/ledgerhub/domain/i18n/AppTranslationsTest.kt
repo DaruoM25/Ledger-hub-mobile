@@ -36,6 +36,24 @@ class AppTranslationsTest {
         )
     }
 
+    @Test
+    fun quotesScreen_usesTheAgreedBilingualWording() {
+        assertEquals("Devis", AppTranslations.get(StringKey.NAV_QUOTES, AppLanguage.FR))
+        assertEquals("Quotes", AppTranslations.get(StringKey.NAV_QUOTES, AppLanguage.EN))
+        assertEquals("Créer un devis", AppTranslations.get(StringKey.ACTION_CREATE_QUOTE, AppLanguage.FR))
+        assertEquals("Create quote", AppTranslations.get(StringKey.ACTION_CREATE_QUOTE, AppLanguage.EN))
+        assertEquals("Aucun devis pour le moment", AppTranslations.get(StringKey.QUOTES_EMPTY, AppLanguage.FR))
+        assertEquals("No quotes yet", AppTranslations.get(StringKey.QUOTES_EMPTY, AppLanguage.EN))
+        assertEquals("Chargement des devis…", AppTranslations.get(StringKey.QUOTES_LOADING, AppLanguage.FR))
+        assertEquals("Loading quotes…", AppTranslations.get(StringKey.QUOTES_LOADING, AppLanguage.EN))
+        assertEquals("Accepté", AppTranslations.get(StringKey.STATUS_ACCEPTED, AppLanguage.FR))
+        assertEquals("Accepted", AppTranslations.get(StringKey.STATUS_ACCEPTED, AppLanguage.EN))
+        assertEquals("Acceptés", AppTranslations.get(StringKey.FILTER_ACCEPTED, AppLanguage.FR))
+        assertEquals("Accepted", AppTranslations.get(StringKey.FILTER_ACCEPTED, AppLanguage.EN))
+        assertEquals("Convertir en facture", AppTranslations.get(StringKey.QUOTE_CONVERT_ACTION, AppLanguage.FR))
+        assertEquals("Convert to invoice", AppTranslations.get(StringKey.QUOTE_CONVERT_ACTION, AppLanguage.EN))
+    }
+
     /**
      * Libellés réglementaires PPF 2026 (US-13). Leur formulation est imposée par le référentiel :
      * elle est donc figée par des sentinelles, et non laissée à l'appréciation d'une relecture.

@@ -47,6 +47,7 @@ object InvoiceListTags {
     const val RETRY_BUTTON = "invoice_list_retry_button"
     const val EMPTY = "invoice_list_empty"
     const val LIST = "invoice_list_items"
+    const val CREATE_BUTTON = "invoice_list_create_button"
     fun filterChip(filter: InvoiceStatusFilter) = "invoice_list_filter_${filter.name}"
 
     /** US-10 : action « Créer un avoir » proposée sous une facture finalisée non encore créditée. */
@@ -58,6 +59,7 @@ object InvoiceListTags {
 fun InvoiceListScreen(
     viewModel: InvoiceListViewModel,
     onInvoiceClick: (String) -> Unit,
+    onCreateInvoice: () -> Unit = {},
     onCreateCreditNote: (Invoice) -> Unit = {},
     syncQueueViewModel: SyncQueueViewModel? = null,
 ) {
@@ -67,6 +69,7 @@ fun InvoiceListScreen(
         uiState = uiState,
         onIntent = viewModel::processIntent,
         onInvoiceClick = onInvoiceClick,
+        onCreateInvoice = onCreateInvoice,
         onCreateCreditNote = onCreateCreditNote,
         syncQueueUiState = syncQueueState,
         onSyncBatch = {
@@ -82,6 +85,7 @@ internal fun InvoiceListView(
     uiState: InvoiceListUiState,
     onIntent: (InvoiceListIntent) -> Unit,
     onInvoiceClick: (String) -> Unit,
+    onCreateInvoice: () -> Unit = {},
     onCreateCreditNote: (Invoice) -> Unit = {},
     selectedInvoiceNumber: String? = null,
     syncQueueUiState: SyncQueueUiState? = null,
@@ -95,11 +99,23 @@ internal fun InvoiceListView(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            tr(StringKey.NAV_INVOICES),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                tr(StringKey.NAV_INVOICES),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Button(
+                onClick = onCreateInvoice,
+                modifier = Modifier.semantics { testTag = InvoiceListTags.CREATE_BUTTON },
+            ) {
+                Text("＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}")
+            }
+        }
 
         if (syncQueueUiState != null) {
             SyncBatchCard(

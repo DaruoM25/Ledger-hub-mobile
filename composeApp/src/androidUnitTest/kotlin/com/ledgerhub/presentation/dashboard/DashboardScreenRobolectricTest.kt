@@ -112,4 +112,48 @@ class DashboardScreenRobolectricTest {
         onNodeWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_EMPTY).performScrollTo().assertIsDisplayed()
         onAllNodesWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_LIST).assertCountEquals(0)
     }
+
+    @Test
+    fun dashboard_showsEmptyState_withZeroKpisAndEmptySections_whenAccountHasNoDocuments() = runComposeUiTest {
+        val emptyViewModel = DashboardViewModel(
+            getDashboardAnalyticsUseCase = GetDashboardAnalyticsUseCase(
+                invoiceRepository = object : com.ledgerhub.domain.invoice.InvoiceRepository {
+                    override suspend fun submitInvoice(invoice: com.ledgerhub.domain.invoice.Invoice) = Result.success(Unit)
+                    override suspend fun fetchInvoices(): Result<List<com.ledgerhub.domain.invoice.Invoice>> = Result.success(emptyList())
+                },
+                creditNoteRepository = MockCreditNoteRepository(simulatedDelayMillis = 0L),
+                quoteRepository = EmptyQuoteRepository,
+                clock = clock,
+            ),
+        )
+
+        setContent { DashboardScreen(viewModel = emptyViewModel) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.RECENT_ACTIVITY_EMPTY).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(DashboardTags.KPI_GRID).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.REVENUE_CHART).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.RECENT_ACTIVITY_EMPTY).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_EMPTY).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun dashboardHeader_displaysTitleAndCreateInvoicePillButton() = runComposeUiTest {
+        var createClicked = false
+        setContent {
+            DashboardScreen(
+                viewModel = viewModel(),
+                onCreateInvoice = { createClicked = true },
+            )
+        }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.CREATE_INVOICE_BUTTON).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(DashboardTags.CREATE_INVOICE_BUTTON).assertIsDisplayed()
+    }
 }
+

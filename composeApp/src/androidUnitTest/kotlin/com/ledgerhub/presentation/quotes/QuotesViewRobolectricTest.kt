@@ -1,24 +1,29 @@
 package com.ledgerhub.presentation.quotes
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runComposeUiTest
 import com.ledgerhub.data.invoice.MockInvoiceRepository
 import com.ledgerhub.data.quote.MockQuoteRepository
+import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
 import com.ledgerhub.domain.quote.ConvertQuoteToInvoiceUseCase
+import com.ledgerhub.presentation.i18n.LocalAppLanguage
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.Test
 
 /**
- * Tests IHM Robolectric (Skill 2) de [QuotesView] : affichage des badges de statuts colorés
- * et cinématique du "bouton magique" de conversion d'un devis Accepté en facture.
+ * Tests IHM Robolectric (Skill 2) de [QuotesView] : affichage des badges de statuts colorés,
+ * internationalisation FR/EN et cinématique du "bouton magique" de conversion d'un devis Accepté en facture.
  * Délais réseau mock réduits au minimum pour garder les tests rapides et déterministes.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -143,5 +148,57 @@ class QuotesViewRobolectricTest {
         onNodeWithTag(QuotesTags.LIST).performScrollToNode(hasTestTag(QuotesTags.rowTag("DEV-2026-003")))
         onNodeWithTag(QuotesTags.convertButtonTag("DEV-2026-003")).performClick()
         assert(convertedQuoteNumber == "DEV-2026-003")
+    }
+
+    @Test
+    fun quotesScreen_inEnglish_displaysEnglishLabelsAndFilters() = runComposeUiTest {
+        setContent {
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.EN) {
+                QuotesView(viewModel = viewModel())
+            }
+        }
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Header and CTA
+        onNodeWithText("Quotes").assertIsDisplayed()
+        onNodeWithTag(QuotesTags.CREATE_BUTTON).assertIsDisplayed()
+        onNodeWithText("＋  Create quote").assertIsDisplayed()
+
+        // Filter chips in English
+        onNodeWithText("All (4)").assertIsDisplayed()
+        onNodeWithText("Drafts (1)").assertIsDisplayed()
+        onNodeWithText("Sent (1)").assertIsDisplayed()
+        onNodeWithText("Accepted (1)").assertIsDisplayed()
+
+        // Status badge in English
+        onNodeWithTag(QuotesTags.statusBadgeTag("DEV-2026-001")).assertIsDisplayed()
+    }
+
+    @Test
+    fun quotesScreen_inFrench_displaysFrenchLabelsAndFilters() = runComposeUiTest {
+        setContent {
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.FR) {
+                QuotesView(viewModel = viewModel())
+            }
+        }
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(QuotesTags.LIST).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Header and CTA
+        onNodeWithText("Devis").assertIsDisplayed()
+        onNodeWithTag(QuotesTags.CREATE_BUTTON).assertIsDisplayed()
+        onNodeWithText("＋  Créer un devis").assertIsDisplayed()
+
+        // Filter chips in French
+        onNodeWithText("Toutes (4)").assertIsDisplayed()
+        onNodeWithText("Brouillons (1)").assertIsDisplayed()
+        onNodeWithText("Envoyés (1)").assertIsDisplayed()
+        onNodeWithText("Acceptés (1)").assertIsDisplayed()
+
+        // Status badge in French
+        onNodeWithTag(QuotesTags.statusBadgeTag("DEV-2026-001")).assertIsDisplayed()
     }
 }

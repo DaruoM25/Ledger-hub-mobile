@@ -1,6 +1,8 @@
 package com.ledgerhub
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
@@ -278,14 +280,19 @@ fun App(
      */
     startAuthenticated: Boolean = false,
 ) {
-    val invoiceRepository = remember(database) {
-        SqlDelightInvoiceRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
+    val authApiClient = remember { KtorAuthApiClient() }
+    val authRepository = remember(database) { SqlDelightAuthRepository(database) }
+    val currentAccount by authRepository.observeCurrentAccount().collectAsState(initial = null)
+    val currentUserEmail = currentAccount?.email ?: (if (startAuthenticated) CURRENT_USER_EMAIL_PLACEHOLDER else "")
+
+    val invoiceRepository = remember(database, currentUserEmail) {
+        SqlDelightInvoiceRepository(database, userEmail = currentUserEmail.ifEmpty { CURRENT_USER_EMAIL_PLACEHOLDER })
     }
-    val creditNoteRepository = remember(database) {
-        SqlDelightCreditNoteRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
+    val creditNoteRepository = remember(database, currentUserEmail) {
+        SqlDelightCreditNoteRepository(database, userEmail = currentUserEmail.ifEmpty { CURRENT_USER_EMAIL_PLACEHOLDER })
     }
-    val quoteRepository = remember(database) {
-        SqlDelightQuoteRepository(database, userEmail = CURRENT_USER_EMAIL_PLACEHOLDER)
+    val quoteRepository = remember(database, currentUserEmail) {
+        SqlDelightQuoteRepository(database, userEmail = currentUserEmail.ifEmpty { CURRENT_USER_EMAIL_PLACEHOLDER })
     }
     val ledgerRepository = remember(invoiceRepository) { LocalLedgerRepository(invoiceRepository) }
     val clientRepository = remember(database) { SqlDelightClientRepository(database) }
@@ -319,14 +326,16 @@ fun App(
     // e-Reporting (US-08), branché sur la base partagée en US-26.
     val eReportingRepository = remember(database) { SqlDelightEReportingRepository(database) }
 
-    // ViewModels des onglets — créés une fois, conservés entre les changements d'onglet.
-    val dashboardViewModel = remember {
+    // ViewModels des onglets — recréés ou réactualisés dès que le compte change.
+    val dashboardViewModel = remember(invoiceRepository, creditNoteRepository, quoteRepository) {
         DashboardViewModel(
             GetDashboardAnalyticsUseCase(invoiceRepository, creditNoteRepository, quoteRepository),
         )
     }
-    val invoiceListViewModel = remember { InvoiceListViewModel(ledgerRepository, creditNoteRepository) }
-    val quotesViewModel = remember {
+    val invoiceListViewModel = remember(ledgerRepository, creditNoteRepository) {
+        InvoiceListViewModel(ledgerRepository, creditNoteRepository)
+    }
+    val quotesViewModel = remember(quoteRepository, invoiceRepository) {
         QuotesViewModel(
             quoteRepository = quoteRepository,
             submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
@@ -337,21 +346,19 @@ fun App(
         ClientsViewModel(clientRepository, sireneLookupService)
     }
     val directoryViewModel = remember { DirectoryViewModel(directoryRepository) }
-    val authApiClient = remember { KtorAuthApiClient() }
-    val authRepository = remember(database) { SqlDelightAuthRepository(database) }
     val deleteAccountUseCase = remember(authRepository, authApiClient) {
         DeleteAccountUseCase(authRepository, authApiClient)
     }
-    val taxSettingsViewModel = remember(taxSettingsRepository, deleteAccountUseCase, authRepository) {
+    val taxSettingsViewModel = remember(taxSettingsRepository, deleteAccountUseCase, authRepository, currentUserEmail) {
         TaxSettingsViewModel(
             repository = taxSettingsRepository,
             deleteAccountUseCase = deleteAccountUseCase,
             authRepository = authRepository,
-            currentUserEmail = CURRENT_USER_EMAIL_PLACEHOLDER,
+            currentUserEmail = currentUserEmail.ifEmpty { CURRENT_USER_EMAIL_PLACEHOLDER },
         )
     }
     val themeViewModel = remember { ThemeViewModel(themePreferenceRepository) }
-    val reconciliationViewModel = remember {
+    val reconciliationViewModel = remember(invoiceRepository, bankTransactionRepository, reconciliationRepository) {
         ReconciliationViewModel(
             invoiceRepository = invoiceRepository,
             bankTransactionRepository = bankTransactionRepository,
@@ -391,31 +398,36 @@ fun App(
     val getFeatureRequestsUseCase = remember(featureFeedbackRepository) { GetFeatureRequestsUseCase(featureFeedbackRepository) }
     val submitFeatureRequestUseCase = remember(featureFeedbackRepository) { SubmitFeatureRequestUseCase(featureFeedbackRepository) }
     val voteFeatureRequestUseCase = remember(featureFeedbackRepository) { VoteFeatureRequestUseCase(featureFeedbackRepository) }
-    val supportFeedbackViewModel = remember(supportRepository, featureFeedbackRepository) {
+    val supportFeedbackViewModel = remember(supportRepository, featureFeedbackRepository, currentUserEmail) {
         SupportFeedbackViewModel(
             supportRepository = supportRepository,
             createSupportTicketUseCase = createSupportTicketUseCase,
             getFeatureRequestsUseCase = getFeatureRequestsUseCase,
             submitFeatureRequestUseCase = submitFeatureRequestUseCase,
             voteFeatureRequestUseCase = voteFeatureRequestUseCase,
-            currentUserId = CURRENT_USER_EMAIL_PLACEHOLDER,
-            currentUserEmail = CURRENT_USER_EMAIL_PLACEHOLDER,
+            currentUserId = currentUserEmail.ifEmpty { CURRENT_USER_EMAIL_PLACEHOLDER },
+            currentUserEmail = currentUserEmail.ifEmpty { CURRENT_USER_EMAIL_PLACEHOLDER },
         )
     }
     DisposableEffect(supportFeedbackViewModel) {
         onDispose { supportFeedbackViewModel.onCleared() }
     }
 
-    // Le semis tourne en parallèle du chargement initial des ViewModels, qui lisent donc une base
-    // encore vide au tout premier lancement. On relance explicitement la lecture s'il a semé —
-    // sans quoi le tableau de bord et la liste restent à zéro jusqu'au redémarrage suivant.
-    LaunchedEffect(invoiceRepository, quoteRepository) {
-        val seeded = withContext(Dispatchers.Default) {
-            val invoicesSeeded = seedDemoDataIfEmpty(invoiceRepository)
-            val quotesSeeded = seedDemoQuotesIfEmpty(quoteRepository)
-            invoicesSeeded || quotesSeeded
-        }
-        if (seeded) {
+    // Le semis est strictement réservé au compte de démo ou au mode startAuthenticated de test.
+    // Un compte nouvellement enregistré commence avec une base vierge (Empty State).
+    LaunchedEffect(invoiceRepository, quoteRepository, currentUserEmail, startAuthenticated) {
+        if (currentUserEmail == CURRENT_USER_EMAIL_PLACEHOLDER && startAuthenticated) {
+            val seeded = withContext(Dispatchers.Default) {
+                val invoicesSeeded = seedDemoDataIfEmpty(invoiceRepository)
+                val quotesSeeded = seedDemoQuotesIfEmpty(quoteRepository)
+                invoicesSeeded || quotesSeeded
+            }
+            if (seeded) {
+                dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
+                invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
+                quotesViewModel.processIntent(QuotesIntent.LoadQuotes)
+            }
+        } else {
             dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
             invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
             quotesViewModel.processIntent(QuotesIntent.LoadQuotes)
@@ -670,6 +682,7 @@ fun App(
                                         ) {
                                             ShellContent(
                                                 destination = destination,
+                                                onSelectDestination = { destination = it },
                                                 overlay = overlay,
                                                 onCreateInvoice = onCreateInvoice,
                                                 onBack = onBackToTabs,
@@ -740,6 +753,7 @@ fun App(
                                         ) {
                                             ShellContent(
                                                 destination = destination,
+                                                onSelectDestination = { destination = it },
                                                 overlay = overlay,
                                                 onCreateInvoice = onCreateInvoice,
                                                 onBack = onBackToTabs,
@@ -815,6 +829,7 @@ fun App(
                                     Box(modifier = Modifier.fillMaxSize().padding(inner)) {
                                         ShellContent(
                                             destination = destination,
+                                            onSelectDestination = { destination = it },
                                             overlay = overlay,
                                             onCreateInvoice = onCreateInvoice,
                                             onBack = onBackToTabs,
@@ -922,7 +937,7 @@ private fun AuthGate(
     onAuthenticated: () -> Unit,
 ) {
     var showForgotPassword by remember { mutableStateOf(false) }
-    val sireneLookupService = remember { KtorSireneLookupService() }
+    val sireneLookupService = remember { KtorSireneLookupService(fallbackOnOffline = true) }
     val authViewModel = remember(sireneLookupService, authRepository) {
         AuthViewModel(
             authRepository = authRepository,
@@ -1170,6 +1185,90 @@ private fun IncomingInvoicesAction(onClick: () -> Unit) {
 internal const val INCOMING_INVOICES_TRIGGER_TAG = "incoming_invoices_trigger"
 
 /**
+ * Point d'entrée de l'Annuaire DGFIP dans le hub Plus/Paramètres.
+ */
+@Composable
+private fun DirectoryAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = DIRECTORY_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("📇", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_DIRECTORY),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Annuaire DGFIP des entreprises & plateformes",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur Annuaire DGFIP. */
+internal const val DIRECTORY_TRIGGER_TAG = "directory_trigger"
+
+/**
+ * Point d'entrée du Rapprochement bancaire dans le hub Plus/Paramètres.
+ */
+@Composable
+private fun ReconciliationAction(onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, LedgerHubTheme.palette.Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .sizeIn(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { testTag = RECONCILIATION_TRIGGER_TAG },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🔗", style = MaterialTheme.typography.titleMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    tr(StringKey.NAV_RECONCILIATION),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Lettrage & Rapprochement bancaire des règlements",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LedgerHubTheme.palette.SecondaryText,
+                )
+            }
+            Text("›", style = MaterialTheme.typography.titleLarge, color = LedgerHubTheme.palette.SecondaryText)
+        }
+    }
+}
+
+/** Tag du déclencheur Rapprochement bancaire. */
+internal const val RECONCILIATION_TRIGGER_TAG = "reconciliation_trigger"
+
+/**
  * En-tête mobile : nom de l'app + bascule de thème + sélecteur de langue (le « Header » demandé par
  * l'US-02, côté mobile ; la bascule clair/sombre s'y ajoute en US-25).
  */
@@ -1190,47 +1289,43 @@ private fun LedgerHeader(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── Pourquoi le titre porte un `weight` et les commandes non ────────────────────────
-        // Dans un Row, les enfants SANS poids sont mesurés d'abord, avec toute la largeur
-        // disponible ; le reste va aux enfants pondérés. Le titre est donc la seule chose qui
-        // puisse être rognée ici, et les cinq commandes obtiennent toujours leur largeur pleine.
-        //
-        // Ce n'est pas une précaution théorique. Livré sans ce poids, l'en-tête a débordé sur
-        // Pixel 5 (393 dp) : la bascule de thème y a été comprimée à 14,5 dp et le sélecteur de
-        // langue refoulé hors de l'écran. Les réglages ci-dessous (recherche compacte, gouttières
-        // resserrées) rendent la place ; ce weight garantit que la prochaine commande ajoutée
-        // rognera le nom de l'application plutôt qu'une cible tactile.
-        Text(
-            tr(StringKey.APP_NAME),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
+        // ── Zone gauche : Statut PPF & Actions rapides ───────────────────────────
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             NetworkSimulationSelector(networkState = networkState, onToggle = onToggleNetwork, compact = true)
-            ExportModalTrigger(onClick = onOpenExportModal, compact = true)
-            IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
-            CommandPaletteTrigger(onClick = onOpenCommandPalette, compact = true)
-            // Cinquieme commande de l'en-tete (US-25) : reduite a son glyphe et posee juste a
-            // gauche du selecteur de langue, avec lequel elle forme une paire.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ExportModalTrigger(onClick = onOpenExportModal, compact = true)
+                IntegrationsHubTrigger(onClick = onOpenIntegrations, compact = true)
+                CommandPaletteTrigger(onClick = onOpenCommandPalette, compact = true)
+            }
+        }
+
+        // ── Zone droite : Actions système (Thème & Langue) ──────────────────────
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             ThemeToggle(mode = themeMode, resolved = resolvedTheme, onToggle = onToggleTheme)
             LangToggle(current = language, onSelect = onSelectLanguage)
         }
     }
 }
 
+
+
 @Composable
 private fun ShellContent(
     destination: Destination,
+    onSelectDestination: (Destination) -> Unit = {},
     overlay: Overlay,
     onCreateInvoice: () -> Unit,
     onBack: () -> Unit,
@@ -1472,6 +1567,7 @@ private fun ShellContent(
         // feuille par-dessus.
         Overlay.None, Overlay.ExportModal -> TabsContent(
             destination = destination,
+            onSelectDestination = onSelectDestination,
             onCreateInvoice = onCreateInvoice,
             onOpenInvoice = onOpenInvoice,
             onCreateCreditNote = onCreateCreditNote,
@@ -1506,6 +1602,7 @@ private fun ShellContent(
 @Composable
 private fun TabsContent(
     destination: Destination,
+    onSelectDestination: (Destination) -> Unit = {},
     onCreateInvoice: () -> Unit,
     onOpenInvoice: (String) -> Unit,
     onCreateCreditNote: (Invoice) -> Unit,
@@ -1534,14 +1631,12 @@ private fun TabsContent(
     onOpenIncomingInvoices: () -> Unit = {},
 ) {
     when (destination) {
-        Destination.OVERVIEW -> Column(modifier = Modifier.fillMaxSize()) {
-            CreateInvoiceAction(onCreateInvoice)
-            DashboardScreen(
-                viewModel = dashboardViewModel,
-                onQuotesPendingClick = { onNavigateToQuotesWithFilter(QuoteStatusFilter.SENT) },
-                onQuotesFollowUpClick = { onNavigateToQuotesWithFilter(QuoteStatusFilter.SENT) },
-            )
-        }
+        Destination.OVERVIEW -> DashboardScreen(
+            viewModel = dashboardViewModel,
+            onCreateInvoice = onCreateInvoice,
+            onQuotesPendingClick = { onNavigateToQuotesWithFilter(QuoteStatusFilter.SENT) },
+            onQuotesFollowUpClick = { onNavigateToQuotesWithFilter(QuoteStatusFilter.SENT) },
+        )
 
         Destination.QUOTES -> QuotesView(
             viewModel = quotesViewModel,
@@ -1550,34 +1645,53 @@ private fun TabsContent(
             onConvertToInvoice = onConvertToInvoice,
         )
 
-        Destination.INVOICES -> Column(modifier = Modifier.fillMaxSize()) {
-            CreateInvoiceAction(onCreateInvoice)
-            com.ledgerhub.presentation.invoices.InvoiceAdaptivePane(
-                invoiceListViewModel = invoiceListViewModel,
-                onInvoiceClick = onOpenInvoice,
-                onCreateCreditNote = onCreateCreditNote,
-                ledgerRepository = ledgerRepository,
-                creditNoteRepository = creditNoteRepository,
-                auditRepository = auditRepository,
-                changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
-                onExportInvoiceXml = onExportInvoiceXml,
-                onExportCreditNoteXml = onExportCreditNoteXml,
-                syncQueueViewModel = syncQueueViewModel,
-            )
-        }
+        Destination.INVOICES -> com.ledgerhub.presentation.invoices.InvoiceAdaptivePane(
+            invoiceListViewModel = invoiceListViewModel,
+            onInvoiceClick = onOpenInvoice,
+            onCreateInvoice = onCreateInvoice,
+            onCreateCreditNote = onCreateCreditNote,
+            ledgerRepository = ledgerRepository,
+            creditNoteRepository = creditNoteRepository,
+            auditRepository = auditRepository,
+            changeInvoiceStatusUseCase = changeInvoiceStatusUseCase,
+            onExportInvoiceXml = onExportInvoiceXml,
+            onExportCreditNoteXml = onExportCreditNoteXml,
+            syncQueueViewModel = syncQueueViewModel,
+        )
 
         Destination.CLIENTS -> ClientsScreen(viewModel = clientsViewModel)
-        Destination.DIRECTORY -> DirectoryScreen(viewModel = directoryViewModel)
-        Destination.RECONCILIATION -> ReconciliationScreen(viewModel = reconciliationViewModel)
-        // L'e-Reporting n'a pas d'onglet à lui : son point d'entrée vit ici, au-dessus des
-        // paramètres fiscaux, là où l'on règle déjà la conformité (US-26).
-        Destination.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+        Destination.DIRECTORY -> Column(modifier = Modifier.fillMaxSize()) {
+            TextButton(
+                onClick = { onSelectDestination(Destination.SETTINGS) },
+                modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 0.dp),
+            ) {
+                Text("←  ${tr(StringKey.NAV_SETTINGS)}")
+            }
+            DirectoryScreen(viewModel = directoryViewModel)
+        }
+        Destination.RECONCILIATION -> Column(modifier = Modifier.fillMaxSize()) {
+            TextButton(
+                onClick = { onSelectDestination(Destination.SETTINGS) },
+                modifier = Modifier.padding(8.dp, 8.dp, 8.dp, 0.dp),
+            ) {
+                Text("←  ${tr(StringKey.NAV_SETTINGS)}")
+            }
+            ReconciliationScreen(viewModel = reconciliationViewModel)
+        }
+        // L'e-Reporting et les services avancés sont regroupés dans l'onglet Paramètres/Plus (US-26 / Recette).
+        Destination.SETTINGS -> Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            DirectoryAction { onSelectDestination(Destination.DIRECTORY) }
+            ReconciliationAction { onSelectDestination(Destination.RECONCILIATION) }
             EReportingAction(onOpenEReporting)
             IncomingInvoicesAction(onOpenIncomingInvoices)
             VaultArchiveAction(onOpenVaultArchive)
             VatDashboardAction(onOpenVatDashboard)
             SupportFeedbackAction(onOpenSupportFeedback)
-            TaxSettingsScreen(viewModel = taxSettingsViewModel)
+            TaxSettingsScreen(viewModel = taxSettingsViewModel, scrollable = false)
         }
     }
 }
@@ -1604,13 +1718,36 @@ private fun CreateInvoiceAction(onCreateInvoice: () -> Unit) {
 
 @Composable
 private fun LedgerBottomBar(selected: Destination, onSelect: (Destination) -> Unit) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-        Destination.entries.forEach { entry ->
+    val bottomBarEntries = listOf(
+        Destination.OVERVIEW,
+        Destination.INVOICES,
+        Destination.QUOTES,
+        Destination.CLIENTS,
+        Destination.SETTINGS,
+    )
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.semantics { testTag = BOTTOM_BAR_TAG },
+    ) {
+        bottomBarEntries.forEach { entry ->
+            val isSelected = if (entry == Destination.SETTINGS) {
+                selected == Destination.SETTINGS || selected == Destination.DIRECTORY || selected == Destination.RECONCILIATION
+            } else {
+                selected == entry
+            }
             NavigationBarItem(
-                selected = entry == selected,
+                modifier = Modifier.semantics { testTag = bottomBarItemTag(entry) },
+                selected = isSelected,
                 onClick = { onSelect(entry) },
                 icon = { Text(entry.glyph) },
-                label = { Text(tr(entry.titleKey), style = MaterialTheme.typography.labelSmall) },
+                label = {
+                    Text(
+                        tr(entry.titleKey),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.primary,
                     selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -1622,6 +1759,9 @@ private fun LedgerBottomBar(selected: Destination, onSelect: (Destination) -> Un
         }
     }
 }
+
+internal const val BOTTOM_BAR_TAG = "ledger_bottom_bar"
+internal fun bottomBarItemTag(destination: Destination) = "bottom_bar_item_${destination.name.lowercase()}"
 
 @Composable
 private fun LedgerSidebar(

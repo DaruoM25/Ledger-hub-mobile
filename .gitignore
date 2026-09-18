@@ -57,3 +57,8 @@ _quarantine/
 *contxt.md
 bundle.py
 ledgerhub-mobile-context.md
+
+# Office temporary lock files
+~$*
+*.tmp
+

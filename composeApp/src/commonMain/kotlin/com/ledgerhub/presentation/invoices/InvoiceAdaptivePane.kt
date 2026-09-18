@@ -53,6 +53,7 @@ object InvoiceAdaptiveTags {
 fun InvoiceAdaptivePane(
     invoiceListViewModel: InvoiceListViewModel,
     onInvoiceClick: (String) -> Unit,
+    onCreateInvoice: () -> Unit = {},
     onCreateCreditNote: (Invoice) -> Unit,
     ledgerRepository: LocalLedgerRepository,
     creditNoteRepository: SqlDelightCreditNoteRepository,
@@ -71,6 +72,7 @@ fun InvoiceAdaptivePane(
         InvoiceListScreen(
             viewModel = invoiceListViewModel,
             onInvoiceClick = onInvoiceClick,
+            onCreateInvoice = onCreateInvoice,
             onCreateCreditNote = onCreateCreditNote,
             syncQueueViewModel = syncQueueViewModel,
         )
@@ -110,6 +112,7 @@ fun InvoiceAdaptivePane(
                     onInvoiceClick = { invoiceNumber ->
                         selectedInvoiceNumber = invoiceNumber
                     },
+                    onCreateInvoice = onCreateInvoice,
                     onCreateCreditNote = onCreateCreditNote,
                     selectedInvoiceNumber = selectedInvoiceNumber,
                     syncQueueUiState = syncQueueState,

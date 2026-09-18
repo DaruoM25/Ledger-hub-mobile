@@ -1,0 +1,39 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3b : Golden Screenshots Capture
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+- assertVisible:
+    id: "dashboard_screen"
+
+# 1. Capture TopBar Dark FR
+- tapOn:
+    id: "lang_toggle_fr"
+- assertVisible: "Vue d'ensemble"
+- takeScreenshot: reports/screenshots/dashboard/topbar_dark_fr
+
+# 2. Capture TopBar Light FR
+- tapOn:
+    id: "theme_toggle_btn"
+- assertVisible:
+    id: "dashboard_screen"
+- takeScreenshot: reports/screenshots/dashboard/topbar_light_fr
+
+# 3. Capture TopBar Dark EN
+- tapOn:
+    id: "theme_toggle_btn"
+- assertVisible:
+    id: "dashboard_screen"
+- tapOn:
+    id: "lang_toggle_en"
+- assertVisible: "Dashboard"
+- takeScreenshot: reports/screenshots/dashboard/topbar_dark_en
+
+# Rétablissement de l'état nominal FR
+- tapOn:
+    id: "lang_toggle_fr"
+- assertVisible: "Vue d'ensemble"

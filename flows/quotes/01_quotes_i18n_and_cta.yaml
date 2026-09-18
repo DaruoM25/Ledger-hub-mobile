@@ -1,0 +1,59 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3a/N3b : Écran Devis (QuotesView) — Internationalisation & CTA Pill
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+# 1. Navigation vers l'onglet Devis
+- tapOn:
+    id: "bottom_bar_item_quotes"
+- assertVisible:
+    id: "quotes_screen"
+
+# 2. Vérification en langue active (FR)
+- tapOn:
+    id: "lang_toggle_fr"
+- assertVisible: "Devis"
+- assertVisible:
+    id: "quotes_create_button"
+- assertVisible:
+    id: "quotes_filter_TOUS"
+- assertVisible:
+    id: "quotes_filter_DRAFT"
+- assertVisible:
+    id: "quotes_filter_SENT"
+- assertVisible:
+    id: "quotes_filter_ACCEPTED"
+- assertVisible: ".*Toutes.*"
+- assertVisible: ".*Brouillons.*"
+
+# Capture dorée N3b en français
+- takeScreenshot: reports/screenshots/quotes/quotes_screen_fr
+
+# 3. Bascule en anglais (EN) & vérification i18n
+- tapOn:
+    id: "lang_toggle_en"
+- assertVisible: "Quotes"
+- assertVisible:
+    id: "quotes_create_button"
+- assertVisible:
+    id: "quotes_filter_TOUS"
+- assertVisible:
+    id: "quotes_filter_DRAFT"
+- assertVisible:
+    id: "quotes_filter_SENT"
+- assertVisible:
+    id: "quotes_filter_ACCEPTED"
+- assertVisible: ".*All.*"
+- assertVisible: ".*Drafts.*"
+
+# Capture dorée N3b en anglais
+- takeScreenshot: reports/screenshots/quotes/quotes_screen_en
+
+# 4. Rebascule en français pour clore proprement
+- tapOn:
+    id: "lang_toggle_fr"
+- assertVisible: "Devis"

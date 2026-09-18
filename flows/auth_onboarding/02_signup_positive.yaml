@@ -1,0 +1,77 @@
+appId: com.ledgerhub.app.debug
+---
+- launchApp:
+    clearState: true
+
+- assertVisible:
+    id: "login_submit_button"
+
+# Bascule vers l'onglet Inscription
+- tapOn:
+    id: "auth_tab_register"
+
+- assertVisible:
+    id: "auth_siret_input"
+
+# Remplissage du formulaire d'inscription avec SIRET valide
+- tapOn:
+    id: "auth_siret_input"
+- inputText: "52499268200012"
+
+- extendedWaitUntil:
+    visible: ".*SIRENE.*"
+    timeout: 10000
+
+- tapOn:
+    id: "login_email_field"
+- inputText: "nouveau.compte@test.fr"
+
+- tapOn:
+    id: "login_password_field"
+- inputText: "SuperSecret123!"
+
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "auth_confirm_password_field"
+    direction: DOWN
+
+- tapOn:
+    id: "auth_confirm_password_field"
+- inputText: "SuperSecret123!"
+
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "login_submit_button"
+    direction: DOWN
+
+- tapOn:
+    id: "login_submit_button"
+
+
+# Validation de l'arrivée sur le Dashboard (Vue d'ensemble)
+- extendedWaitUntil:
+    visible:
+      id: "dashboard_screen"
+    timeout: 10000
+
+# Vérification du clean empty state (0,00 € et 0 facture)
+- assertVisible: ".*0,00.*"
+- assertVisible: "0"
+
+# Vérification de la nouvelle Bottom Navigation à 5 entrées
+- assertVisible:
+    id: "bottom_bar_item_overview"
+- assertVisible:
+    id: "bottom_bar_item_invoices"
+- assertVisible:
+    id: "bottom_bar_item_quotes"
+- assertVisible:
+    id: "bottom_bar_item_clients"
+- assertVisible:
+    id: "bottom_bar_item_settings"
+
+
