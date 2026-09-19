@@ -1,11 +1,15 @@
 package com.ledgerhub.presentation.quoteform
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -17,17 +21,24 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,12 +47,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.invoice.VatRate
 import com.ledgerhub.presentation.components.ClientPicker
 import com.ledgerhub.presentation.components.ClientPickerTags
@@ -49,9 +64,53 @@ import com.ledgerhub.presentation.components.QuickClientDialog
 import com.ledgerhub.presentation.components.filterAmount
 import com.ledgerhub.presentation.components.filterQuantity
 import com.ledgerhub.presentation.components.filterSiret
+import com.ledgerhub.presentation.i18n.formatIsoDate
+import com.ledgerhub.presentation.i18n.isoDateToMillis
+import com.ledgerhub.presentation.i18n.millisToIsoDate
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
 import com.ledgerhub.presentation.invoices.formatEuros
 import com.ledgerhub.presentation.theme.LedgerHubTheme
+import kotlinx.coroutines.delay
+
+/** Icône calendrier vectorielle Material 3 (24x24 dp). */
+private val CalendarVectorIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "CalendarToday",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            fill = SolidColor(Color.Black),
+        ) {
+            moveTo(19f, 3f)
+            lineTo(18f, 3f)
+            lineTo(18f, 1f)
+            lineTo(16f, 1f)
+            lineTo(16f, 3f)
+            lineTo(8f, 3f)
+            lineTo(8f, 1f)
+            lineTo(6f, 1f)
+            lineTo(6f, 3f)
+            lineTo(5f, 3f)
+            curveTo(3.89f, 3f, 3f, 3.9f, 3f, 5f)
+            lineTo(3f, 19f)
+            curveToRelative(0f, 1.1f, 0.89f, 2f, 2f, 2f)
+            lineTo(19f, 21f)
+            curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
+            lineTo(21f, 5f)
+            curveToRelative(0f, -1.1f, -0.9f, -2f, -2f, -2f)
+            close()
+            moveTo(19f, 19f)
+            lineTo(5f, 19f)
+            lineTo(5f, 8f)
+            lineTo(19f, 8f)
+            lineTo(19f, 19f)
+            close()
+        }
+    }.build()
+}
 
 /** Tags de test — contrat partagé entre l'UI (commonMain) et les tests (commonTest). */
 object QuoteFormTags {
@@ -93,10 +152,22 @@ object QuoteFormTags {
 
 @Composable
 fun QuoteFormScreen(
-    viewModel: QuoteFormViewModel = remember { QuoteFormViewModel() }
+    viewModel: QuoteFormViewModel = remember { QuoteFormViewModel() },
+    onNavigateBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    QuoteFormContent(uiState = uiState, onIntent = viewModel::processIntent)
+
+    if (uiState.submissionStatus is SubmissionStatus.Success) {
+        LaunchedEffect(Unit) {
+            delay(1200L)
+            onNavigateBack()
+        }
+    }
+
+    QuoteFormContent(
+        uiState = uiState,
+        onIntent = viewModel::processIntent,
+    )
 }
 
 @Composable
@@ -110,6 +181,7 @@ internal fun QuoteFormContent(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .semantics { testTag = QuoteFormTags.SCREEN }
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -171,23 +243,23 @@ internal fun QuoteFormContent(
                 enabled = enabled,
                 onValueChange = { onIntent(QuoteFormIntent.QuoteNumberChanged(it)) },
             )
-            FormField(
-                label = "Date d'émission (AAAA-MM-JJ)",
-                value = uiState.issueDate,
+            DatePickerFormField(
+                label = "Date d'émission",
+                isoValue = uiState.issueDate,
                 tag = QuoteFormTags.ISSUE_DATE,
                 error = uiState.visibleErrors[QuoteFormField.ISSUE_DATE],
                 errorTag = QuoteFormTags.errorTagFor(QuoteFormField.ISSUE_DATE),
                 enabled = enabled,
-                onValueChange = { onIntent(QuoteFormIntent.IssueDateChanged(it)) },
+                onDateSelected = { onIntent(QuoteFormIntent.IssueDateChanged(it)) },
             )
-            FormField(
-                label = "Date de validité (AAAA-MM-JJ)",
-                value = uiState.validityDate,
+            DatePickerFormField(
+                label = "Date de validité",
+                isoValue = uiState.validityDate,
                 tag = QuoteFormTags.VALIDITY_DATE,
                 error = uiState.visibleErrors[QuoteFormField.VALIDITY_DATE],
                 errorTag = QuoteFormTags.errorTagFor(QuoteFormField.VALIDITY_DATE),
                 enabled = enabled,
-                onValueChange = { onIntent(QuoteFormIntent.ValidityDateChanged(it)) },
+                onDateSelected = { onIntent(QuoteFormIntent.ValidityDateChanged(it)) },
             )
         }
 
@@ -266,6 +338,8 @@ internal fun QuoteFormContent(
         ) {
             Text("📄  Finaliser le devis")
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 
     val quickClientDraft = uiState.quickClientDraft
@@ -440,35 +514,155 @@ private fun FormField(
     label: String,
     value: String,
     tag: String,
-    error: String?,
-    errorTag: String,
+    error: String? = null,
+    errorTag: String = "",
     enabled: Boolean,
     onValueChange: (String) -> Unit,
     keyboardType: KeyboardType = KeyboardType.Text,
     inputFilter: ((String) -> String)? = null,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { raw -> onValueChange(inputFilter?.invoke(raw) ?: raw) },
-        label = { Text(label) },
-        isError = error != null,
-        enabled = enabled,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
-        singleLine = true,
-    )
-    if (error != null) {
-        Text(
-            text = error,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.semantics {
-                testTag = errorTag
-                contentDescription = error
-            },
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { raw -> onValueChange(inputFilter?.invoke(raw) ?: raw) },
+            label = { Text(label) },
+            isError = error != null,
+            enabled = enabled,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+                focusedBorderColor = LedgerHubTheme.palette.Accent,
+                unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
+                focusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                unfocusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                cursorColor = LedgerHubTheme.palette.Accent,
+            ),
+            modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
+            singleLine = true,
         )
+        if (error != null) {
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics {
+                    testTag = errorTag
+                    contentDescription = error
+                },
+            )
+        }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerFormField(
+    label: String,
+    isoValue: String,
+    tag: String,
+    error: String? = null,
+    errorTag: String = "",
+    enabled: Boolean,
+    onDateSelected: (String) -> Unit,
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val displayValue = if (isoValue.isNotBlank()) formatIsoDate(isoValue, AppLanguage.FR) else ""
+
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { showDialog = true },
+        ) {
+            OutlinedTextField(
+                value = displayValue,
+                onValueChange = {},
+                readOnly = true,
+                enabled = enabled,
+                label = { Text(label) },
+                isError = error != null,
+                trailingIcon = {
+                    IconButton(
+                        onClick = { if (enabled) showDialog = true },
+                        enabled = enabled,
+                    ) {
+                        Icon(
+                            imageVector = CalendarVectorIcon,
+                            contentDescription = "Sélectionner la date",
+                            tint = if (enabled) LedgerHubTheme.palette.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                    unfocusedContainerColor = LedgerHubTheme.palette.InputBackground,
+                    disabledContainerColor = LedgerHubTheme.palette.InputBackground,
+                    focusedBorderColor = LedgerHubTheme.palette.Accent,
+                    unfocusedBorderColor = LedgerHubTheme.palette.InputBorder,
+                    focusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                    unfocusedTextColor = LedgerHubTheme.palette.PrimaryText,
+                    cursorColor = LedgerHubTheme.palette.Accent,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { testTag = tag },
+                singleLine = true,
+            )
+            // Overlay invisible interceptant les clics pour garantir que le tap n'importe où ouvre le dialogue
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(enabled = enabled) { showDialog = true },
+            )
+        }
+        if (error != null) {
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics {
+                    testTag = errorTag
+                    contentDescription = error
+                },
+            )
+        }
+    }
+
+    if (showDialog) {
+        val initialMillis = isoDateToMillis(isoValue)
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+
+        DatePickerDialog(
+            onDismissRequest = { showDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selectedMillis = datePickerState.selectedDateMillis
+                        if (selectedMillis != null) {
+                            val selectedIso = millisToIsoDate(selectedMillis)
+                            onDateSelected(selectedIso)
+                        }
+                        showDialog = false
+                    },
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Annuler")
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
 
 @Composable
 private fun RecapRow(label: String, value: String, tag: String) {

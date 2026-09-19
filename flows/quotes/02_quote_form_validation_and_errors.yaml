@@ -1,0 +1,78 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3a/N3b : Formulaire Devis (QuoteFormScreen) — Validation & Erreurs
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+# 1. Navigation vers l'écran Devis
+- tapOn:
+    id: "bottom_bar_item_quotes"
+- assertVisible:
+    id: "quotes_screen"
+
+# 2. Ouverture du formulaire de création de devis
+- tapOn:
+    id: "quotes_create_button"
+- assertVisible:
+    id: "quote_form_screen"
+
+# 3. Sélection assistée des dates via DatePicker (masquage de la contrainte technique & format FR)
+- scrollUntilVisible:
+    element:
+      id: "quote_form_issue_date"
+    direction: DOWN
+
+- assertVisible:
+    id: "quote_form_issue_date"
+
+- scrollUntilVisible:
+    element:
+      id: "quote_form_validity_date"
+    direction: DOWN
+
+- tapOn:
+    id: "quote_form_validity_date"
+- tapOn: "OK"
+
+
+# 4. Saisie de valeurs erronées sur la première ligne de prestation
+- scrollUntilVisible:
+    element:
+      id: "quote_form_line_0_quantity"
+    direction: DOWN
+
+- tapOn:
+    id: "quote_form_line_0_quantity"
+- eraseText: 5
+- inputText: "0"
+
+- tapOn:
+    id: "quote_form_line_0_unit_price"
+- eraseText: 10
+- inputText: ""
+
+# 5. Tentative de finalisation pour révéler les erreurs
+- scrollUntilVisible:
+    element:
+      id: "quote_form_submit_button"
+    direction: DOWN
+
+- tapOn:
+    id: "quote_form_submit_button"
+
+# 6. Vérification de la visibilité des messages d'erreur sans superposition
+- scrollUntilVisible:
+    element:
+      id: "quote_form_line_0_error_QUANTITY"
+    direction: UP
+- assertVisible:
+    id: "quote_form_line_0_error_QUANTITY"
+
+- assertVisible:
+    id: "quote_form_line_0_error_UNIT_PRICE"
+
+# 7. Capture dorée N3b : absence de superposition graphique des erreurs
+- takeScreenshot: reports/screenshots/quotes/quote_form_line_errors_layout

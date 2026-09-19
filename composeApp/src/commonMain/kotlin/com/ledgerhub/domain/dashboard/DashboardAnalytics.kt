@@ -136,9 +136,10 @@ fun computeDashboardAnalytics(
         .sortedBy { it.month }
         .takeLast(MONTHLY_CHART_SIZE)
 
-    val recentDocuments = (invoices.map(RecentDocument::InvoiceDocument) + quotes.map(RecentDocument::QuoteDocument))
+    val recentDocuments = invoices
         .sortedByDescending { it.issueDate }
         .take(RECENT_DOCUMENTS_SIZE)
+        .map(RecentDocument::InvoiceDocument)
 
     // ── Activité commerciale des devis (US-12) ────────────────────────────────
     val sentQuotes = quotes.filter { it.status == QuoteStatus.SENT }

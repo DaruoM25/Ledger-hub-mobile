@@ -219,7 +219,7 @@ class DashboardAnalyticsTest {
     }
 
     @Test
-    fun recentDocuments_mergesInvoicesAndQuotes_sortedByIssueDateDescending_cappedToThree() {
+    fun recentDocuments_onlyContainsInvoices_sortedByIssueDateDescending_cappedToThree() {
         val quote = Quote(
             number = "DEV-001",
             issueDate = "2026-08-05",
@@ -233,12 +233,30 @@ class DashboardAnalyticsTest {
             invoice("F-030", InvoiceStatus.DRAFT, issueDate = "2026-08-01"),
             invoice("F-031", InvoiceStatus.PAID, issueDate = "2026-08-08"),
             invoice("F-032", InvoiceStatus.DEPOSITED, issueDate = "2026-08-03"),
+            invoice("F-033", InvoiceStatus.PAID, issueDate = "2026-08-06"),
         )
 
         val analytics = computeDashboardAnalytics(invoices = invoices, creditNotes = emptyList(), quotes = listOf(quote))
 
         assertEquals(3, analytics.recentDocuments.size)
-        assertEquals(listOf("F-031", "DEV-001", "F-032"), analytics.recentDocuments.map { it.number })
+        // Les devis (DEV-001) ne doivent JAMAIS figurer dans les factures récentes
+        assertEquals(listOf("F-031", "F-033", "F-032"), analytics.recentDocuments.map { it.number })
+        assertTrue(analytics.recentDocuments.all { it is RecentDocument.InvoiceDocument })
+    }
+
+    @Test
+    fun recentDocuments_exposesExpectedInvoiceDetails_forPopulatedTable() {
+        val invoice = invoice("FAC-2026-001", InvoiceStatus.DEPOSITED, issueDate = "2026-08-15", unitPriceHtCents = 10000)
+        val analytics = computeDashboardAnalytics(invoices = listOf(invoice), creditNotes = emptyList())
+
+        assertEquals(1, analytics.recentDocuments.size)
+        val doc = analytics.recentDocuments.first()
+        assertTrue(doc is RecentDocument.InvoiceDocument)
+        assertEquals("FAC-2026-001", doc.number)
+        assertEquals("2026-08-15", doc.issueDate)
+        assertEquals("Client SAS", (doc as RecentDocument.InvoiceDocument).invoice.recipient.name)
+        assertEquals(12000L, doc.invoice.totalTtc.cents)
+        assertEquals(InvoiceStatus.DEPOSITED, doc.invoice.status)
     }
 
     // ── Activité commerciale des devis (US-12) ──────────────────────────────

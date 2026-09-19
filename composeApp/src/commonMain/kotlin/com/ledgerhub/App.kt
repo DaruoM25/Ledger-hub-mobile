@@ -1479,7 +1479,10 @@ private fun ShellContent(
             }
             DisposableEffect(Unit) { onDispose { formViewModel.onCleared() } }
             OverlayScaffold(title = tr(StringKey.OVERLAY_BACK_DASHBOARD), onBack = onBack) {
-                InvoiceFormScreen(viewModel = formViewModel)
+                InvoiceFormScreen(
+                    viewModel = formViewModel,
+                    onNavigateBack = onBack,
+                )
             }
         }
 
@@ -1492,7 +1495,10 @@ private fun ShellContent(
             }
             DisposableEffect(Unit) { onDispose { quoteFormViewModel.onCleared() } }
             OverlayScaffold(title = "Retour aux devis", onBack = onBack) {
-                QuoteFormScreen(viewModel = quoteFormViewModel)
+                QuoteFormScreen(
+                    viewModel = quoteFormViewModel,
+                    onNavigateBack = onBack,
+                )
             }
         }
 
@@ -1506,7 +1512,10 @@ private fun ShellContent(
             }
             DisposableEffect(overlay.quote.number) { onDispose { quoteFormViewModel.onCleared() } }
             OverlayScaffold(title = "Retour aux devis", onBack = onBack) {
-                QuoteFormScreen(viewModel = quoteFormViewModel)
+                QuoteFormScreen(
+                    viewModel = quoteFormViewModel,
+                    onNavigateBack = onBack,
+                )
             }
         }
 
@@ -1524,7 +1533,10 @@ private fun ShellContent(
             }
             DisposableEffect(overlay.quote.number) { onDispose { formViewModel.onCleared() } }
             OverlayScaffold(title = "Retour aux devis", onBack = onBack) {
-                InvoiceFormScreen(viewModel = formViewModel)
+                InvoiceFormScreen(
+                    viewModel = formViewModel,
+                    onNavigateBack = onBack,
+                )
             }
         }
 

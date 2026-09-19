@@ -14,8 +14,9 @@ appId: com.ledgerhub.app.debug
 - assertVisible:
     id: "dashboard_create_invoice_button"
 
-# Capture d'écran dorée N3b En-tête Alignée Dashboard
+# Capture d'écran dorée N3b En-tête Alignée Dashboard (Titre sur une seule ligne en FR)
 - takeScreenshot: reports/screenshots/dashboard/dashboard_header_aligned
+- takeScreenshot: reports/screenshots/dashboard/dashboard_header_fr_single_line
 
 - assertVisible:
     id: "dashboard_revenue_chart"

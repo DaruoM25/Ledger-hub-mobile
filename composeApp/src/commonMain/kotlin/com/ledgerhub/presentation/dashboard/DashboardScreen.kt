@@ -3,18 +3,23 @@ package com.ledgerhub.presentation.dashboard
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -113,35 +118,44 @@ internal fun DashboardContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     tr(StringKey.NAV_OVERVIEW),
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp),
                 )
-                Text(
-                    tr(StringKey.DASHBOARD_SUBTITLE),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
 
-            if (onCreateInvoice != null) {
-                Button(
-                    onClick = onCreateInvoice,
-                    modifier = Modifier.semantics { testTag = DashboardTags.CREATE_INVOICE_BUTTON },
-                ) {
-                    Text("＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}")
+                if (onCreateInvoice != null) {
+                    Button(
+                        onClick = onCreateInvoice,
+                        modifier = Modifier
+                            .height(36.dp)
+                            .semantics { testTag = DashboardTags.CREATE_INVOICE_BUTTON },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    ) {
+                        Text(
+                            "＋  ${tr(StringKey.ACTION_CREATE_INVOICE)}",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                tr(StringKey.DASHBOARD_SUBTITLE),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         when {
@@ -368,39 +382,17 @@ private fun RecentInvoicesSection(documents: List<RecentDocument>) {
                     modifier = Modifier.semantics { testTag = DashboardTags.RECENT_ACTIVITY_EMPTY },
                 )
             } else {
-                RecentHeaderRow()
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics { testTag = DashboardTags.RECENT_ACTIVITY_LIST },
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     documents.forEach { RecentDocumentRow(it) }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun RecentHeaderRow() {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        HeaderCell(tr(StringKey.COL_INVOICE_NO), 1.4f)
-        HeaderCell(tr(StringKey.COL_CLIENT), 1.6f)
-        HeaderCell(tr(StringKey.COL_DATE), 1.1f)
-        HeaderCell(tr(StringKey.COL_TTC), 1f, alignEnd = true)
-    }
-}
-
-@Composable
-private fun RowScope.HeaderCell(text: String, weight: Float, alignEnd: Boolean = false) {
-    Text(
-        text = text,
-        modifier = Modifier.weight(weight),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-    )
 }
 
 @Composable
@@ -421,36 +413,71 @@ private fun RecentDocumentRow(document: RecentDocument) {
         )
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(vertical = 4.dp)
             .semantics { testTag = DashboardTags.recentDocumentTag(document.number) },
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            document.number,
-            modifier = Modifier.weight(1.4f),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(row.client, modifier = Modifier.weight(1.6f), style = MaterialTheme.typography.bodySmall)
-        Text(
-            formatIsoDate(document.issueDate, lang),
-            modifier = Modifier.weight(1.1f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+        // Ligne supérieure : N° de facture à gauche | Montant TTC à droite
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                formatMoney(row.ttcCents, lang),
+                text = document.number,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+            )
+            Text(
+                text = formatMoney(row.ttcCents, lang),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.End,
+            )
+        }
+
+        // Ligne inférieure : Nom du client à gauche | Date d'émission + Badge de statut à droite
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = row.client,
                 style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
             )
-            StatusBadge(
-                tag = DashboardTags.recentDocumentStatusBadgeTag(document.number),
-                text = tr(row.statusKey),
-                tone = row.tone,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = formatIsoDate(document.issueDate, lang),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                StatusBadge(
+                    tag = DashboardTags.recentDocumentStatusBadgeTag(document.number),
+                    text = tr(row.statusKey),
+                    tone = row.tone,
+                )
+            }
         }
     }
 }
@@ -504,19 +531,13 @@ private fun QuotesToFollowUpSection(
                     modifier = Modifier.semantics { testTag = DashboardTags.QUOTES_TO_FOLLOWUP_EMPTY },
                 )
             } else {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    HeaderCell(tr(StringKey.COL_QUOTE_NO), 1.4f)
-                    HeaderCell(tr(StringKey.COL_CLIENT), 1.6f)
-                    HeaderCell(tr(StringKey.COL_VALIDITY), 1.3f)
-                    HeaderCell(tr(StringKey.COL_TTC), 1f, alignEnd = true)
-                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics { testTag = DashboardTags.QUOTES_TO_FOLLOWUP_LIST },
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items.forEach { QuoteFollowUpRow(it, onClick = onSectionClick) }
+                    items.forEach { QuoteFollowUpRow(it) }
                 }
             }
         }
@@ -526,11 +547,8 @@ private fun QuotesToFollowUpSection(
 @Composable
 private fun QuoteFollowUpRow(
     item: QuoteFollowUpItem,
-    onClick: (() -> Unit)? = null,
 ) {
     val lang = LocalAppLanguage.current
-    // Expiré = rouge, expire aujourd'hui ou demain = ambre, au-delà = neutre. Le délai est
-    // l'information qui décide de l'action, il porte donc la couleur.
     val deadlineColor = when {
         item.isExpired -> LedgerHubTheme.palette.ErrorText
         item.daysRemaining <= URGENT_THRESHOLD_DAYS -> LedgerHubTheme.palette.StatusPendingFg
@@ -542,59 +560,93 @@ private fun QuoteFollowUpRow(
         else -> "${tr(StringKey.QUOTE_DAYS_LEFT)}${item.daysRemaining}"
     }
 
-    val rowModifier = if (onClick != null) {
-        Modifier
+    Column(
+        modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { testTag = DashboardTags.quoteFollowUpTag(item.number) }
-    } else {
-        Modifier
-            .fillMaxWidth()
-            .semantics { testTag = DashboardTags.quoteFollowUpTag(item.number) }
-    }
-
-    Row(
-        modifier = rowModifier,
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = 4.dp)
+            .semantics { testTag = DashboardTags.quoteFollowUpTag(item.number) },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            item.number,
-            modifier = Modifier.weight(1.4f),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            item.clientName,
-            modifier = Modifier.weight(1.6f),
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Column(modifier = Modifier.weight(1.3f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Ligne supérieure : N° de devis à gauche | Montant TTC à droite
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                formatIsoDate(item.validityDate, lang),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = item.number,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
             )
             Text(
-                deadlineLabel,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = deadlineColor,
-                modifier = Modifier.semantics {
-                    testTag = DashboardTags.quoteFollowUpDeadlineTag(item.number)
-                    contentDescription = deadlineLabel
-                },
+                text = formatMoney(item.totalTtc.cents, lang),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.End,
             )
         }
-        Text(
-            formatMoney(item.totalTtc.cents, lang),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End,
-        )
+
+        // Ligne inférieure : Nom du client à gauche | Date + Badge d'échéance à droite
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = item.clientName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = formatIsoDate(item.validityDate, lang),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                DeadlineBadge(
+                    item = item,
+                    deadlineLabel = deadlineLabel,
+                    deadlineColor = deadlineColor,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun DeadlineBadge(
+    item: QuoteFollowUpItem,
+    deadlineLabel: String,
+    deadlineColor: Color,
+) {
+    Text(
+        text = deadlineLabel,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = deadlineColor,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier.semantics {
+            testTag = DashboardTags.quoteFollowUpDeadlineTag(item.number)
+            contentDescription = deadlineLabel
+        },
+    )
 }
 
 /** En deçà de ce délai, la relance devient urgente (couleur d'alerte). */
@@ -616,6 +668,8 @@ private fun StatusBadge(tag: String, text: String, tone: InvoiceStatusTone) {
             text = text,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }

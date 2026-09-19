@@ -72,13 +72,26 @@ class QuoteFormScreenTest {
     }
 
     @Test
-    fun typingInvalidValidityDate_displaysFieldError() = runComposeUiTest {
-        setContent { QuoteFormScreen(viewModel = QuoteFormViewModel()) }
+    fun dateFields_areDisplayed_withFormattedDates() = runComposeUiTest {
+        val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-18"))
+        viewModel.processIntent(QuoteFormIntent.ValidityDateChanged("2026-10-18"))
+        setContent { QuoteFormScreen(viewModel = viewModel) }
 
-        onNodeWithTag(QuoteFormTags.VALIDITY_DATE).performScrollTo().performTextInput("not-a-date")
+        onNodeWithTag(QuoteFormTags.ISSUE_DATE).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(QuoteFormTags.VALIDITY_DATE).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun validityDateBeforeIssueDate_displaysFieldError() = runComposeUiTest {
+        val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-18"))
+        viewModel.processIntent(QuoteFormIntent.ValidityDateChanged("2026-09-10"))
+        setContent { QuoteFormScreen(viewModel = viewModel) }
 
         onNodeWithTag(QuoteFormTags.errorTagFor(QuoteFormField.VALIDITY_DATE))
             .performScrollTo()
             .assertIsDisplayed()
     }
 }
+

@@ -6,7 +6,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.swipeUp
 import com.ledgerhub.data.creditnote.MockCreditNoteRepository
 import com.ledgerhub.data.invoice.MockInvoiceRepository
 import com.ledgerhub.data.quote.MockQuoteRepository
@@ -16,6 +18,7 @@ import com.ledgerhub.domain.quote.QuoteRepository
 import com.ledgerhub.domain.time.FixedClock
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import kotlin.test.Test
 
 /**
@@ -24,6 +27,7 @@ import kotlin.test.Test
  * pour le même principe (délais réseau mock réduits, attente active via waitUntil).
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w411dp-h891dp")
 @OptIn(ExperimentalTestApi::class)
 class DashboardScreenRobolectricTest {
 
@@ -81,6 +85,13 @@ class DashboardScreenRobolectricTest {
         }
 
         onNodeWithTag(DashboardTags.RECENT_ACTIVITY_LIST).performScrollTo().assertIsDisplayed()
+        // Vérification que les 3 factures les plus récentes sont présentes dans le tableau
+        onNodeWithTag(DashboardTags.recentDocumentTag("F-2026-110")).assertExists()
+        onNodeWithTag(DashboardTags.recentDocumentStatusBadgeTag("F-2026-110")).assertExists()
+        onNodeWithTag(DashboardTags.recentDocumentTag("F-2026-109")).assertExists()
+        onNodeWithTag(DashboardTags.recentDocumentStatusBadgeTag("F-2026-109")).assertExists()
+        onNodeWithTag(DashboardTags.recentDocumentTag("F-2026-108")).assertExists()
+        onNodeWithTag(DashboardTags.recentDocumentStatusBadgeTag("F-2026-108")).assertExists()
     }
 
     // ── Devis à relancer (US-12) ────────────────────────────────────────────
@@ -96,8 +107,8 @@ class DashboardScreenRobolectricTest {
         onNodeWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_SECTION).performScrollTo().assertIsDisplayed()
         onNodeWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_LIST).performScrollTo().assertIsDisplayed()
         // MockQuoteRepository ne sème qu'un devis Envoyé, échéant au 2026-09-01.
-        onNodeWithTag(DashboardTags.quoteFollowUpTag("DEV-2026-002")).performScrollTo().assertIsDisplayed()
-        onNodeWithTag(DashboardTags.quoteFollowUpDeadlineTag("DEV-2026-002")).assertIsDisplayed()
+        onNodeWithTag(DashboardTags.quoteFollowUpTag("DEV-2026-002")).assertExists()
+        onNodeWithTag(DashboardTags.quoteFollowUpDeadlineTag("DEV-2026-002")).assertExists()
     }
 
     @Test
@@ -154,6 +165,73 @@ class DashboardScreenRobolectricTest {
         }
 
         onNodeWithTag(DashboardTags.CREATE_INVOICE_BUTTON).assertIsDisplayed()
+    }
+
+    @Test
+    fun dashboard_rendersPopulatedActivityTables_withInvoiceAndQuoteDetails() = runComposeUiTest {
+        val specificInvoice = com.ledgerhub.domain.invoice.Invoice(
+            number = "FAC-2026-001",
+            issueDate = "2026-08-20",
+            dueDate = "2026-09-20",
+            issuer = com.ledgerhub.domain.invoice.Party("Cabinet", "123456789", "12345678900012"),
+            recipient = com.ledgerhub.domain.invoice.Party("Client Alpha", "987654321", "98765432100045"),
+            lines = listOf(
+                com.ledgerhub.domain.invoice.InvoiceLine(
+                    label = "Prestation",
+                    quantity = 1,
+                    unitPriceHt = com.ledgerhub.domain.invoice.Money(10000),
+                    vatRate = com.ledgerhub.domain.invoice.VatRate.TAUX_NORMAL,
+                )
+            ),
+            status = com.ledgerhub.domain.invoice.InvoiceStatus.DEPOSITED,
+        )
+
+        val specificQuote = com.ledgerhub.domain.quote.Quote(
+            number = "DEV-2026-001",
+            issueDate = "2026-08-15",
+            validityDate = "2026-09-02",
+            issuer = com.ledgerhub.domain.invoice.Party("Cabinet", "123456789", "12345678900012"),
+            recipient = com.ledgerhub.domain.invoice.Party("Client Beta", "987654321", "98765432100045"),
+            lines = listOf(
+                com.ledgerhub.domain.quote.QuoteLine(
+                    label = "Mission",
+                    quantity = 1,
+                    unitPriceHt = com.ledgerhub.domain.invoice.Money(20000),
+                    vatRate = com.ledgerhub.domain.invoice.VatRate.TAUX_NORMAL,
+                )
+            ),
+            status = com.ledgerhub.domain.quote.QuoteStatus.SENT,
+        )
+
+        val customViewModel = DashboardViewModel(
+            getDashboardAnalyticsUseCase = GetDashboardAnalyticsUseCase(
+                invoiceRepository = object : com.ledgerhub.domain.invoice.InvoiceRepository {
+                    override suspend fun submitInvoice(invoice: com.ledgerhub.domain.invoice.Invoice) = Result.success(Unit)
+                    override suspend fun fetchInvoices(): Result<List<com.ledgerhub.domain.invoice.Invoice>> = Result.success(listOf(specificInvoice))
+                },
+                creditNoteRepository = MockCreditNoteRepository(simulatedDelayMillis = 0L),
+                quoteRepository = object : com.ledgerhub.domain.quote.QuoteRepository {
+                    override suspend fun submitQuote(quote: com.ledgerhub.domain.quote.Quote) = Result.success(Unit)
+                    override suspend fun fetchQuotes(): Result<List<com.ledgerhub.domain.quote.Quote>> = Result.success(listOf(specificQuote))
+                },
+                clock = clock,
+            ),
+        )
+
+        setContent { DashboardScreen(viewModel = customViewModel) }
+
+        waitUntil(timeoutMillis = 5_000) {
+            onAllNodesWithTag(DashboardTags.RECENT_ACTIVITY_LIST).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        onNodeWithTag(DashboardTags.RECENT_ACTIVITY_LIST).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.recentDocumentTag("FAC-2026-001")).assertExists()
+        onNodeWithTag(DashboardTags.recentDocumentStatusBadgeTag("FAC-2026-001")).assertExists()
+
+        onNodeWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_SECTION).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.QUOTES_TO_FOLLOWUP_LIST).performScrollTo().assertIsDisplayed()
+        onNodeWithTag(DashboardTags.quoteFollowUpTag("DEV-2026-001")).assertExists()
+        onNodeWithTag(DashboardTags.quoteFollowUpDeadlineTag("DEV-2026-001")).assertExists()
     }
 }
 

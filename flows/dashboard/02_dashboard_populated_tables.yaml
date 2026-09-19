@@ -1,0 +1,132 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3a/N3b : Tableaux du Dashboard Remplis (Factures & Devis) & Snapshots
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+- assertVisible:
+    id: "dashboard_screen"
+
+# 1. Vérification initiale du Dashboard et des sections d'activité
+- scrollUntilVisible:
+    element:
+      id: "dashboard_revenue_chart"
+    direction: DOWN
+
+- assertVisible:
+    id: "dashboard_revenue_chart"
+
+# 2. Création assistée d'une facture depuis le CTA du Dashboard
+- scrollUntilVisible:
+    element:
+      id: "dashboard_create_invoice_button"
+    direction: UP
+
+- tapOn:
+    id: "dashboard_create_invoice_button"
+
+- assertVisible:
+    id: "invoice_form_screen"
+
+# Saisie des informations client directement dans le formulaire
+- scrollUntilVisible:
+    element:
+      id: "CLIENT_SEARCH_INPUT"
+    direction: DOWN
+
+- tapOn:
+    id: "CLIENT_SEARCH_INPUT"
+- inputText: "Acme Corp"
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "invoice_form_client_siret"
+    direction: DOWN
+
+- tapOn:
+    id: "invoice_form_client_siret"
+- inputText: "98765432100045"
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "invoice_form_client_email"
+    direction: DOWN
+
+- tapOn:
+    id: "invoice_form_client_email"
+- inputText: "facturation@acme.fr"
+- hideKeyboard
+
+# Saisie du numéro de facture
+- scrollUntilVisible:
+    element:
+      id: "invoice_form_number"
+    direction: DOWN
+
+- tapOn:
+    id: "invoice_form_number"
+- eraseText: 15
+- inputText: "fact01"
+- hideKeyboard
+
+# Saisie de la première ligne
+- scrollUntilVisible:
+    element:
+      id: "invoice_form_line_0_label"
+    direction: DOWN
+
+- tapOn:
+    id: "invoice_form_line_0_label"
+- inputText: "Prestation Web"
+- hideKeyboard
+
+- tapOn:
+    id: "invoice_form_line_0_quantity"
+- eraseText: 5
+- inputText: "1"
+- hideKeyboard
+
+- tapOn:
+    id: "invoice_form_line_0_unit_price"
+- eraseText: 10
+- inputText: "100.00"
+- hideKeyboard
+
+# Soumission du formulaire
+- scrollUntilVisible:
+    element:
+      id: "invoice_form_submit_button"
+    direction: DOWN
+
+- tapOn:
+    id: "invoice_form_submit_button"
+
+# Attente brève de persistance SQLDelight
+- scrollUntilVisible:
+    element: "←  Retour au tableau de bord"
+    direction: UP
+    timeout: 10000
+
+# 3. Retour au Dashboard & Vérification des données dans les tableaux
+- tapOn: "←  Retour au tableau de bord"
+
+- assertVisible:
+    id: "dashboard_screen"
+
+- scrollUntilVisible:
+    element:
+      id: "dashboard_recent_activity_list"
+    direction: DOWN
+    centerElement: true
+    timeout: 10000
+
+- assertVisible:
+    id: "dashboard_recent_activity_list"
+
+# 4. Capture dorée N3b : Snapshot du tableau d'activité rempli et centré
+- takeScreenshot: reports/screenshots/dashboard/dashboard_tables_populated

@@ -64,10 +64,10 @@ class InvoiceFormRegulationRobolectricTest {
             .performTextInput("FAC-2026-001")
         onNodeWithTag(InvoiceFormTags.ISSUE_DATE)
             .performScrollTo()
-            .performTextInput("2026-09-08")
+            .assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.DUE_DATE)
             .performScrollTo()
-            .performTextInput("2026-10-08")
+            .assertIsDisplayed()
 
         // Ligne de facturation
         onNodeWithTag(InvoiceFormTags.lineLabelTag(0))
@@ -131,10 +131,10 @@ class InvoiceFormRegulationRobolectricTest {
             .performTextInput("FAC-2026-B2C-001")
         onNodeWithTag(InvoiceFormTags.ISSUE_DATE)
             .performScrollTo()
-            .performTextInput("2026-09-08")
+            .assertIsDisplayed()
         onNodeWithTag(InvoiceFormTags.DUE_DATE)
             .performScrollTo()
-            .performTextInput("2026-10-08")
+            .assertIsDisplayed()
 
         // Ligne de prestation
         onNodeWithTag(InvoiceFormTags.lineLabelTag(0))

@@ -20,6 +20,7 @@ import com.ledgerhub.presentation.components.QuickClientField
 import com.ledgerhub.presentation.components.validateQuickClient
 import com.ledgerhub.presentation.invoiceform.CabinetIdentity
 import com.ledgerhub.presentation.invoiceform.SubmissionStatus
+import com.ledgerhub.presentation.i18n.todayIsoDate
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +83,7 @@ class QuoteFormViewModel(
                 )
             } else {
                 QuoteFormUiState(
+                    issueDate = todayIsoDate(),
                     issuer = issuer,
                     isClientDirectoryAvailable = clientRepository != null,
                 )
@@ -356,6 +358,8 @@ class QuoteFormViewModel(
         }
         if (!ISO_DATE_REGEX.matches(state.validityDate)) {
             errors[QuoteFormField.VALIDITY_DATE] = "Date attendue au format AAAA-MM-JJ"
+        } else if (ISO_DATE_REGEX.matches(state.issueDate) && state.validityDate < state.issueDate) {
+            errors[QuoteFormField.VALIDITY_DATE] = "La date de validité ne peut pas être antérieure à la date d'émission"
         }
         if (state.issuerName.isBlank()) {
             errors[QuoteFormField.ISSUER_NAME] = "Le nom de l'émetteur est requis"

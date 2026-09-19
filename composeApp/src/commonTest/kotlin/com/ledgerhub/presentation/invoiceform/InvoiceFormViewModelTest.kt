@@ -1,6 +1,7 @@
 package com.ledgerhub.presentation.invoiceform
 
 import com.ledgerhub.data.invoice.MockInvoiceRepository
+import com.ledgerhub.domain.i18n.ValidationErrorKey
 import com.ledgerhub.domain.invoice.InvoiceStatus
 import com.ledgerhub.domain.invoice.NatureOperation
 import com.ledgerhub.domain.invoice.SubmitInvoiceUseCase
@@ -64,6 +65,52 @@ class InvoiceFormViewModelTest {
         assertEquals(SubmissionStatus.Idle, state.submissionStatus)
     }
 
+    // ── Validation dates (en-tête) ───────────────────────────────────────────
+
+    @Test
+    fun initialState_hasIssueDateAndDueDatePrefilledWithToday() {
+        val viewModel = InvoiceFormViewModel()
+        val state = viewModel.uiState.value
+        assertTrue(state.issueDate.isNotBlank())
+        assertTrue(state.dueDate.isNotBlank())
+        assertNull(state.errors[InvoiceFormField.ISSUE_DATE])
+        assertNull(state.errors[InvoiceFormField.DUE_DATE])
+    }
+
+    @Test
+    fun blankDueDate_producesFieldError() {
+        val viewModel = InvoiceFormViewModel()
+        viewModel.processIntent(InvoiceFormIntent.DueDateChanged(""))
+        assertEquals(ValidationErrorKey.DATE_FORMAT_INVALID, viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
+        viewModel.processIntent(InvoiceFormIntent.DueDateChanged("2026-09-30"))
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
+    }
+
+    @Test
+    fun dueDateBeforeIssueDate_producesTemporalError() {
+        val viewModel = InvoiceFormViewModel()
+        viewModel.processIntent(InvoiceFormIntent.IssueDateChanged("2026-09-18"))
+        viewModel.processIntent(InvoiceFormIntent.DueDateChanged("2026-09-10"))
+        val error = viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE]
+        assertEquals(ValidationErrorKey.DUE_DATE_BEFORE_ISSUE_DATE, error)
+    }
+
+    @Test
+    fun changingIssueDateAfterDueDate_updatesTemporalErrorInRealTime() {
+        val viewModel = InvoiceFormViewModel()
+        viewModel.processIntent(InvoiceFormIntent.IssueDateChanged("2026-09-01"))
+        viewModel.processIntent(InvoiceFormIntent.DueDateChanged("2026-09-15"))
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
+
+        // L'utilisateur repousse la date d'émission après l'échéance -> l'erreur se déclenche immédiatement
+        viewModel.processIntent(InvoiceFormIntent.IssueDateChanged("2026-09-20"))
+        assertEquals(ValidationErrorKey.DUE_DATE_BEFORE_ISSUE_DATE, viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
+
+        // L'utilisateur réajuste la date d'émission avant l'échéance -> l'erreur disparaît immédiatement
+        viewModel.processIntent(InvoiceFormIntent.IssueDateChanged("2026-09-10"))
+        assertNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
+    }
+
     // ── Validation client (en-tête) ──────────────────────────────────────────
 
     @Test
@@ -89,14 +136,6 @@ class InvoiceFormViewModelTest {
         assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_EMAIL])
         viewModel.processIntent(InvoiceFormIntent.ClientEmailChanged("valide@client.fr"))
         assertNull(viewModel.uiState.value.errors[InvoiceFormField.CLIENT_EMAIL])
-    }
-
-    @Test
-    fun blankDueDate_producesFieldError() {
-        val viewModel = InvoiceFormViewModel()
-        assertNotNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
-        viewModel.processIntent(InvoiceFormIntent.DueDateChanged("2026-09-30"))
-        assertNull(viewModel.uiState.value.errors[InvoiceFormField.DUE_DATE])
     }
 
     // ── Multi-lignes : ajout ─────────────────────────────────────────────────

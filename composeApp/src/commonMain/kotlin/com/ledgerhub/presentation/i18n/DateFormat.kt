@@ -3,6 +3,11 @@ package com.ledgerhub.presentation.i18n
 import com.ledgerhub.domain.i18n.AppLanguage
 import com.ledgerhub.domain.i18n.AppTranslations
 import com.ledgerhub.domain.i18n.StringKey
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 
 private val ISO_DATE = Regex("""^(\d{4})-(\d{2})-(\d{2})$""")
 
@@ -44,3 +49,36 @@ private fun monthAbbrKey(month: Int): StringKey = when (month) {
     11 -> StringKey.MONTH_ABBR_11
     else -> StringKey.MONTH_ABBR_12
 }
+
+/**
+ * Convertit un timestamp en millisecondes UTC (fourni par DatePicker M3) en chaîne ISO `YYYY-MM-DD`.
+ */
+fun millisToIsoDate(millis: Long): String {
+    val instant = kotlinx.datetime.Instant.fromEpochMilliseconds(millis)
+    val date = instant.toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
+    return date.toString()
+}
+
+/**
+ * Convertit une chaîne ISO `YYYY-MM-DD` en millisecondes UTC pour initialiser un DatePicker M3.
+ */
+fun isoDateToMillis(iso: String): Long? {
+    val match = ISO_DATE.matchEntire(iso.trim()) ?: return null
+    return try {
+        val date = kotlinx.datetime.LocalDate.parse(match.value)
+        val instant = date.atStartOfDayIn(kotlinx.datetime.TimeZone.UTC)
+        instant.toEpochMilliseconds()
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * Renvoie la date du jour en chaîne ISO `YYYY-MM-DD` selon le fuseau horaire système.
+ */
+fun todayIsoDate(): String {
+    val now = kotlinx.datetime.Clock.System.now()
+    val localDate = now.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+    return localDate.toString()
+}
+

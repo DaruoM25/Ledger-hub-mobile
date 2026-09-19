@@ -31,6 +31,7 @@ import com.ledgerhub.domain.degraded.EnqueueDegradedInvoiceUseCase
 import com.ledgerhub.presentation.components.QuickClientDraft
 import com.ledgerhub.presentation.components.QuickClientField
 import com.ledgerhub.presentation.components.validateQuickClient
+import com.ledgerhub.presentation.i18n.todayIsoDate
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +98,8 @@ class InvoiceFormViewModel(
         revalidate(
             if (sourceQuote != null) {
                 InvoiceFormUiState(
+                    issueDate = sourceQuote.issueDate.ifBlank { todayIsoDate() },
+                    dueDate = todayIsoDate(),
                     clientName = sourceQuote.recipient.name,
                     clientSiret = sourceQuote.recipient.siret,
                     clientSiren = sourceQuote.recipient.siren.ifBlank { sourceQuote.recipient.siret.take(9) },
@@ -117,6 +120,8 @@ class InvoiceFormViewModel(
                 )
             } else {
                 InvoiceFormUiState(
+                    issueDate = todayIsoDate(),
+                    dueDate = todayIsoDate(),
                     issuer = issuer,
                     lines = listOf(InvoiceLineFormState(vatRate = defaultVatRate)),
                     isClientDirectoryAvailable = clientRepository != null,
@@ -472,6 +477,8 @@ class InvoiceFormViewModel(
         }
         if (!ISO_DATE_REGEX.matches(state.dueDate)) {
             errors[InvoiceFormField.DUE_DATE] = ValidationErrorKey.DATE_FORMAT_INVALID
+        } else if (ISO_DATE_REGEX.matches(state.issueDate) && state.dueDate < state.issueDate) {
+            errors[InvoiceFormField.DUE_DATE] = ValidationErrorKey.DUE_DATE_BEFORE_ISSUE_DATE
         }
         if (state.clientName.isBlank()) {
             errors[InvoiceFormField.CLIENT_NAME] = ValidationErrorKey.CLIENT_NAME_REQUIRED

@@ -1,5 +1,7 @@
 package com.ledgerhub.presentation.quotes
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,8 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -203,22 +203,41 @@ private fun QuotesFilterRow(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         QuoteStatusFilter.entries.forEach { filter ->
             val isSelected = filter == selectedFilter
             val count = counts[filter] ?: 0
-            FilterChip(
-                selected = isSelected,
+            QuoteFilterPill(
+                label = "${tr(filter.labelKey())} ($count)",
+                isSelected = isSelected,
+                tag = QuotesTags.filterChipTag(filter),
                 onClick = { onFilterSelected(filter) },
-                label = { Text("${tr(filter.labelKey())} ($count)", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.semantics { testTag = QuotesTags.filterChipTag(filter) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
             )
         }
+    }
+}
+
+@Composable
+private fun QuoteFilterPill(label: String, isSelected: Boolean, tag: String, onClick: () -> Unit) {
+    val container =
+        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val onContainer =
+        if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Surface(
+        color = container,
+        contentColor = onContainer,
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .semantics { testTag = tag },
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 

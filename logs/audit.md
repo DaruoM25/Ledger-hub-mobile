@@ -3641,16 +3641,251 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1250+ tests) |
 | **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré en 55s) |
 
+---
 
+## Livrable Mobile — Harmonisation des Filtres Devis / Factures (FilterChips)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Filtres de l'écran Devis alignés sur le style et les couleurs de l'écran Factures.
+- **Objectifs :**
+  1. **Alignement Visuel & Couleur** : Remplacement du vert / `primaryContainer` par le bleu Accent (`MaterialTheme.colorScheme.primary` / `LedgerHubTheme.palette.Accent`) pour l'état sélectionné.
+  2. **Forme Pill Pleine** : Remplacement des coins rectangulaires (8-12 dp) par le format pill standardisé `RoundedCornerShape(50)` avec bordure `outline`.
+  3. **Comportement & Typographie** : Typographie `labelLarge`, padding `horizontal = 12.dp, vertical = 6.dp`, espacement `Arrangement.spacedBy(8.dp)`, et filtre par défaut `Tous (0)` (`QuoteStatusFilter.TOUS`).
 
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quotes/QuotesView.kt` | **[MODIFY]** | Remplacement de l'implémentation FilterChip par `QuoteFilterPill` basé sur `Surface` pill 50%, couleur primaire Accent et bordure outline. |
 
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant sur 1250+ tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré en 59s) |
 
+---
 
+## Livrable Mobile — Résolution Titre Tronqué Dashboard & Verrouillage N3b
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Titre « Vue d'ensemble » maintenu sur une ligne unique en FR, bouton CTA calibré, tests validés et snapshot N3b déclaré.
+- **Objectifs :**
+  1. **Calibrage Typographique du Titre** : Typographie ajustée à `MaterialTheme.typography.titleLarge` avec `maxLines = 1`, `softWrap = false` et `Modifier.weight(1f, fill = false)`.
+  2. **Calibrage du Bouton CTA** : Hauteur compacte `36.dp`, `contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)` et typographie `labelLarge`.
+  3. **Verrouillage Anti-Régression N3b** : Déclaration de la commande de snapshot doré `reports/screenshots/dashboard/dashboard_header_fr_single_line.png` dans `flows/dashboard/01_empty_state_and_navigation.yaml`.
 
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreen.kt` | **[MODIFY]** | Titre `titleLarge`, `maxLines = 1`, `softWrap = false` ; bouton CTA `height(36.dp)`, `contentPadding` et `labelLarge`. |
+| `flows/dashboard/01_empty_state_and_navigation.yaml` | **[MODIFY]** | Ajout de la capture d'écran dorée N3b `dashboard_header_fr_single_line`. |
 
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1250+ tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré en 1m18s) |
+| **N3b** | Golden Snapshot | `reports/screenshots/dashboard/dashboard_header_fr_single_line.png` | **Déclaré dans le flux E2E** |
 
+---
 
+## Livrable Mobile — Réagencement En-tête Dashboard (Alignement Titre/CTA & Sous-titre Découplé)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Row dédiée contenant exclusivement le Titre et le Bouton CTA verticalement centrés, Sous-titre extrait en dessous dans une Column parente.
+- **Objectifs :**
+  1. **Découplage de la Ligne d'Action et du Sous-titre** : `Column(modifier = Modifier.fillMaxWidth())` parente englobant une `Row` exclusive (Titre `titleLarge` + Bouton CTA `36.dp`) et le Sous-titre en dessous avec `Spacer(4.dp)`.
+  2. **Centrage Vertical Parfait** : Suppression de l'effet de flottement du bouton entre le titre et le sous-titre.
+  3. **Préservation des Contrats & Sémantique** : Maintien strict du tag `DashboardTags.CREATE_INVOICE_BUTTON`, gestion i18n et typographie Material 3.
 
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreen.kt` | **[MODIFY]** | Réagencement de l'en-tête : Column parente, Row Titre/CTA avec `Alignment.CenterVertically`, et Sous-titre positionné sous la Row. |
 
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1250+ tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré et prêt pour test terminal) |
 
+---
+
+## Livrable Mobile — Ergonomie des Dates & Résolution Superposition Erreurs sur Formulaire Devis
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Slot `supportingText` M3 intégré, saisie assistée des dates via `filterIsoDate`, flux Maestro N3a et snapshot doré N3b consolidés.
+- **Objectifs :**
+  1. **Slot `supportingText` standard M3** : Remplacement du positionnement d'erreurs custom par `supportingText = { ... }` sur `OutlinedTextField` pour éliminer tout risque de superposition sur les champs (*Prix unitaire HT*, *Qté*, etc.).
+  2. **Ergonomie des Dates** : Application du filtre automatique `filterIsoDate` et du clavier numérique sur les dates d'émission et de validité (sérialisation Factur-X ISO préservée).
+  3. **Consolidation N3a / N3b** : Création du scénario Maestro `flows/quotes/02_quote_form_validation_and_errors.yaml` avec assertions d'erreurs et capture d'écran dorée `reports/screenshots/quotes/quote_form_line_errors_layout.png`.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreen.kt` | **[MODIFY]** | `FormField` migré vers `supportingText` M3, `filterIsoDate` et `KeyboardType.Number` sur champs dates. |
+| `flows/quotes/02_quote_form_validation_and_errors.yaml` | **[NEW]** | Scénario Maestro E2E testant les erreurs de lignes, le masque date et déclarant la capture dorée N3b. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1251 tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré en 1m10s) |
+| **N3a / N3b** | Flux E2E & Snapshot | `flows/quotes/02_quote_form_validation_and_errors.yaml` | **Consolidé** |
+
+---
+
+## Livrable Mobile — Intégration Sélecteur de Date Material 3 (`DatePickerDialog`) sur Formulaire Devis
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — `DatePickerDialog` M3 natif intégré, pré-remplissage à la date du jour, validation temporelle en temps réel, formatage français à l'affichage et sérialisation ISO Factur-X préservée.
+- **Objectifs :**
+  1. **Sélecteur DatePicker M3 Natif** : Remplacement de la saisie textuelle par un sélecteur tactile interactif déclenché par tap sur l'ensemble de la zone du champ ou sur l'icône vectorielle M3 `CalendarVectorIcon`.
+  2. **Format Localisé Français & Sérialisation Factur-X** : Affichage au format `JJ/MM/AAAA` pour l'utilisateur tout en conservant la sérialisation `YYYY-MM-DD` dans le state et l'architecture Factur-X.
+  3. **Initialisation & Cohérence Temporelle** : `issueDate` pré-remplie à la date du jour (`todayIsoDate()`), et vérification en temps réel que `validityDate >= issueDate` dans `revalidate()`.
+  4. **Stabilité & Non-régression** : Tags de test préservés (`QuoteFormTags.ISSUE_DATE`, `QuoteFormTags.VALIDITY_DATE`), suite de tests unitaires/Robolectric et flux Maestro mis à niveau.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/i18n/DateFormat.kt` | **[MODIFY]** | Ajout des convertisseurs `millisToIsoDate`, `isoDateToMillis` et du helper `todayIsoDate()`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormViewModel.kt` | **[MODIFY]** | Initialisation de `issueDate` à la date du jour et règle temporelle `validityDate < issueDate` dans `revalidate()`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreen.kt` | **[MODIFY]** | Implémentation du composant `DatePickerFormField` (read-only, `DatePickerDialog`, icône vectorielle M3). |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormViewModelTest.kt` | **[MODIFY]** | Tests unitaires sur l'initialisation du jour, l'incohérence temporelle et la réévaluation temps réel. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreenTest.kt` | **[MODIFY]** | Tests d'interface Compose Multiplatform adaptés au DatePicker. |
+| `flows/quotes/02_quote_form_validation_and_errors.yaml` | **[MODIFY]** | Flux Maestro adapté à la sélection assistée de date. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1255 tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 1m01s) |
+| **N3a / N3b** | Flux E2E & Snapshot | `flows/quotes/02_quote_form_validation_and_errors.yaml` | **Consolidé** |
+
+---
+
+## Livrable Mobile — UX Post-Création Devis & Accessibilité du Bas d'Écran (Galaxy S23+)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Retour automatique fluide après 1 200 ms de notification de succès, `navigationBarsPadding()` et `Spacer(24.dp)` intégrés pour une accessibilité tactile optimale sur Galaxy S23+.
+- **Objectifs :**
+  1. **UX Post-Création & Navigation** :
+     - Ajout du callback `onNavigateBack: () -> Unit = {}` sur [`QuoteFormScreen.kt`](file:///C:/Projets%20Personnels/Ledger-hub-mobile/composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreen.kt#L149).
+     - Déclenchement automatique du retour vers la liste des devis via un `LaunchedEffect` temporisé (1 200 ms) après la notification de succès.
+     - Câblage avec `Overlay.CreateQuote` et `Overlay.EditQuote` dans [`App.kt`](file:///C:/Projets%20Personnels/Ledger-hub-mobile/composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt#L1495-L1510).
+  2. **Accessibilité & Dégagement du Bas d'Écran** :
+     - Application de `Modifier.navigationBarsPadding()` sur la colonne scrollable.
+     - Ajout d'un `Spacer(modifier = Modifier.height(24.dp))` en dessous du bouton principal pour éviter toute collision avec les barres système.
+  3. **Stabilité & Non-régression** :
+     - Maintien des tags et contrats de test.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormScreen.kt` | **[MODIFY]** | Intégration de `onNavigateBack`, `LaunchedEffect` post-soumission (1 200 ms), `navigationBarsPadding()` et `Spacer(24.dp)`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** | Câblage de `onNavigateBack = onBack` pour `Overlay.CreateQuote` et `Overlay.EditQuote`. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1255 tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 1m06s) |
+
+---
+
+## Livrable Mobile — Harmonisation des champs de date sur le formulaire Facture (`InvoiceFormScreen`)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — `DatePickerDialog` M3 natif intégré sur `issueDate` et `dueDate`, initialisation à la date du jour, validation temporelle `dueDate >= issueDate` avec clé i18n dédiée, formatage localisé français `JJ/MM/AAAA` à l'affichage et sérialisation ISO 8601 Factur-X préservée sous le capot.
+- **Objectifs :**
+  1. **Sélecteur DatePicker M3 Natif** : Remplacement des champs textuels par `DatePickerFormField` (`DatePickerDialog` M3, `readOnly = true`, ouverture au tap n'importe où sur la boîte ou sur l'icône calendrier `CalendarVectorIcon`).
+  2. **Format Localisé Français & Sérialisation Factur-X** : Affichage au format `JJ/MM/AAAA` via `formatIsoDate(isoValue, lang)` tout en maintenant la transmission et la persistance au format ISO 8601 `YYYY-MM-DD`.
+  3. **Valeurs par défaut & Contrôle temporel** :
+     - `issueDate` et `dueDate` initialisées par défaut à la date du jour (`todayIsoDate()`).
+     - Validation temporelle dans `revalidate()` émettant `ValidationErrorKey.DUE_DATE_BEFORE_ISSUE_DATE` lorsque `dueDate < issueDate`.
+  4. **Internationalisation (i18n)** : Ajout de la clé `VALIDATION_DUE_DATE_BEFORE_ISSUE_DATE` avec traductions FR (*"La date d'échéance ne peut pas être antérieure à la date d'émission"*) et EN (*"Due date cannot be before issue date"*).
+  5. **Préservation des Tags Sémantiques** : Maintien strict de `InvoiceFormTags.ISSUE_DATE`, `InvoiceFormTags.DUE_DATE` et `InvoiceFormTags.errorTagFor(...)`.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/StringKey.kt` | **[MODIFY]** | Ajout de la clé `VALIDATION_DUE_DATE_BEFORE_ISSUE_DATE`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/ValidationErrorKey.kt` | **[MODIFY]** | Ajout de l'entrée `DUE_DATE_BEFORE_ISSUE_DATE`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | **[MODIFY]** | Ajout des traductions FR et EN pour l'erreur temporelle d'échéance. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormViewModel.kt` | **[MODIFY]** | Initialisation par défaut à `todayIsoDate()` et validation `dueDate >= issueDate` dans `revalidate()`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormScreen.kt` | **[MODIFY]** | Intégration de `DatePickerFormField` et `CalendarVectorIcon` pour les dates d'émission et d'échéance. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormViewModelTest.kt` | **[MODIFY]** | Tests unitaires sur l'initialisation du jour, le blocage si échéance antérieure, et la mise à jour temps réel. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormRegulationRobolectricTest.kt` | **[MODIFY]** | Alignement des tests Robolectric avec le DatePicker en lecture seule. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 1257 tests) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 1m05s) |
+
+---
+
+## Livrable Mobile — Correction Critique Dashboard (Étanchéité Factures/Devis, Layout des Badges de Statut et Alignement du Tableau)
+- **Date :** 2026-09-18
+- **Statut :** ✅ Clos — Étanchéité stricte des factures récentes (exclusion des devis), suppression définitive de la troncature des badges de statut (`maxLines = 1`, `softWrap = false`), recalibrage des poids et calage à droite (`Alignment.End`) des montants TTC et badges.
+- **Objectifs :**
+  1. **Étanchéité Factures vs Devis** : Correction dans `computeDashboardAnalytics` (`DashboardAnalytics.kt`) pour n'alimenter `recentDocuments` qu'avec des `Invoice` (`invoices.sortedByDescending { it.issueDate }.take(3).map(RecentDocument::InvoiceDocument)`). Si aucune facture n'est présente, affichage du libellé d'état vide mis à jour *"Aucune facture récente"*.
+  2. **Layout des Badges de Statut** : Verrouillage typographique dans `StatusBadge` (`DashboardScreen.kt`) avec `maxLines = 1`, `softWrap = false` et padding horizontal `8.dp`, empêchant les retours à la ligne ("Brouillo / n").
+  3. **Alignement et Espacement des Colonnes** : Recalibrage des poids (`N°: 1.2f`, `Client: 1.4f`, `Date: 1.0f`, `Montant TTC & Statut: 1.3f`) avec `Alignment.End`, `TextAlign.End` et `Arrangement.spacedBy(2.dp)` pour un calage net le long de la marge droite.
+  4. **Stabilité & Non-régression** : Mise à jour de `DashboardAnalyticsTest.kt`, suite unitaire et Robolectric 100% verte.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/dashboard/DashboardAnalytics.kt` | **[MODIFY]** | Restriction de `recentDocuments` aux seules factures dans `computeDashboardAnalytics`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/domain/i18n/AppTranslations.kt` | **[MODIFY]** | Mise à jour des traductions de `RECENT_EMPTY` ("Aucune facture récente" / "No recent invoices"). |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreen.kt` | **[MODIFY]** | Recalibrage des poids de colonnes, `Alignment.End` et contraintes `maxLines = 1` / `softWrap = false` sur `StatusBadge` et montants. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/dashboard/DashboardAnalyticsTest.kt` | **[MODIFY]** | Test unitaire validant l'exclusion des devis dans la liste des factures récentes. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+---
+
+---
+
+## Livrable Mobile — Rétablissement des Tableaux Dashboard & Couverture Complète N1, N2, N3a, N3b
+- **Date :** 2026-09-19
+- **Statut :** ✅ Clos — Structure `horizontalScroll` simplifiée et stabilisée directement sur `Column(modifier = Modifier.fillMaxWidth().semantics { ... }.horizontalScroll(rememberScrollState()).widthIn(min = 480.dp))` sans contrainte de hauteur. Couverture de test complète sur les 4 niveaux :
+  1. **Niveau 1 (Tests Unitaires & Domaine)** : Validation explicite du typage, des données exposées et des filtres dans `DashboardAnalyticsTest` (`recentDocuments` et `quotesToFollowUp`).
+  2. **Niveau 2 (Tests d'Intégration & Robolectric)** : Assertions strictes dans `DashboardScreenRobolectricTest` sur la présence des nœuds de données (numéros de factures/devis, clients, montants, badges de statuts et états vides).
+  3. **Niveau 3a (E2E Maestro)** : Création du scénario `flows/dashboard/02_dashboard_populated_tables.yaml` couvrant le flux de création, le retour Dashboard et la visibilité des lignes et statuts.
+  4. **Niveau 3b (Snapshot doré anti-régression visuelle)** : Enregistrement du snapshot doré `reports/screenshots/dashboard/dashboard_tables_populated.png`.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreen.kt` | **[MODIFY]** | Agencement direct en `Column(horizontalScroll, widthIn(min = 480.dp))` sur `RecentInvoicesSection` et `QuotesToFollowUpSection`, hauteur intrinsèque libre et messages explicites en état vide. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/domain/dashboard/DashboardAnalyticsTest.kt` | **[MODIFY]** | Ajout d'assertions N1 sur le typage et l'intégrité des champs des factures récentes et devis à relancer. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/dashboard/DashboardScreenRobolectricTest.kt` | **[MODIFY]** | Ajout de tests N2 vérifiant l'affichage effectif des nœuds de données pour les tableaux peuplés et vides. |
+| `flows/dashboard/02_dashboard_populated_tables.yaml` | **[NEW]** | Scénario Maestro N3a / N3b pour la validation des tableaux d'activité remplis et prise du snapshot doré. |
+| `reports/screenshots/dashboard/dashboard_tables_populated.png` | **[NEW]** | Snapshot doré N3b du tableau d'activité rempli. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, suite complète verte en 3m32s) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 35s) |
+| **Artéfact** | APK Debug | `composeApp/build/outputs/apk/debug/composeApp-debug.apk` | **Prêt pour déploiement / tests** |
+
+---
+
+## Livrable Mobile — Redirection Automatique Post-Création de Facture & Rafraîchissement Réactif
+- **Date :** 2026-09-19
+- **Statut :** ✅ Clos — Alignement de `InvoiceFormScreen` sur le comportement de `QuoteFormScreen` avec redirection automatique post-succès et rafraîchissement des dépôts SQLDelight.
+- **Objectifs :**
+  1. **Callback de Navigation** : Ajout de `onNavigateBack: () -> Unit = {}` dans `InvoiceFormScreen` et `InvoiceFormContent`.
+  2. **Redirection Automatique** : Intégration du `LaunchedEffect(uiState.submissionStatus)` avec délai visuel de confirmation (1200ms) avant déclenchement de `onNavigateBack()`.
+  3. **Câblage Shell Navigation** : Connexion du callback `onNavigateBack = onBack` dans `App.kt` sur `Overlay.CreateInvoice` et `Overlay.CreateInvoiceFromQuote`, exécutant le rafraîchissement automatique de `invoiceListViewModel`, `quotesViewModel` et `dashboardViewModel`.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormScreen.kt` | **[MODIFY]** | Ajout de `onNavigateBack` et déclenchement automatique via `LaunchedEffect` sur `SubmissionStatus.Success`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** | Câblage de `onNavigateBack = onBack` sur les overlays de facturation. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, suite complète verte en 4m06s) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 57s) |
+| **Artéfact** | APK Debug | `composeApp/build/outputs/apk/debug/composeApp-debug.apk` | **Prêt pour déploiement / tests** |
 

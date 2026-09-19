@@ -67,7 +67,7 @@ object AppTranslations {
         StringKey.CHART_MIN to "Min",
         StringKey.CHART_MAX to "Max",
         StringKey.RECENT_INVOICES_TITLE to "Factures récentes",
-        StringKey.RECENT_EMPTY to "Aucun document pour le moment",
+        StringKey.RECENT_EMPTY to "Aucune facture récente",
         StringKey.COL_INVOICE_NO to "Nº FACTURE",
         StringKey.COL_CLIENT to "CLIENT",
         StringKey.COL_DATE to "DATE",
@@ -241,6 +241,7 @@ object AppTranslations {
 
         StringKey.VALIDATION_INVOICE_NUMBER_REQUIRED to "Le numéro de facture est requis",
         StringKey.VALIDATION_DATE_FORMAT_INVALID to "Date attendue au format AAAA-MM-JJ",
+        StringKey.VALIDATION_DUE_DATE_BEFORE_ISSUE_DATE to "La date d'échéance ne peut pas être antérieure à la date d'émission",
         StringKey.VALIDATION_CLIENT_NAME_REQUIRED to "La raison sociale du client est requise",
         StringKey.VALIDATION_CLIENT_SIRET_INVALID to "Le SIRET doit comporter exactement 14 chiffres",
         StringKey.VALIDATION_CLIENT_EMAIL_INVALID to "Adresse email du client invalide",
@@ -639,7 +640,7 @@ object AppTranslations {
         StringKey.CHART_MIN to "Min",
         StringKey.CHART_MAX to "Max",
         StringKey.RECENT_INVOICES_TITLE to "Recent invoices",
-        StringKey.RECENT_EMPTY to "No documents yet",
+        StringKey.RECENT_EMPTY to "No recent invoices",
         StringKey.COL_INVOICE_NO to "INVOICE #",
         StringKey.COL_CLIENT to "CLIENT",
         StringKey.COL_DATE to "DATE",
@@ -813,6 +814,7 @@ object AppTranslations {
 
         StringKey.VALIDATION_INVOICE_NUMBER_REQUIRED to "Invoice number is required",
         StringKey.VALIDATION_DATE_FORMAT_INVALID to "Expected date format YYYY-MM-DD",
+        StringKey.VALIDATION_DUE_DATE_BEFORE_ISSUE_DATE to "Due date cannot be before issue date",
         StringKey.VALIDATION_CLIENT_NAME_REQUIRED to "Client company name is required",
         StringKey.VALIDATION_CLIENT_SIRET_INVALID to "SIRET must be exactly 14 digits",
         StringKey.VALIDATION_CLIENT_EMAIL_INVALID to "Invalid client email address",

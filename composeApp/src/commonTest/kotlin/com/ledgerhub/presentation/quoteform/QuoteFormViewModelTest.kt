@@ -85,7 +85,15 @@ class QuoteFormViewModelTest {
         assertNotNull(viewModel.uiState.value.errors[QuoteFormField.RECIPIENT_SIRET])
     }
 
-    // ── Champ spécifique devis : date de validité ────────────────────────────
+    // ── Champ spécifique devis : date de validité & date d'émission ─────────
+
+    @Test
+    fun initialState_hasIssueDatePrefilledWithToday() {
+        val viewModel = QuoteFormViewModel()
+        val state = viewModel.uiState.value
+        assertTrue(state.issueDate.isNotBlank())
+        assertNull(state.errors[QuoteFormField.ISSUE_DATE])
+    }
 
     @Test
     fun invalidValidityDate_producesFieldError() {
@@ -95,8 +103,35 @@ class QuoteFormViewModelTest {
     }
 
     @Test
+    fun validityDateBeforeIssueDate_producesTemporalError() {
+        val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-18"))
+        viewModel.processIntent(QuoteFormIntent.ValidityDateChanged("2026-09-10"))
+        val error = viewModel.uiState.value.errors[QuoteFormField.VALIDITY_DATE]
+        assertNotNull(error)
+        assertTrue(error.contains("antérieure"))
+    }
+
+    @Test
+    fun changingIssueDateAfterValidityDate_updatesTemporalErrorInRealTime() {
+        val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-01"))
+        viewModel.processIntent(QuoteFormIntent.ValidityDateChanged("2026-09-15"))
+        assertNull(viewModel.uiState.value.errors[QuoteFormField.VALIDITY_DATE])
+
+        // L'utilisateur repousse la date d'émission après la validité -> l'erreur se déclenche immédiatement
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-20"))
+        assertNotNull(viewModel.uiState.value.errors[QuoteFormField.VALIDITY_DATE])
+
+        // L'utilisateur réajuste la date d'émission avant la validité -> l'erreur disparaît immédiatement
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-10"))
+        assertNull(viewModel.uiState.value.errors[QuoteFormField.VALIDITY_DATE])
+    }
+
+    @Test
     fun validValidityDate_clearsFieldError() {
         val viewModel = QuoteFormViewModel()
+        viewModel.processIntent(QuoteFormIntent.IssueDateChanged("2026-09-01"))
         viewModel.processIntent(QuoteFormIntent.ValidityDateChanged("2026-09-03"))
         assertNull(viewModel.uiState.value.errors[QuoteFormField.VALIDITY_DATE])
     }
