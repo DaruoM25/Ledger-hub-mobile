@@ -49,13 +49,7 @@ class SqlDelightAuthRepository(
     override fun observeCurrentAccount(): Flow<UserAccount?> = _currentAccount.asStateFlow()
 
     override suspend fun getCurrentAccount(): UserAccount? = withContext(dispatcher) {
-        _currentAccount.value ?: queries.selectCurrentAccount().executeAsOneOrNull()?.let {
-            UserAccount(
-                email = it.email,
-                companyName = it.companyName,
-                siret = it.siret,
-            ).also { account -> _currentAccount.value = account }
-        }
+        _currentAccount.value
     }
 
     override suspend fun login(email: String, password: String): Result<UserAccount> = withContext(dispatcher) {
@@ -163,9 +157,6 @@ class SqlDelightAuthRepository(
 
     override suspend fun logout(): Result<Unit> = withContext(dispatcher) {
         try {
-            database.transaction {
-                queries.deleteAllAccounts()
-            }
             _currentAccount.value = null
             Result.success(Unit)
         } catch (e: CancellationException) {
