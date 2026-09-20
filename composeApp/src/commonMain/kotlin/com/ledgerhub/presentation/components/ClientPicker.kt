@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -47,6 +49,7 @@ object ClientPickerTags {
     const val QUICK_CLIENT_EMAIL_INPUT = "QUICK_CLIENT_EMAIL_INPUT"
     const val QUICK_CLIENT_SAVE_BTN = "QUICK_CLIENT_SAVE_BTN"
     const val QUICK_CLIENT_CANCEL_BTN = "QUICK_CLIENT_CANCEL_BTN"
+    const val QUICK_CLIENT_SIRENE_LOADER = "QUICK_CLIENT_SIRENE_LOADER"
 
     /** Une suggestion, identifiée par le SIRET — identité métier de la fiche client. */
     fun suggestionItem(siret: String) = "CLIENT_SUGGESTION_ITEM_$siret"
@@ -73,6 +76,7 @@ data class QuickClientDraft(
     val email: String = "",
     val errors: Map<QuickClientField, String> = emptyMap(),
     val isSaving: Boolean = false,
+    val isSireneResolving: Boolean = false,
 )
 
 private val QUICK_CLIENT_EMAIL_REGEX = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""")
@@ -212,6 +216,8 @@ private fun SuggestionRow(client: Party, enabled: Boolean, onClick: () -> Unit) 
 /**
  * Modale de création rapide d'une fiche client — trois champs et deux actions.
  *
+ * Le SIRET est placé en tête du formulaire (US-11/Ergonomie) : sa validation déclenche
+ * la résolution de la raison sociale par le répertoire SIRENE.
  * Le SIRET est contrôlé par la clé de Luhn côté ViewModel : la modale se contente d'afficher
  * l'erreur qu'on lui donne, et **reste ouverte** tant que la saisie est refusée.
  */
@@ -222,6 +228,7 @@ fun QuickClientDialog(
     email: String,
     errors: Map<String, String>,
     isSaving: Boolean,
+    isSireneResolving: Boolean = false,
     onFieldChanged: (name: String, siret: String, email: String) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
@@ -233,15 +240,6 @@ fun QuickClientDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 DialogField(
-                    label = "Raison sociale",
-                    value = name,
-                    tag = ClientPickerTags.QUICK_CLIENT_NAME_INPUT,
-                    error = errors["NAME"],
-                    errorTag = ClientPickerTags.quickClientError("NAME"),
-                    enabled = !isSaving,
-                    onValueChange = { onFieldChanged(it, siret, email) },
-                )
-                DialogField(
                     label = "SIRET (14 chiffres)",
                     value = siret,
                     tag = ClientPickerTags.QUICK_CLIENT_SIRET_INPUT,
@@ -250,6 +248,26 @@ fun QuickClientDialog(
                     enabled = !isSaving,
                     onValueChange = { onFieldChanged(name, filterSiret(it), email) },
                     keyboardType = KeyboardType.Number,
+                    trailingIcon = if (isSireneResolving) {
+                        {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .semantics { testTag = ClientPickerTags.QUICK_CLIENT_SIRENE_LOADER },
+                                strokeWidth = 2.dp,
+                                color = LedgerHubTheme.palette.Accent,
+                            )
+                        }
+                    } else null,
+                )
+                DialogField(
+                    label = "Raison sociale",
+                    value = name,
+                    tag = ClientPickerTags.QUICK_CLIENT_NAME_INPUT,
+                    error = errors["NAME"],
+                    errorTag = ClientPickerTags.quickClientError("NAME"),
+                    enabled = !isSaving,
+                    onValueChange = { onFieldChanged(it, siret, email) },
                 )
                 DialogField(
                     label = "Email",
@@ -297,6 +315,7 @@ private fun DialogField(
     enabled: Boolean,
     onValueChange: (String) -> Unit,
     keyboardType: KeyboardType = KeyboardType.Text,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -309,6 +328,7 @@ private fun DialogField(
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             shape = RoundedCornerShape(10.dp),
             colors = ledgerFieldColors(),
+            trailingIcon = trailingIcon,
             modifier = Modifier.fillMaxWidth().semantics { testTag = tag },
         )
         if (error != null) {

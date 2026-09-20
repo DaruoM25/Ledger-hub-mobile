@@ -1,0 +1,75 @@
+appId: com.ledgerhub.app.debug
+---
+# ==============================================================================
+# Scénario N3a/N3b : Création Client avec Ordre SIRET Prioritaire & Autocomplétion SIRENE
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+# 1. Navigation vers l'onglet Clients
+- tapOn:
+    id: "bottom_bar_item_clients"
+
+- assertVisible:
+    id: "clients_screen"
+
+# 2. Ouverture de la modale de création d'un nouveau client
+- tapOn:
+    id: "clients_add_button"
+
+- assertVisible:
+    id: "client_form_dialog"
+
+# 3. Vérification que le champ SIRET est positionné en premier
+- assertVisible:
+    id: "client_form_siret"
+
+# 4. Saisie d'un SIRET invalide (Luhn faux) et tentative de sauvegarde
+- tapOn:
+    id: "client_form_siret"
+- inputText: "78410233600022"
+
+- tapOn:
+    id: "client_form_save"
+
+- assertVisible:
+    id: "client_form_error_SIRET"
+
+# 5. Correction avec un SIRET valide pour déclencher l'autocomplétion SIRENE
+- tapOn:
+    id: "client_form_siret"
+- eraseText: 14
+- inputText: "73282932000074"
+
+# Attente de la résolution SIRENE (simulée avec 1s de délai)
+- extendedWaitUntil:
+    visible:
+      text: "RENAULT SAS"
+    timeout: 5000
+
+- assertVisible:
+    text: "RENAULT SAS"
+
+# Saisie de l'email pour finaliser
+- tapOn:
+    id: "client_form_email"
+- inputText: "contact@renault.fr"
+
+# 6. Capture du snapshot doré N3b de la modale avec SIRET prioritaire et Raison sociale pré-remplie
+- takeScreenshot: reports/screenshots/clients/client_creation_siret_autocompletion
+
+# 7. Sauvegarde du client
+- tapOn:
+    id: "client_form_save"
+
+# Vérification du retour sur la liste avec la nouvelle fiche client
+- extendedWaitUntil:
+    visible:
+      text: "RENAULT SAS"
+    timeout: 5000
+
+- assertVisible:
+    text: "RENAULT SAS"
+- assertVisible:
+    text: "SIRET 73282932000074"

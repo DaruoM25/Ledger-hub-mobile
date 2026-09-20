@@ -68,11 +68,15 @@ class ClientPickerLogicTest {
     private val bouchon = Party("Bouchon Lyonnais SAS", "732829320", "73282932000074", "contact@bouchon.fr")
     private val atelier = Party("Atelier Martin", "443061841", "44306184100005", "hello@atelier-martin.fr")
 
-    private fun newViewModel(vararg clients: Party): Pair<InvoiceFormViewModel, InMemoryClientRepository> {
+    private fun newViewModel(
+        vararg clients: Party,
+        sireneLookupService: com.ledgerhub.domain.sirene.SireneLookupService = com.ledgerhub.data.sirene.MockSireneLookupService(simulatedDelayMillis = 0L),
+    ): Pair<InvoiceFormViewModel, InMemoryClientRepository> {
         val repository = InMemoryClientRepository(clients.toList())
         val viewModel = InvoiceFormViewModel(
             dispatcher = UnconfinedTestDispatcher(),
             clientRepository = repository,
+            sireneLookupService = sireneLookupService,
         )
         return viewModel to repository
     }
@@ -327,5 +331,59 @@ class ClientPickerLogicTest {
         assertNull(state.errors[InvoiceFormField.CLIENT_NAME])
         // Pas d'annuaire : proposer la création rapide mènerait à une modale sans destination.
         assertFalse(state.showAddNewClientButton)
+    }
+
+    // ── Autocomplétion SIRENE & Ordre des champs (N1) ───────────────────────
+
+    @Test
+    fun typingValidSiret_inQuickClient_triggersSireneAutocompletion() = runTest {
+        val (viewModel, _) = newViewModel()
+        viewModel.processIntent(InvoiceFormIntent.OnOpenQuickClientDialog)
+
+        // Saisie d'un SIRET de 14 chiffres valide (Luhn) présent dans SEED
+        viewModel.processIntent(
+            InvoiceFormIntent.OnQuickClientFieldChanged(
+                name = "",
+                siret = "73282932000074",
+                email = "",
+            ),
+        )
+
+        val draft = assertNotNull(viewModel.uiState.value.quickClientDraft)
+        // Autocomplétion de la raison sociale déclenchée
+        assertEquals("RENAULT SAS", draft.name)
+        assertFalse(draft.isSireneResolving)
+    }
+
+    @Test
+    fun typingIncompleteOrInvalidSiret_doesNotTriggerSireneAutocompletion() = runTest {
+        val (viewModel, _) = newViewModel()
+        viewModel.processIntent(InvoiceFormIntent.OnOpenQuickClientDialog)
+
+        // 13 chiffres
+        viewModel.processIntent(
+            InvoiceFormIntent.OnQuickClientFieldChanged(
+                name = "",
+                siret = "7841023360000",
+                email = "",
+            ),
+        )
+
+        val draft13 = assertNotNull(viewModel.uiState.value.quickClientDraft)
+        assertEquals("", draft13.name)
+        assertFalse(draft13.isSireneResolving)
+
+        // 14 chiffres mais Luhn invalide
+        viewModel.processIntent(
+            InvoiceFormIntent.OnQuickClientFieldChanged(
+                name = "",
+                siret = "78410233600009",
+                email = "",
+            ),
+        )
+
+        val draftInvalidLuhn = assertNotNull(viewModel.uiState.value.quickClientDraft)
+        assertEquals("", draftInvalidLuhn.name)
+        assertFalse(draftInvalidLuhn.isSireneResolving)
     }
 }

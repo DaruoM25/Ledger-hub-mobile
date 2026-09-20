@@ -1,5 +1,27 @@
 # Journal d'audit — LedgerHub Mobile
 
+## Diagnostic & Correctif : Affinement du Prédicat de Recherche Client (Préfixe de mot & Séparateurs étendus)
+- **Date :** 2026-09-20
+- **Statut :** ✅ Validé & Déployé sur terminal réel (Galaxy S23+)
+- **Composants :** `ClientsViewModel.kt`, `ClientsUiState.kt`, `ClientsViewModelTest.kt`
+- **Résultat tests :** `./gradlew :composeApp:testDebugUnitTest` → 100% verts (37 tasks, BUILD SUCCESSFUL in 4m 31s)
+- **Build APK :** `./gradlew :composeApp:assembleDebug` → SUCCESS (36s)
+- **Déploiement :** `adb install -r composeApp/build/outputs/apk/debug/composeApp-debug.apk` → SUCCESS
+
+### Problème résolu
+- La recherche par simple sous-chaîne `contains("or")` faisait remonter `M2i Formation` au lieu de cibler uniquement `ORANGE`.
+- Prise en compte des séparateurs composés pour les noms d'entreprises : espaces, tirets, underscores et apostrophes (`Eco-Bat`, `L'Atelier`).
+
+### Correctif apporté
+- Découpage par regex `[\\s\\-_']+` et test de préfixe `startsWith` sur chaque mot ainsi que sur la dénomination complète.
+- Découpage sur l'email (`@`, `.`) avec test de préfixe sur le compte ou le nom de domaine.
+- Recherche SIRET par préfixe `startsWith` activée uniquement si la requête est purement numérique.
+- Couverture de tests ajoutée : `searchQuery_prefixMatching_handlesWordsHyphensApostrophesAndExcludesMiddleSubstrings` validant l'exclusion de `M2i Formation` sur `or`, et la bonne détection de `Eco-Bat` sur `bat` et `L'Atelier d'Art` sur `atelier`.
+
+---
+
+
+
 ## Initialisation
 - **Stack :** Kotlin Multiplatform (KMP), Compose Multiplatform, Ktor, SQLDelight
 - **Environnement de dev :** Windows 11 / WSL2 (Cible Android locale)
@@ -3888,4 +3910,138 @@ Lors de la recette sur terminal physique de la RC1, un bug bloquant a été rele
 | **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, suite complète verte en 4m06s) |
 | **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 57s) |
 | **Artéfact** | APK Debug | `composeApp/build/outputs/apk/debug/composeApp-debug.apk` | **Prêt pour déploiement / tests** |
+
+---
+
+## Livrable Mobile — Réorganisation du flux Client (SIRET Prioritaire & Autocomplétion SIRENE) & Couverture N1/N2/N3
+- **Date :** 2026-09-19
+- **Statut :** ✅ Clos — Champ SIRET positionné en 1ère position dans `QuickClientDialog` et `ClientFormDialog`, restreint à 14 chiffres (`filterSiret`) et clavier numérique (`KeyboardType.Number`). Autocomplétion SIRENE instantanée dès la saisie d'un SIRET valide selon Luhn, annulation réactive du job coroutine sur modification/effacement du SIRET, et protection des contrats de test.
+- **Objectifs :**
+  1. **Réorganisation Ergonomique des Champs** : Champ Numéro SIRET (14 chiffres) placé tout en haut du formulaire de création rapide (`QuickClientDialog`) et de la fiche client complète (`ClientFormDialog`).
+  2. **Autocomplétion & Validation Luhn** : Dès que 14 chiffres et la clé de Luhn sont valides (`LuhnChecksum.isValidSiret`), déclenchement de la résolution asynchrone via `SireneLookupService` avec indicateur de chargement (`CircularProgressIndicator` dans l'icône de fin du champ SIRET) et pré-remplissage immédiat de la raison sociale.
+  3. **Annulation Réactive & Gestion des États** : Annulation immédiate du job coroutine en cours (`quickClientLookupJob?.cancel()`) si l'utilisateur modifie ou efface le SIRET, ainsi qu'à la fermeture de la modale.
+  4. **Couverture Pyramide de Tests** :
+     - **N1 (Tests Unitaires & Domaine)** : Tests dans `ClientPickerLogicTest`, `QuoteFormViewModelTest` et `ClientsViewModelTest` validant l'autocomplétion, la clé de Luhn et le rejet des SIRETs invalides.
+     - **N2 (Tests d'Intégration Robolectric)** : Tests dans `ClientPickerRobolectricTest` et `ClientsScreenRobolectricTest` vérifiant la disposition en premier du champ SIRET, le comportement du loader et le pré-remplissage.
+     - **N3a / N3b (E2E Maestro & Snapshot)** : Script E2E `flows/clients/03_client_creation_siret_autocompletion.yaml`.
+
+### 1. Fichiers Modifiés & Créés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/components/ClientPicker.kt` | **[MODIFY]** | Champ SIRET positionné en tête dans `QuickClientDialog`, `trailingIcon` avec loader SIRENE, `KeyboardType.Number` et `filterSiret`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/invoiceform/InvoiceFormViewModel.kt` | **[MODIFY]** | Injection de `sireneLookupService`, gestion du job coroutine avec annulation, et pré-remplissage raison sociale. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormViewModel.kt` | **[MODIFY]** | Injection de `sireneLookupService`, gestion du job coroutine avec annulation, et pré-remplissage raison sociale. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** | Injection de `sireneLookupService` dans `InvoiceFormViewModel` et `QuoteFormViewModel`. |
+| `composeApp/src/androidUnitTest/kotlin/com/ledgerhub/presentation/invoiceform/ClientPickerRobolectricTest.kt` | **[MODIFY]** | Validation du champ SIRET en 1er, loader SIRENE et alignement sur la raison sociale résolue. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/invoiceform/ClientPickerLogicTest.kt` | **[MODIFY]** | Tests unitaires N1 sur le déclenchement SIRENE et le contrôle Luhn. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/quoteform/QuoteFormViewModelTest.kt` | **[MODIFY]** | Tests unitaires N1 sur l'autocomplétion SIRENE dans le formulaire devis. |
+| `flows/clients/03_client_creation_siret_autocompletion.yaml` | **[NEW]** | Scénario Maestro N3a/N3b de création client avec SIRET prioritaire et autocomplétion SIRENE. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (100% passant, 37 actionable tasks en 2m14s) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 1m11s) |
+| **N3a / N3b** | Flux Maestro & Snapshot | `flows/clients/03_client_creation_siret_autocompletion.yaml` | Prêt pour exécution sur terminal physique |
+
+---
+
+## Livrable Mobile — Filtrage Réactif de la Recherche Client (ClientsScreen / ClientsViewModel / ClientsUiState)
+- **Date :** 2026-09-20
+- **Statut :** ✅ Clos — Filtrage temps réel réactif et explicite dans `ClientsUiState`, élimination de la régression d'affichage ("test" vs "M2i Formation"), consolidation N1/N2 et build APK debug réussi.
+- **Objectifs & Exigences d'Architecture :**
+  1. **Explicitation de `filteredClients` dans `ClientsUiState`** : 
+     - Champ direct `val filteredClients: List<Party>` dans la data class au lieu d'un simple getter calculé pour garantir l'invalidation de recomposition Compose Multiplatform.
+     - Calcul systématique et déterministe dans `_uiState.update { ... }` du ViewModel lors de `SearchQueryChanged`, `ClearSearch` ou `load()`.
+  2. **Logique de Filtrage Multi-Critères** :
+     - Filtrage insensible à la casse sur la raison sociale (`name`), l'adresse email (`email`) et le numéro SIRET (`siret`).
+     - Support des requêtes SIRET avec chiffres purs (`filter { it.isDigit() }`) permettant le match même si l'utilisateur saisit des espaces ("123 456").
+  3. **Vérification de l'Architecture & Navigation App.kt** :
+     - Confirmation que `ClientsScreen` reçoit bien l'instance mémorisée de `ClientsViewModel` et que `uiState` est collecté avec `collectAsState()`.
+     - Ajout de l'événement `ClientsIntent.Load` dans le callback `onBackToTabs` pour rafraîchir la liste après navigation.
+  4. **Couverture Pyramide de Tests & Build** :
+     - Ajout du test unitaire N1 `searchQuery_filtersClientsByNameSiretAndEmail()` dans `ClientsViewModelTest.kt` validant spécifiquement l'exclusion de "M2i Formation" lors de la saisie de "test".
+     - Exécution complète des tests unitaires et d'intégration Robolectric (`./gradlew :composeApp:testDebugUnitTest`) : **100% verts**.
+     - Compilation de l'APK (`./gradlew :composeApp:assembleDebug`) : **BUILD SUCCESSFUL**.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsUiState.kt` | **[MODIFY]** | Déclaration de `val filteredClients: List<Party>` comme propriété concrète de la data class et méthode `filterClients` dans le companion object. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsViewModel.kt` | **[MODIFY]** | Mise à jour explicite de `filteredClients` lors de `onSearchQueryChange`, `onClearSearch` et `load()`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/App.kt` | **[MODIFY]** | Ajout de l'import `ClientsIntent` et rafraîchissement réactif dans `onBackToTabs`. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/clients/ClientsViewModelTest.kt` | **[MODIFY]** | Ajout du test de filtrage unitaire `searchQuery_filtersClientsByNameSiretAndEmail()`. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (37 actionable tasks en 4m22s, 100% passants) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 59s) |
+
+---
+
+## Livrable Mobile — P0 : Filtrage Instantané dès le 1er Caractère & Cycle de Vie des Notifications (ClientsScreen / ClientsViewModel)
+- **Date :** 2026-09-20
+- **Statut :** ✅ Clos — Filtrage instantané garanti dès la frappe du 1er caractère (`name`, `email` ou `siret`), auto-dismiss du bandeau d'erreur (`errorMessage`) après 3 500 ms via `LaunchedEffect` et `ClientsIntent.DismissMessage`, suite complète de tests N1/N2 passante et APK debug assemblé.
+- **Détail des Implémentations :**
+  1. **Filtrage instantané dès 1 caractère** :
+     - Méthode unifiée `filterClients(allClients: List<Party>, query: String)` dans `ClientsViewModel.kt` et synchronisée dans `ClientsUiState.Companion`.
+     - Prise en compte immédiate insensible à la casse sur `name` et `email`, et filtrage numérique sur `siret` (`digitsOnly`).
+     - Consommation exclusive de `uiState.filteredClients` dans `ClientsScreen.kt`.
+  2. **Cycle de vie des notifications et erreurs (Auto-dismiss)** :
+     - Ajout de `ClientsIntent.DismissMessage` réinitialisant à `null` à la fois `errorMessage` et `feedbackMessage`.
+     - Ajout d'un `LaunchedEffect(message)` dans `ClientsScreen.kt` avec `delay(3500L)` appelant `onIntent(ClientsIntent.DismissMessage)` pour masquer automatiquement l'erreur après 3,5 secondes.
+  3. **Pyramide de tests (N1 & N2) & Build** :
+     - Ajout de `searchQuery_filtersInstantlyFromFirstCharacter()` dans `ClientsViewModelTest.kt` vérifiant que la frappe de `"m"` ne retient que `"M2i Formation"` et écarte les autres clients.
+     - Ajout de `dismissMessage_resetsErrorMessageAndFeedbackMessage()` vérifiant la remise à zéro des messages d'état.
+     - Validation N1 & N2 : `./gradlew :composeApp:testDebugUnitTest` réussi en 4m57s (100% passants).
+     - Assemblage APK : `./gradlew :composeApp:assembleDebug` réussi en 1m12s.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsViewModel.kt` | **[MODIFY]** | Implémentation de `filterClients`, ajout de `ClientsIntent.DismissMessage` et calcul systématique de `filteredClients`. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsUiState.kt` | **[MODIFY]** | Harmonisation de `filterClients` dans le companion object. |
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsScreen.kt` | **[MODIFY]** | Ajout de `LaunchedEffect(message)` avec `delay(3500L)` et émission de `ClientsIntent.DismissMessage`. |
+| `composeApp/src/commonTest/kotlin/com/ledgerhub/presentation/clients/ClientsViewModelTest.kt` | **[MODIFY]** | Tests unitaires N1 du filtrage au premier caractère et du reset de message via `DismissMessage`. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (37 actionable tasks en 4m57s, 100% passants) |
+
+---
+
+## Livrable Mobile — Correction Racine & Validation Terminal Réel (ClientsViewModel.kt)
+- **Date :** 2026-09-20
+- **Statut :** ✅ Clos — Inlining strict de la mise à jour de `filteredClients` dans `processIntent` pour `SearchQueryChanged` et `ClearSearch`, installation de l'APK sur terminal réel connecté (Samsung Galaxy S23+), vérification du filtrage réactif au nom ("ORANGE"), au SIRET ("380129"), et purge ✕ validée par captures d'écran.
+- **Détail des Implémentations & Déploiement :**
+  1. **Inlining de la mise à jour dans `processIntent`** :
+     - Traitement direct des intentions `ClientsIntent.SearchQueryChanged` et `ClientsIntent.ClearSearch` au sein du `when (intent)` de `ClientsViewModel.kt`.
+     - `_uiState.update` garantit la projection immédiate de `filteredClients` calculée via `filterClients(...)`.
+  2. **Validation & Déploiement Terminal Réel** :
+     - Déploiement : `adb install -r composeApp/build/outputs/apk/debug/composeApp-debug.apk` (Success).
+     - Test réel 1 : Recherche "ORANGE" -> Seule la carte ORANGE est affichée, les autres fiches sont masquées.
+     - Test réel 2 : Recherche par chiffres du SIRET "380129" -> Seule la fiche ORANGE (SIRET 38012986648625) est affichée.
+     - Test réel 3 : Clic sur l'icône de purge "✕" -> Rétablissement immédiat de l'ensemble de la liste.
+  3. **Pyramide de tests N1 & N2** :
+     - `./gradlew :composeApp:testDebugUnitTest` : **BUILD SUCCESSFUL** (100% passants en 4m10s).
+     - `./gradlew :composeApp:assembleDebug` : **BUILD SUCCESSFUL** en 35s.
+
+### 1. Fichiers Modifiés
+| Fichier | Nature | Description |
+|---|---|---|
+| `composeApp/src/commonMain/kotlin/com/ledgerhub/presentation/clients/ClientsViewModel.kt` | **[MODIFY]** | Inlining direct de la mise à jour de `filteredClients` dans `processIntent` pour `SearchQueryChanged` et `ClearSearch`. |
+
+### 2. Validation & Recette
+| Niveau | Type | Commande / Fichier | Résultat |
+|---|---|---|---|
+| **N1 / N2** | Tests Unitaires & Robolectric | `./gradlew :composeApp:testDebugUnitTest` | **BUILD SUCCESSFUL** (37 actionable tasks en 4m10s, 100% passants) |
+| **N2** | Build APK Debug | `./gradlew :composeApp:assembleDebug` | **BUILD SUCCESSFUL** (APK généré avec succès en 35s) |
+| **N3a / Réel**| Test interactif terminal physique | `adb shell screencap` & injections `input text` | **Filtrage nom, SIRET et bouton ✕ 100% opérationnels** |
+| **Artéfact** | APK Debug | `composeApp/build/outputs/apk/debug/composeApp-debug.apk` | **Installé et testé sur terminal physique** |
+
+
+
+
 

@@ -40,6 +40,7 @@ sealed interface ClientsIntent {
     data object FormSubmitted : ClientsIntent
     data object FormDismissed : ClientsIntent
     data object FeedbackShown : ClientsIntent
+    data object DismissMessage : ClientsIntent
 }
 
 /**
@@ -107,11 +108,23 @@ class ClientsViewModel(
             is ClientsIntent.EmailChanged ->
                 updateForm(ClientFormField.EMAIL) { it.copy(email = intent.value) }
 
-            is ClientsIntent.SearchQueryChanged ->
-                _uiState.update { it.copy(searchQuery = intent.query) }
+            is ClientsIntent.SearchQueryChanged -> {
+                _uiState.update { current ->
+                    current.copy(
+                        searchQuery = intent.query,
+                        filteredClients = filterClients(current.clients, intent.query),
+                    )
+                }
+            }
 
-            ClientsIntent.ClearSearch ->
-                _uiState.update { it.copy(searchQuery = "") }
+            ClientsIntent.ClearSearch -> {
+                _uiState.update { current ->
+                    current.copy(
+                        searchQuery = "",
+                        filteredClients = current.clients,
+                    )
+                }
+            }
 
             ClientsIntent.FormSubmitted -> submitForm()
 
@@ -120,11 +133,47 @@ class ClientsViewModel(
                 _uiState.update { it.copy(form = null) }
             }
 
-            ClientsIntent.FeedbackShown -> {
+            ClientsIntent.FeedbackShown, ClientsIntent.DismissMessage -> {
                 feedbackDismissJob?.cancel()
                 _uiState.update { it.copy(feedbackMessage = null, errorMessage = null) }
             }
         }
+    }
+
+    fun onSearchQueryChange(query: String) {
+        processIntent(ClientsIntent.SearchQueryChanged(query))
+    }
+
+    fun onClearSearch() {
+        processIntent(ClientsIntent.ClearSearch)
+    }
+
+    private fun matchesClient(client: Party, query: String): Boolean {
+        val raw = query.trim()
+        if (raw.isEmpty()) return true
+
+        val normalizedQuery = raw.lowercase()
+
+        // Recherche par préfixe sur les mots du nom (espaces, tirets, underscores, apostrophes)
+        val nameWords = client.name.lowercase().split("[\\s\\-_']+".toRegex()).filter { it.isNotEmpty() }
+        val matchesName = nameWords.any { it.startsWith(normalizedQuery) } ||
+                client.name.lowercase().startsWith(normalizedQuery)
+
+        // Recherche email (préfixe du compte ou du domaine)
+        val emailParts = client.email.lowercase().split("@", ".").filter { it.isNotEmpty() }
+        val matchesEmail = emailParts.any { it.startsWith(normalizedQuery) } ||
+                client.email.lowercase().startsWith(normalizedQuery)
+
+        // Recherche SIRET (uniquement numérique et par préfixe)
+        val isNumericQuery = raw.all { it.isDigit() || it.isWhitespace() }
+        val digitsOnly = raw.filter { it.isDigit() }
+        val matchesSiret = isNumericQuery && digitsOnly.isNotEmpty() && client.siret.startsWith(digitsOnly)
+
+        return matchesName || matchesEmail || matchesSiret
+    }
+
+    private fun filterClients(allClients: List<Party>, query: String): List<Party> {
+        return allClients.filter { matchesClient(it, query) }
     }
 
     private fun load() {
@@ -133,7 +182,13 @@ class ClientsViewModel(
             val result = repository.fetchClients()
             _uiState.update { current ->
                 result.fold(
-                    onSuccess = { clients -> current.copy(isLoading = false, clients = clients) },
+                    onSuccess = { clients ->
+                        current.copy(
+                            isLoading = false,
+                            clients = clients,
+                            filteredClients = filterClients(clients, current.searchQuery),
+                        )
+                    },
                     onFailure = { throwable ->
                         current.copy(
                             isLoading = false,

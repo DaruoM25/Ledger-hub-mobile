@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -168,6 +169,10 @@ internal fun ClientsView(
             )
         }
         uiState.errorMessage?.let { message ->
+            LaunchedEffect(message) {
+                kotlinx.coroutines.delay(3500L)
+                onIntent(ClientsIntent.DismissMessage)
+            }
             Banner(
                 text = message,
                 tag = ClientsTags.ERROR,
@@ -280,13 +285,17 @@ private fun ClientFormDialog(form: ClientFormState, onIntent: (ClientsIntent) ->
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 DialogField(
-                    label = tr(StringKey.CLIENT_FIELD_NAME),
-                    value = form.name,
-                    tag = ClientsTags.FORM_NAME,
-                    error = form.visibleErrors[ClientFormField.NAME],
-                    errorTag = ClientsTags.errorTag(ClientFormField.NAME),
-                    enabled = !form.isSaving,
-                    onValueChange = { onIntent(ClientsIntent.NameChanged(it)) },
+                    label = tr(StringKey.CLIENT_FIELD_SIRET),
+                    value = form.siret,
+                    tag = ClientsTags.FORM_SIRET,
+                    error = form.visibleErrors[ClientFormField.SIRET],
+                    errorTag = ClientsTags.errorTag(ClientFormField.SIRET),
+                    // Le SIRET est la clé d'identité : verrouillé dès qu'on édite une fiche.
+                    enabled = !form.isSaving && !form.isEditing,
+                    onValueChange = { onIntent(ClientsIntent.SiretChanged(it)) },
+                    keyboardType = KeyboardType.Number,
+                    inputFilter = ::filterSiret,
+                    helper = if (form.isEditing) tr(StringKey.CLIENT_SIRET_LOCKED_HINT) else null,
                     trailingIcon = if (form.isSireneResolving) {
                         {
                             CircularProgressIndicator(
@@ -300,17 +309,13 @@ private fun ClientFormDialog(form: ClientFormState, onIntent: (ClientsIntent) ->
                     } else null,
                 )
                 DialogField(
-                    label = tr(StringKey.CLIENT_FIELD_SIRET),
-                    value = form.siret,
-                    tag = ClientsTags.FORM_SIRET,
-                    error = form.visibleErrors[ClientFormField.SIRET],
-                    errorTag = ClientsTags.errorTag(ClientFormField.SIRET),
-                    // Le SIRET est la clé d'identité : verrouillé dès qu'on édite une fiche.
-                    enabled = !form.isSaving && !form.isEditing,
-                    onValueChange = { onIntent(ClientsIntent.SiretChanged(it)) },
-                    keyboardType = KeyboardType.Number,
-                    inputFilter = ::filterSiret,
-                    helper = if (form.isEditing) tr(StringKey.CLIENT_SIRET_LOCKED_HINT) else null,
+                    label = tr(StringKey.CLIENT_FIELD_NAME),
+                    value = form.name,
+                    tag = ClientsTags.FORM_NAME,
+                    error = form.visibleErrors[ClientFormField.NAME],
+                    errorTag = ClientsTags.errorTag(ClientFormField.NAME),
+                    enabled = !form.isSaving,
+                    onValueChange = { onIntent(ClientsIntent.NameChanged(it)) },
                 )
                 DialogField(
                     label = tr(StringKey.CLIENT_FIELD_EMAIL),

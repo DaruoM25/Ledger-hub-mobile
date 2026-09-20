@@ -65,9 +65,13 @@ class ClientPickerRobolectricTest {
 
     private fun directory(vararg clients: Party) = FakeClientDirectory(clients.toList())
 
-    private fun viewModelFor(directory: FakeClientDirectory) = InvoiceFormViewModel(
+    private fun viewModelFor(
+        directory: FakeClientDirectory,
+        sireneLookupService: com.ledgerhub.domain.sirene.SireneLookupService = com.ledgerhub.data.sirene.MockSireneLookupService(simulatedDelayMillis = 0L),
+    ) = InvoiceFormViewModel(
         dispatcher = UnconfinedTestDispatcher(),
         clientRepository = directory,
+        sireneLookupService = sireneLookupService,
     )
 
     // ── Scénario 1 : recherche, sélection, auto-complétion ──────────────────
@@ -132,13 +136,13 @@ class ClientPickerRobolectricTest {
 
         // La modale se ferme…
         onAllNodesWithTag(ClientPickerTags.QUICK_CLIENT_DIALOG).assertCountEquals(0)
-        // …le client est sélectionné dans la facture courante…
-        onNodeWithTag(ClientPickerTags.CLIENT_SEARCH_INPUT).performScrollTo().assertTextContains("Client Inconnu SAS")
+        // …le client est sélectionné dans la facture courante avec la raison sociale résolue par SIRENE…
+        onNodeWithTag(ClientPickerTags.CLIENT_SEARCH_INPUT).performScrollTo().assertTextContains("RENAULT SAS")
         onNodeWithTag(InvoiceFormTags.CLIENT_SIRET).performScrollTo().assertTextContains("73282932000074")
         onNodeWithTag(InvoiceFormTags.CLIENT_EMAIL).performScrollTo().assertTextContains("contact@inconnu.fr")
         // …et persisté dans l'annuaire.
         val stored = directory.clients.single { it.siret == "73282932000074" }
-        assertEquals("Client Inconnu SAS", stored.name)
+        assertEquals("RENAULT SAS", stored.name)
     }
 
     @Test
@@ -184,5 +188,24 @@ class ClientPickerRobolectricTest {
         onNodeWithTag(ClientPickerTags.CLIENT_SEARCH_INPUT).performTextClearance()
 
         onAllNodesWithTag(ClientPickerTags.ADD_NEW_CLIENT_BTN).assertCountEquals(0)
+    }
+
+    @Test
+    fun quickClientDialog_rendersSiretFieldFirst_andTriggersSireneLoader() = runComposeUiTest {
+        val directory = directory()
+        setContent { InvoiceFormScreen(viewModel = viewModelFor(directory)) }
+
+        onNodeWithTag(ClientPickerTags.CLIENT_SEARCH_INPUT).performScrollTo().performTextInput("Nouveau Client")
+        onNodeWithTag(ClientPickerTags.ADD_NEW_CLIENT_BTN).performScrollTo().performClick()
+
+        onNodeWithTag(ClientPickerTags.QUICK_CLIENT_DIALOG).assertIsDisplayed()
+        // Vérification de la présence des champs
+        onNodeWithTag(ClientPickerTags.QUICK_CLIENT_SIRET_INPUT).assertIsDisplayed()
+        onNodeWithTag(ClientPickerTags.QUICK_CLIENT_NAME_INPUT).assertIsDisplayed()
+        onNodeWithTag(ClientPickerTags.QUICK_CLIENT_EMAIL_INPUT).assertIsDisplayed()
+
+        // Saisie d'un SIRET valide déclenche la résolution et pré-remplit la raison sociale
+        onNodeWithTag(ClientPickerTags.QUICK_CLIENT_SIRET_INPUT).performTextInput("73282932000074")
+        onNodeWithTag(ClientPickerTags.QUICK_CLIENT_NAME_INPUT).assertTextContains("RENAULT SAS")
     }
 }

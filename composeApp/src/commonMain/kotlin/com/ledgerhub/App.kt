@@ -113,6 +113,7 @@ import com.ledgerhub.presentation.clients.ClientsScreen
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormScreen
 import com.ledgerhub.presentation.creditnoteform.CreditNoteFormViewModel
 import com.ledgerhub.presentation.clients.ClientsViewModel
+import com.ledgerhub.presentation.clients.ClientsIntent
 import com.ledgerhub.presentation.command.CommandPalette
 import com.ledgerhub.presentation.command.CommandPaletteIntent
 import com.ledgerhub.presentation.command.CommandPaletteTrigger
@@ -528,6 +529,7 @@ fun App(
         invoiceListViewModel.processIntent(InvoiceListIntent.Retry)
         quotesViewModel.processIntent(QuotesIntent.LoadQuotes)
         dashboardViewModel.processIntent(DashboardIntent.LoadDashboard)
+        clientsViewModel.processIntent(ClientsIntent.Load)
     }
 
     // L'action choisie est prise en charge ici, puis acquittee : sans accuse, elle resterait dans
@@ -705,6 +707,7 @@ fun App(
                                                 quotesViewModel = quotesViewModel,
                                                 clientsViewModel = clientsViewModel,
                                                 clientRepository = clientRepository,
+                                                sireneLookupService = sireneLookupService,
                                                 directoryViewModel = directoryViewModel,
                                                 reconciliationViewModel = reconciliationViewModel,
                                                 taxSettingsViewModel = taxSettingsViewModel,
@@ -776,6 +779,7 @@ fun App(
                                                 quotesViewModel = quotesViewModel,
                                                 clientsViewModel = clientsViewModel,
                                                 clientRepository = clientRepository,
+                                                sireneLookupService = sireneLookupService,
                                                 directoryViewModel = directoryViewModel,
                                                 reconciliationViewModel = reconciliationViewModel,
                                                 taxSettingsViewModel = taxSettingsViewModel,
@@ -852,6 +856,7 @@ fun App(
                                             quotesViewModel = quotesViewModel,
                                             clientsViewModel = clientsViewModel,
                                             clientRepository = clientRepository,
+                                            sireneLookupService = sireneLookupService,
                                             directoryViewModel = directoryViewModel,
                                             reconciliationViewModel = reconciliationViewModel,
                                             taxSettingsViewModel = taxSettingsViewModel,
@@ -1348,6 +1353,7 @@ private fun ShellContent(
     quotesViewModel: QuotesViewModel,
     clientsViewModel: ClientsViewModel,
     clientRepository: SqlDelightClientRepository,
+    sireneLookupService: com.ledgerhub.domain.sirene.SireneLookupService = com.ledgerhub.data.sirene.MockSireneLookupService(),
     directoryViewModel: DirectoryViewModel,
     reconciliationViewModel: ReconciliationViewModel,
     taxSettingsViewModel: TaxSettingsViewModel,
@@ -1465,7 +1471,7 @@ private fun ShellContent(
         }
 
         Overlay.CreateInvoice -> {
-            val formViewModel = remember(taxSettings, networkState) {
+            val formViewModel = remember(taxSettings, networkState, sireneLookupService) {
                 InvoiceFormViewModel(
                     submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
                     issuer = taxSettings.issuerParty,
@@ -1473,6 +1479,7 @@ private fun ShellContent(
                     // Annuaire du sélecteur client (US-11) — même dépôt que l'écran Clients,
                     // donc une fiche créée à la volée y apparaît immédiatement.
                     clientRepository = clientRepository,
+                    sireneLookupService = sireneLookupService,
                     enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                     initialNetworkState = networkState,
                 )
@@ -1487,10 +1494,11 @@ private fun ShellContent(
         }
 
         Overlay.CreateQuote -> {
-            val quoteFormViewModel = remember {
+            val quoteFormViewModel = remember(sireneLookupService) {
                 QuoteFormViewModel(
                     submitQuoteUseCase = SubmitQuoteUseCase(quoteRepository),
                     clientRepository = clientRepository,
+                    sireneLookupService = sireneLookupService,
                 )
             }
             DisposableEffect(Unit) { onDispose { quoteFormViewModel.onCleared() } }
@@ -1503,10 +1511,11 @@ private fun ShellContent(
         }
 
         is Overlay.EditQuote -> {
-            val quoteFormViewModel = remember(overlay.quote.number) {
+            val quoteFormViewModel = remember(overlay.quote.number, sireneLookupService) {
                 QuoteFormViewModel(
                     submitQuoteUseCase = SubmitQuoteUseCase(quoteRepository),
                     clientRepository = clientRepository,
+                    sireneLookupService = sireneLookupService,
                     initialQuote = overlay.quote,
                 )
             }
@@ -1520,12 +1529,13 @@ private fun ShellContent(
         }
 
         is Overlay.CreateInvoiceFromQuote -> {
-            val formViewModel = remember(overlay.quote.number, taxSettings, networkState) {
+            val formViewModel = remember(overlay.quote.number, taxSettings, networkState, sireneLookupService) {
                 InvoiceFormViewModel(
                     submitInvoiceUseCase = SubmitInvoiceUseCase(invoiceRepository),
                     issuer = taxSettings.issuerParty,
                     defaultVatRate = taxSettings.defaultVatRate,
                     clientRepository = clientRepository,
+                    sireneLookupService = sireneLookupService,
                     sourceQuote = overlay.quote,
                     enqueueDegradedInvoiceUseCase = enqueueDegradedInvoiceUseCase,
                     initialNetworkState = networkState,

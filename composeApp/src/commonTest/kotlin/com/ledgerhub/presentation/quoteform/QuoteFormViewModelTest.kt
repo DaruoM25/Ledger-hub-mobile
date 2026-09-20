@@ -282,11 +282,15 @@ class QuoteFormViewModelTest {
     private val boulangerie = Party("Boulangerie Moreau SARL", "784102336", "78410233600004", "compta@moreau.fr")
     private val bouchon = Party("Bouchon Lyonnais SAS", "732829320", "73282932000074", "contact@bouchon.fr")
 
-    private fun viewModelWithDirectory(vararg clients: Party): Pair<QuoteFormViewModel, InMemoryClientRepository> {
+    private fun viewModelWithDirectory(
+        vararg clients: Party,
+        sireneLookupService: com.ledgerhub.domain.sirene.SireneLookupService = com.ledgerhub.data.sirene.MockSireneLookupService(simulatedDelayMillis = 0L),
+    ): Pair<QuoteFormViewModel, InMemoryClientRepository> {
         val repository = InMemoryClientRepository(clients.toList())
         val viewModel = QuoteFormViewModel(
             dispatcher = UnconfinedTestDispatcher(),
             clientRepository = repository,
+            sireneLookupService = sireneLookupService,
         )
         return viewModel to repository
     }
@@ -457,6 +461,24 @@ class QuoteFormViewModelTest {
         assertFalse(viewModel.uiState.value.showQuickClientDialog)
         assertNull(viewModel.uiState.value.quickClientDraft)
         assertTrue(repository.clients.isEmpty())
+    }
+
+    @Test
+    fun typingValidSiret_inQuickClientQuote_triggersSireneAutocompletion() = runTest {
+        val (viewModel, _) = viewModelWithDirectory()
+        viewModel.processIntent(QuoteFormIntent.OnOpenQuickClientDialog)
+
+        viewModel.processIntent(
+            QuoteFormIntent.OnQuickClientFieldChanged(
+                name = "",
+                siret = "73282932000074",
+                email = "",
+            ),
+        )
+
+        val draft = assertNotNull(viewModel.uiState.value.quickClientDraft)
+        assertEquals("RENAULT SAS", draft.name)
+        assertFalse(draft.isSireneResolving)
     }
 
     // ── Validation progressive & Actions Brouillon vs Finaliser ───────────────

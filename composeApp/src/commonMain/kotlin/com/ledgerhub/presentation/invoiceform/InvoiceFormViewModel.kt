@@ -32,9 +32,16 @@ import com.ledgerhub.presentation.components.QuickClientDraft
 import com.ledgerhub.presentation.components.QuickClientField
 import com.ledgerhub.presentation.components.validateQuickClient
 import com.ledgerhub.presentation.i18n.todayIsoDate
+import com.ledgerhub.data.sirene.MockSireneLookupService
+import com.ledgerhub.domain.directory.LuhnChecksum
+import com.ledgerhub.domain.sirene.SireneLookupResult
+import com.ledgerhub.domain.sirene.SireneLookupService
+import com.ledgerhub.domain.sirene.SiretInput
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +90,7 @@ class InvoiceFormViewModel(
      * ni création rapide (utile aux tests qui n'ont que faire du sélecteur).
      */
     private val clientRepository: ClientRepository? = null,
+    private val sireneLookupService: SireneLookupService = MockSireneLookupService(),
     /** Cas d'usage d'enfilement en mode dégradé (US-29). */
     private val enqueueDegradedInvoiceUseCase: EnqueueDegradedInvoiceUseCase? = null,
     /** État initial du réseau pour la simulation (US-29). */
@@ -91,6 +99,7 @@ class InvoiceFormViewModel(
     sourceQuote: Quote? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+    private var quickClientLookupJob: Job? = null
 
     // L'état initial reflète aussi les erreurs de validation (formulaire vide = invalide) :
     // sans ce revalidate, isSubmitEnabled serait incorrectement `true` avant toute saisie.
@@ -154,27 +163,13 @@ class InvoiceFormViewModel(
 
             is InvoiceFormIntent.OnClientSelected -> onClientSelected(intent.client)
             InvoiceFormIntent.OnOpenQuickClientDialog -> openQuickClientDialog()
-            InvoiceFormIntent.OnDismissQuickClientDialog ->
+            InvoiceFormIntent.OnDismissQuickClientDialog -> {
+                quickClientLookupJob?.cancel()
                 _uiState.update { it.copy(showQuickClientDialog = false, quickClientDraft = null) }
-
-            is InvoiceFormIntent.OnQuickClientFieldChanged -> _uiState.update { current ->
-                val draft = current.quickClientDraft ?: return@update current
-                current.copy(
-                    quickClientDraft = draft.copy(
-                        name = intent.name,
-                        siret = intent.siret,
-                        email = intent.email,
-                        // La frappe efface l'erreur du champ corrigé, pas celles des autres.
-                        errors = draft.errors.filterKeys { field ->
-                            when (field) {
-                                QuickClientField.NAME -> intent.name == draft.name
-                                QuickClientField.SIRET -> intent.siret == draft.siret
-                                QuickClientField.EMAIL -> intent.email == draft.email
-                            }
-                        },
-                    ),
-                )
             }
+
+            is InvoiceFormIntent.OnQuickClientFieldChanged ->
+                onQuickClientFieldChanged(intent.name, intent.siret, intent.email)
 
             is InvoiceFormIntent.OnSaveQuickClient ->
                 saveQuickClient(intent.name, intent.siret, intent.email)
@@ -250,6 +245,65 @@ class InvoiceFormViewModel(
                 // Le nom déjà tapé est repris : l'utilisateur ne le ressaisit pas.
                 quickClientDraft = QuickClientDraft(name = current.clientQuery.trim()),
             )
+        }
+    }
+
+    private fun onQuickClientFieldChanged(name: String, siret: String, email: String) {
+        val currentDraft = _uiState.value.quickClientDraft ?: return
+        if (currentDraft.isSaving) return
+
+        val digits = SiretInput.sanitize(siret)
+        val isComplete = digits.length == SiretInput.LENGTH
+        val isValidLuhn = isComplete && LuhnChecksum.isValidSiret(digits)
+
+        quickClientLookupJob?.cancel()
+
+        _uiState.update { current ->
+            val draft = current.quickClientDraft ?: return@update current
+            current.copy(
+                quickClientDraft = draft.copy(
+                    name = name,
+                    siret = siret,
+                    email = email,
+                    isSireneResolving = isValidLuhn,
+                    // La frappe efface l'erreur du champ corrigé, pas celles des autres.
+                    errors = draft.errors.filterKeys { field ->
+                        when (field) {
+                            QuickClientField.NAME -> name == draft.name
+                            QuickClientField.SIRET -> siret == draft.siret
+                            QuickClientField.EMAIL -> email == draft.email
+                        }
+                    },
+                ),
+            )
+        }
+
+        if (!isValidLuhn) return
+
+        quickClientLookupJob = scope.launch {
+            val result = try {
+                Result.success(sireneLookupService.lookup(digits))
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                Result.failure(error)
+            }
+
+            _uiState.update { current ->
+                val draft = current.quickClientDraft ?: return@update current
+                if (SiretInput.sanitize(draft.siret) != digits) return@update current
+
+                val resolvedCompany = result.getOrNull() as? SireneLookupResult.Verified
+                val updatedDraft = if (resolvedCompany != null) {
+                    draft.copy(
+                        name = resolvedCompany.company.companyName,
+                        isSireneResolving = false,
+                    )
+                } else {
+                    draft.copy(isSireneResolving = false)
+                }
+                current.copy(quickClientDraft = updatedDraft)
+            }
         }
     }
 
@@ -700,5 +754,8 @@ class InvoiceFormViewModel(
      * Android : depuis onDestroy() ou rememberViewModel().
      * iOS     : depuis le deinit de la UIViewController.
      */
-    fun onCleared() = scope.cancel()
+    fun onCleared() {
+        quickClientLookupJob?.cancel()
+        scope.cancel()
+    }
 }

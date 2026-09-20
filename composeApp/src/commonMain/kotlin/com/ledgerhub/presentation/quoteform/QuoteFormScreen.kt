@@ -350,6 +350,7 @@ internal fun QuoteFormContent(
             email = quickClientDraft.email,
             errors = quickClientDraft.errors.mapKeys { (field, _) -> field.name },
             isSaving = quickClientDraft.isSaving,
+            isSireneResolving = quickClientDraft.isSireneResolving,
             onFieldChanged = { name, siret, email ->
                 onIntent(QuoteFormIntent.OnQuickClientFieldChanged(name, siret, email))
             },

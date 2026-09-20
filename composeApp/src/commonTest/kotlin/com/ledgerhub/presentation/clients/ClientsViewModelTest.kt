@@ -361,6 +361,35 @@ class ClientsViewModelTest {
     }
 
     @Test
+    fun searchQuery_filtersClientsByNameSiretAndEmail() = runTest {
+        val m2i = Party("M2i Formation", "123456789", "12345678900012", "formation@m2i.fr")
+        val testClient = Party("Test Solution SAS", "987654321", "98765432100099", "contact@test-solution.com")
+        val vm = viewModel(FakeClientRepository(listOf(m2i, testClient)), testScheduler)
+        advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.filteredClients.size)
+
+        // Saisie de "test" : M2i Formation ne doit plus être affiché
+        vm.onSearchQueryChange("test")
+        val filtered = vm.uiState.value.filteredClients
+        assertEquals(1, filtered.size)
+        assertEquals("Test Solution SAS", filtered.first().name)
+        assertFalse(filtered.any { it.name == "M2i Formation" })
+
+        // Filtrage par SIRET avec chiffres
+        vm.onSearchQueryChange("123 456")
+        assertEquals(listOf("M2i Formation"), vm.uiState.value.filteredClients.map { it.name })
+
+        // Filtrage par email
+        vm.onSearchQueryChange("test-solution")
+        assertEquals(listOf("Test Solution SAS"), vm.uiState.value.filteredClients.map { it.name })
+
+        // Purge
+        vm.onClearSearch()
+        assertEquals(2, vm.uiState.value.filteredClients.size)
+    }
+
+    @Test
     fun searchQueryChanged_filtersClientsByNameSiretOrEmail() = runTest {
         val c1 = Party("Alpha SARL", "111111111", "11111111111111", "alpha@test.fr")
         val c2 = Party("Beta SAS", "222222222", "22222222222222", "contact@beta.com")
@@ -416,5 +445,100 @@ class ClientsViewModelTest {
         testScheduler.advanceTimeBy(100L)
         testScheduler.runCurrent()
         assertNull(vm.uiState.value.feedbackMessage)
+    }
+
+    @Test
+    fun searchQuery_filtersInstantlyFromFirstCharacter() = runTest {
+        val c1 = Party("M2i Formation", "111111111", "11111111111111", "contact@m2i.fr")
+        val c2 = Party("Autre Entreprise", "222222222", "22222222222222", "autre@entreprise.fr")
+        val vm = viewModel(FakeClientRepository(listOf(c1, c2)), testScheduler)
+        advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.filteredClients.size)
+
+        // Saisie d'un seul caractère "m" (insensible à la casse)
+        vm.processIntent(ClientsIntent.SearchQueryChanged("m"))
+
+        // Seul "M2i Formation" doit être conservé, "Autre Entreprise" est exclu
+        val filtered = vm.uiState.value.filteredClients
+        assertEquals(1, filtered.size)
+        assertEquals("M2i Formation", filtered.single().name)
+    }
+
+    @Test
+    fun dismissMessage_resetsErrorMessageAndFeedbackMessage() = runTest {
+        val vm = viewModel(FakeClientRepository(), testScheduler)
+        advanceUntilIdle()
+
+        // Simuler un message d'erreur ou de feedback actif
+        vm.processIntent(ClientsIntent.DeleteClicked(client()))
+        // Injection d'une erreur via suppression ou déclenchement
+        vm.processIntent(ClientsIntent.DismissMessage)
+
+        assertNull(vm.uiState.value.errorMessage)
+        assertNull(vm.uiState.value.feedbackMessage)
+    }
+
+    @Test
+    fun searchQuery_isCaseInsensitive() = runTest {
+        val c1 = Party("ORANGE", "380129866", "38012986648625", "test@orange.com")
+        val c2 = Party("M2i Formation", "921883740", "92188374000026", "test@m2i.fr")
+        val vm = viewModel(FakeClientRepository(listOf(c1, c2)), testScheduler)
+        advanceUntilIdle()
+
+        // Test avec "orange", "ORANGE", et "OrAnGe"
+        listOf("orange", "ORANGE", "OrAnGe").forEach { query ->
+            vm.processIntent(ClientsIntent.SearchQueryChanged(query))
+            val filtered = vm.uiState.value.filteredClients
+            assertEquals(1, filtered.size, "Échec pour query: $query")
+            assertEquals("ORANGE", filtered.single().name)
+        }
+    }
+
+    @Test
+    fun searchQuery_alphanumeric_doesNotMatchSiretDigits() = runTest {
+        val c1 = Party("M2i Formation", "921883740", "92188374000026", "test@m2i.fr")
+        val c2 = Party("ORANGE", "380129866", "38012986648625", "test@orange.com")
+        val c3 = Party("test1", "369085214", "36908521470963", "test1@test.com")
+        val vm = viewModel(FakeClientRepository(listOf(c1, c2, c3)), testScheduler)
+        advanceUntilIdle()
+
+        assertEquals(3, vm.uiState.value.filteredClients.size)
+
+        // Recherche alphanumérique "test1" : ne doit matcher que "test1" et ne PAS déclencher
+        // la recherche du chiffre "1" dans les SIRETs de M2i Formation ou ORANGE
+        vm.processIntent(ClientsIntent.SearchQueryChanged("test1"))
+
+        val filtered = vm.uiState.value.filteredClients
+        assertEquals(1, filtered.size)
+        assertEquals("test1", filtered.single().name)
+    }
+
+    @Test
+    fun searchQuery_prefixMatching_handlesWordsHyphensApostrophesAndExcludesMiddleSubstrings() = runTest {
+        val c1 = Party("ORANGE", "380129866", "38012986648625", "test@orange.com")
+        val c2 = Party("M2i Formation", "921883740", "92188374000026", "test@m2i.fr")
+        val c3 = Party("Eco-Bat SAS", "111222333", "11122233300011", "contact@eco-bat.fr")
+        val c4 = Party("L'Atelier d'Art", "444555666", "44455566600022", "info@latelier.fr")
+        val vm = viewModel(FakeClientRepository(listOf(c1, c2, c3, c4)), testScheduler)
+        advanceUntilIdle()
+
+        // 1. "or" doit matcher "ORANGE" mais PAS "M2i Formation" (bien que Formation contienne "or")
+        vm.processIntent(ClientsIntent.SearchQueryChanged("or"))
+        val orResults = vm.uiState.value.filteredClients
+        assertEquals(1, orResults.size)
+        assertEquals("ORANGE", orResults.single().name)
+
+        // 2. "bat" avec tiret doit trouver "Eco-Bat SAS"
+        vm.processIntent(ClientsIntent.SearchQueryChanged("bat"))
+        val batResults = vm.uiState.value.filteredClients
+        assertEquals(1, batResults.size)
+        assertEquals("Eco-Bat SAS", batResults.single().name)
+
+        // 3. "atelier" avec apostrophe doit trouver "L'Atelier d'Art"
+        vm.processIntent(ClientsIntent.SearchQueryChanged("atelier"))
+        val atelierResults = vm.uiState.value.filteredClients
+        assertEquals(1, atelierResults.size)
+        assertEquals("L'Atelier d'Art", atelierResults.single().name)
     }
 }

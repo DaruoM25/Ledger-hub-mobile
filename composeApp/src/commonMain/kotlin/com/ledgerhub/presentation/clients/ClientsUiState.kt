@@ -43,6 +43,7 @@ data class ClientsUiState(
     val isLoading: Boolean = true,
     val clients: List<Party> = emptyList(),
     val searchQuery: String = "",
+    val filteredClients: List<Party> = filterClients(clients, searchQuery),
     val form: ClientFormState? = null,
     /** Fiche dont la suppression attend confirmation. */
     val pendingDeletion: Party? = null,
@@ -51,16 +52,29 @@ data class ClientsUiState(
 ) {
     val isEmpty: Boolean get() = !isLoading && clients.isEmpty()
 
-    val filteredClients: List<Party>
-        get() {
-            val q = searchQuery.trim().lowercase()
-            if (q.isEmpty()) return clients
-            return clients.filter { client ->
-                client.name.lowercase().contains(q) ||
-                    client.siret.lowercase().contains(q) ||
-                    client.email.lowercase().contains(q)
+    val isSearchEmpty: Boolean get() = !isLoading && searchQuery.isNotBlank() && filteredClients.isEmpty() && clients.isNotEmpty()
+
+    companion object {
+        fun filterClients(allClients: List<Party>, query: String): List<Party> {
+            val raw = query.trim()
+            if (raw.isEmpty()) return allClients
+
+            val normalizedQuery = raw.lowercase()
+            val isNumericQuery = raw.all { it.isDigit() || it.isWhitespace() }
+            val digitsOnly = raw.filter { it.isDigit() }
+
+            return allClients.filter { client ->
+                val nameWords = client.name.lowercase().split("[\\s\\-_']+".toRegex()).filter { it.isNotEmpty() }
+                val matchesName = nameWords.any { it.startsWith(normalizedQuery) } ||
+                        client.name.lowercase().startsWith(normalizedQuery)
+
+                val emailParts = client.email.lowercase().split("@", ".").filter { it.isNotEmpty() }
+                val matchesEmail = emailParts.any { it.startsWith(normalizedQuery) } ||
+                        client.email.lowercase().startsWith(normalizedQuery)
+
+                val matchesSiret = isNumericQuery && digitsOnly.isNotEmpty() && client.siret.startsWith(digitsOnly)
+                matchesName || matchesEmail || matchesSiret
             }
         }
-
-    val isSearchEmpty: Boolean get() = !isLoading && searchQuery.isNotBlank() && filteredClients.isEmpty() && clients.isNotEmpty()
+    }
 }

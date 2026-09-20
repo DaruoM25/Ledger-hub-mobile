@@ -696,6 +696,7 @@ internal fun InvoiceFormContent(
             email = quickClientDraft.email,
             errors = quickClientDraft.errors.mapKeys { (field, _) -> field.name },
             isSaving = quickClientDraft.isSaving,
+            isSireneResolving = quickClientDraft.isSireneResolving,
             onFieldChanged = { name, siret, email ->
                 onIntent(InvoiceFormIntent.OnQuickClientFieldChanged(name, siret, email))
             },
