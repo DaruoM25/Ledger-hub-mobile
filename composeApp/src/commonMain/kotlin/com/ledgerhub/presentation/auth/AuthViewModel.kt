@@ -5,6 +5,7 @@ import com.ledgerhub.domain.auth.AuthRepository
 import com.ledgerhub.domain.auth.EmailValidator
 import com.ledgerhub.domain.auth.PasswordValidator
 import com.ledgerhub.domain.auth.UserAccount
+import com.ledgerhub.domain.directory.LuhnChecksum
 import com.ledgerhub.domain.sirene.SireneLookupResult
 import com.ledgerhub.domain.sirene.SireneLookupService
 import com.ledgerhub.domain.sirene.SiretInput
@@ -128,13 +129,14 @@ class AuthViewModel(
         }
 
         lookupJob?.cancel()
+        val isLuhnValid = isComplete && LuhnChecksum.isValidSiret(digits)
         _uiState.update { state ->
             state.copy(
                 siret = value,
-                sireneStatus = if (isComplete) {
-                    SireneVerificationStatus.VERIFYING
-                } else {
-                    SireneVerificationStatus.IDLE
+                sireneStatus = when {
+                    !isComplete -> SireneVerificationStatus.IDLE
+                    !isLuhnValid -> SireneVerificationStatus.NOT_FOUND
+                    else -> SireneVerificationStatus.VERIFYING
                 },
                 // Seule une raison sociale venue du répertoire est retirée : voir
                 // [AuthUiState.companyNameAutoFilled].
@@ -143,7 +145,7 @@ class AuthViewModel(
                 errorMessage = null,
             )
         }
-        if (!isComplete) return
+        if (!isComplete || !isLuhnValid) return
 
         lookupJob = scope.launch {
             // `runCatching` seul ne convient pas : il capture **aussi** la CancellationException
@@ -201,7 +203,7 @@ class AuthViewModel(
     private fun register(state: AuthUiState) {
         val emailErr = if (!EmailValidator.isValid(state.email)) EMAIL_INVALID_MESSAGE else null
         val pwdErr = if (!PasswordValidator.isValid(state.password)) PasswordValidator.ERROR_MESSAGE else null
-        val confirmErr = if (state.passwordConfirmation.isNotBlank() && state.passwordConfirmation != state.password) {
+        val confirmErr = if (state.passwordConfirmation.isBlank() || state.passwordConfirmation != state.password) {
             PASSWORDS_MISMATCH_MESSAGE
         } else null
 

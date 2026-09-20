@@ -67,7 +67,8 @@ data class AuthUiState(
                 password.isNotBlank() &&
                 EmailValidator.isValid(email) &&
                 PasswordValidator.isValid(password) &&
-                (passwordConfirmation.isEmpty() || passwordConfirmation == password) &&
+                passwordConfirmation.isNotBlank() &&
+                passwordConfirmation == password &&
                 emailError == null &&
                 passwordError == null &&
                 passwordConfirmationError == null &&

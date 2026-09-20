@@ -341,6 +341,7 @@ class AuthViewModelTest {
         viewModel.processIntent(AuthIntent.ModeChanged(true))
         viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
         viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
+        viewModel.processIntent(AuthIntent.PasswordConfirmationChanged("SecurePass2026!"))
 
         assertFalse(viewModel.uiState.value.isRegisterEnabled)
 
@@ -348,6 +349,35 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isRegisterEnabled)
+    }
+
+    @Test
+    fun registration_staysDisabled_ifPasswordConfirmationIsBlank() = runTest {
+        val sirene = FakeSireneLookupService()
+        val viewModel = viewModel(sirene, StandardTestDispatcher(testScheduler))
+        viewModel.processIntent(AuthIntent.ModeChanged(true))
+        viewModel.processIntent(AuthIntent.EmailChanged("vous@cabinet.fr"))
+        viewModel.processIntent(AuthIntent.PasswordChanged("SecurePass2026!"))
+        viewModel.processIntent(AuthIntent.PasswordConfirmationChanged(""))
+        viewModel.processIntent(AuthIntent.SiretChanged(validSiret))
+        advanceUntilIdle()
+
+        // Même vérifié et avec un mot de passe valide, la confirmation vide bloque l'inscription
+        assertFalse(viewModel.uiState.value.isRegisterEnabled)
+    }
+
+    @Test
+    fun luhnInvalidSiret_reportsNotFound_withoutCallingSireneLookup() = runTest {
+        val sirene = FakeSireneLookupService()
+        val viewModel = viewModel(sirene, StandardTestDispatcher(testScheduler))
+
+        // SIRET 14 chiffres avec somme de Luhn invalide (ex: 73282932000075)
+        viewModel.processIntent(AuthIntent.SiretChanged("73282932000075"))
+        advanceUntilIdle()
+
+        assertEquals(0, sirene.callCount, "Aucun appel réseau vers SIRENE ne doit être fait si la clé de Luhn est invalide")
+        assertEquals(SireneVerificationStatus.NOT_FOUND, viewModel.uiState.value.sireneStatus)
+        assertFalse(viewModel.uiState.value.isSireneVerified)
     }
 
     @Test
