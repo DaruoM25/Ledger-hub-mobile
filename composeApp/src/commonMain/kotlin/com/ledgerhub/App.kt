@@ -297,10 +297,10 @@ fun App(
     }
     val ledgerRepository = remember(invoiceRepository) { LocalLedgerRepository(invoiceRepository) }
     val clientRepository = remember(database) { SqlDelightClientRepository(database) }
-    // Annuaire DGFIP (US-09) : résolution locale (Mock) doublée d'un cache SQLDelight persistant.
+    // Annuaire DGFIP (US-09) : résolution réseau réelle DINUM/INSEE doublée d'un cache SQLDelight persistant.
     val directoryRepository = remember(database) {
         CachingDirectoryRepository(
-            source = MockDirectoryRepository(),
+            source = com.ledgerhub.data.directory.KtorDirectoryRepository(),
             cache = SqlDelightDirectoryRepository(database),
         )
     }
@@ -942,7 +942,7 @@ private fun AuthGate(
     onAuthenticated: () -> Unit,
 ) {
     var showForgotPassword by remember { mutableStateOf(false) }
-    val sireneLookupService = remember { KtorSireneLookupService(fallbackOnOffline = true) }
+    val sireneLookupService = remember { KtorSireneLookupService(fallbackOnOffline = false) }
     val authViewModel = remember(sireneLookupService, authRepository) {
         AuthViewModel(
             authRepository = authRepository,

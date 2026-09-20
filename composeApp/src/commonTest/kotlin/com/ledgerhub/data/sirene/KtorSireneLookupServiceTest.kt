@@ -69,7 +69,7 @@ class KtorSireneLookupServiceTest {
         val result = serviceWith(jsonEngine(payload)).lookup(siret)
 
         val verified = assertIs<SireneLookupResult.Verified>(result)
-        assertEquals("Youssoufi DevOps & Cloud EURL", verified.company.companyName)
+        assertEquals("YOUSSOUFI DEVOPS & CLOUD", verified.company.companyName)
         assertEquals(siret, verified.company.siret)
     }
 
@@ -136,12 +136,14 @@ class KtorSireneLookupServiceTest {
         assertEquals(SireneLookupResult.NotFound, serviceWith(engine).lookup(siret))
     }
 
-    /** Une fiche sans aucun libellé exploitable ne peut rien pré-remplir : elle vaut « absente ». */
+    /** Une fiche sans libellé explicite se replie sur la désignation générique ENTREPRISE $siren. */
     @Test
-    fun aResultWithoutAnyName_isNotFound() = runTest {
+    fun aResultWithoutAnyName_fallsBackToGenericName() = runTest {
         val body = """{"results":[{"nom_complet":null,"nom_raison_sociale":"   "}]}"""
 
-        assertEquals(SireneLookupResult.NotFound, serviceWith(jsonEngine(body)).lookup(siret))
+        val result = serviceWith(jsonEngine(body)).lookup(siret)
+        val verified = assertIs<SireneLookupResult.Verified>(result)
+        assertEquals("ENTREPRISE ${siret.take(9)}", verified.company.companyName)
     }
 
     // ── « Le répertoire n'a pas répondu » ───────────────────────────────────

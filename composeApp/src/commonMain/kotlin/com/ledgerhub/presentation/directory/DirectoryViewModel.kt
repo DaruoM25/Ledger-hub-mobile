@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * @param dispatcher injecté pour des tests sans dépendance au thread réel.
  */
 class DirectoryViewModel(
-    private val repository: DirectoryRepository = MockDirectoryRepository(),
+    private val repository: DirectoryRepository,
     private val resolveUseCase: ResolveDirectoryEntryUseCase = ResolveDirectoryEntryUseCase(repository),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {

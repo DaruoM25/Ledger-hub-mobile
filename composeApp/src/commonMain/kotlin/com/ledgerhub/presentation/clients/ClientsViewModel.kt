@@ -56,7 +56,7 @@ sealed interface ClientsIntent {
  */
 class ClientsViewModel(
     private val repository: ClientRepository,
-    private val sireneLookupService: SireneLookupService = MockSireneLookupService(),
+    private val sireneLookupService: SireneLookupService,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)

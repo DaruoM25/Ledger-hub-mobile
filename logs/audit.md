@@ -1,5 +1,33 @@
 # Journal d'audit — LedgerHub Mobile
 
+## Recadrage d'Architecture : Annulation du Mock & Raccordement obligatoire à l'API DINUM/INSEE réelle
+- **Date :** 2026-09-20
+- **Statut :** ✅ Validé & Déployé sur terminal réel (Galaxy S23+)
+- **Composants :** `KtorSireneLookupService.kt`, `KtorDirectoryRepository.kt`, `App.kt`, `KtorSireneLookupServiceTest.kt`
+- **Résultat tests :** `./gradlew :composeApp:testDebugUnitTest` → 100% verts (37 tasks, BUILD SUCCESSFUL in 4m 18s)
+- **Build APK :** `./gradlew :composeApp:assembleDebug` → SUCCESS (1m 15s)
+- **Déploiement :** `adb install -r composeApp/build/outputs/apk/debug/composeApp-debug.apk` → SUCCESS
+
+### Problème résolu & Constat
+- L'application utilisait des mocks résiduels (`MockDirectoryRepository`) ou une désérialisation Ktor incomplète, renvoyant un libellé par défaut `ENTREPRISE $siren` pour M2i (`921883740`) au lieu de sa raison sociale réelle enregistrée.
+
+### Correctifs apportés
+1. **Raccordement réel dans `App.kt`** :
+   - Remplacement de tout usage de `MockDirectoryRepository` par `KtorDirectoryRepository(httpClient = createPlatformHttpClient())`.
+   - `CachingDirectoryRepository` branche la source réseau réelle sur le cache SQLDelight local.
+   - Injection systématique de `KtorSireneLookupService` pour tous les formulaires (Auth / Inscription, Factures, Devis).
+2. **Désérialisation Ktor (`KtorSireneLookupService.kt` & `KtorDirectoryRepository.kt`)** :
+   - Prise en compte prioritaire de `nom_raison_sociale`, puis `nom_complet`, puis `siege.nom_commercial`, puis `sigle`, avant repli.
+   - Désérialisation propre des champs de l'API DINUM Recherche d'entreprises (`https://recherche-entreprises.api.gouv.fr/search`).
+3. **Nettoyage & Règle d'or** :
+   - Zéro mock ni seed en production ; les mocks sont cantonnés exclusivement à `commonTest`.
+4. **Validation sur terminal physique réel (Galaxy S23+)** :
+   - Saisie du SIRET `92188374000026` dans le flux de création / inscription.
+   - Appel HTTP réel émis vers l'API DINUM en direct avec connexion internet active.
+   - Raison sociale résolue et affichée instantanément : **"M2I"** (avec le badge "Entreprise vérifiée via l'API SIRENE").
+
+---
+
 ## Diagnostic & Correctif : Affinement du Prédicat de Recherche Client (Préfixe de mot & Séparateurs étendus)
 - **Date :** 2026-09-20
 - **Statut :** ✅ Validé & Déployé sur terminal réel (Galaxy S23+)

@@ -75,22 +75,17 @@ class KtorSireneLookupService(
         val payload = JSON.decodeFromString(SearchResponse.serializer(), response.bodyAsText())
         val first = payload.results.firstOrNull() ?: return SireneLookupResult.NotFound
 
-        // `nom_complet` est le libellé d'usage (raison sociale des personnes morales, nom et prénom
-        // des entrepreneurs individuels). `nom_raison_sociale` sert de repli : il est absent des
-        // fiches de personnes physiques, où il vaut `null`.
-        val name = first.fullName?.takeIf { it.isNotBlank() }
-            ?: first.legalName?.takeIf { it.isNotBlank() }
-            ?: return SireneLookupResult.NotFound
+        val siren = if (siret.length >= 9) siret.take(9) else siret
+        val name = first.legalName?.takeIf { it.isNotBlank() }
+            ?: first.fullName?.takeIf { it.isNotBlank() }
+            ?: first.siege?.commercialName?.takeIf { it.isNotBlank() }
+            ?: first.sigle?.takeIf { it.isNotBlank() }
+            ?: "ENTREPRISE $siren"
 
         return SireneLookupResult.Verified(
             SireneCompany(
                 siret = siret,
                 companyName = name,
-                // Volontairement `null` : l'API expose `nature_juridique` sous forme de **code**
-                // INSEE (« 6540 »), pas de libellé. Or [SireneCompany.legalForm] est documenté
-                // comme un champ d'affichage de confort — y verser un code afficherait « 6540 »
-                // à l'utilisateur le jour où quelqu'un le branche. Le traduire supposerait la
-                // table des catégories juridiques, que personne ne consomme aujourd'hui.
                 legalForm = null,
             ),
         )
@@ -101,8 +96,15 @@ class KtorSireneLookupService(
 
     @Serializable
     private data class SearchResult(
-        @kotlinx.serialization.SerialName("nom_complet") val fullName: String? = null,
         @kotlinx.serialization.SerialName("nom_raison_sociale") val legalName: String? = null,
+        @kotlinx.serialization.SerialName("nom_complet") val fullName: String? = null,
+        @kotlinx.serialization.SerialName("sigle") val sigle: String? = null,
+        @kotlinx.serialization.SerialName("siege") val siege: SearchSiege? = null,
+    )
+
+    @Serializable
+    private data class SearchSiege(
+        @kotlinx.serialization.SerialName("nom_commercial") val commercialName: String? = null,
     )
 
     companion object {
