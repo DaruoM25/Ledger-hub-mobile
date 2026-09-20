@@ -36,7 +36,7 @@ class SqlDelightAuthRepositoryLogoutTest {
     )
 
     @Test
-    fun logout_atomicallyPurgesUserAccount_andEmitsNullOnCurrentAccountFlow() = runTest {
+    fun logout_clearsCurrentSession_whilePreservingAccountInDatabase_allowingReLogin() = runTest {
         val database = newDatabase()
         val repository = SqlDelightAuthRepository(database, clock)
 
@@ -55,12 +55,17 @@ class SqlDelightAuthRepositoryLogoutTest {
         val logoutResult = repository.logout()
         assertTrue(logoutResult.isSuccess)
 
-        // 3. Assertions strictes post-déconnexion
+        // 3. Assertions strictes post-déconnexion (session mémoire vidée)
         assertNull(repository.getCurrentAccount(), "getCurrentAccount() doit retourner null après déconnexion")
         assertNull(repository.observeCurrentAccount().first(), "observeCurrentAccount() doit émettre null après déconnexion")
 
-        // 4. Vérification de la purge en base SQLite
+        // 4. Vérification de la conservation en base SQLite (MOB-AUTH-10)
         val storedCount = database.userAccountQueries.countAccounts().executeAsOne()
-        assertEquals(0L, storedCount, "La table UserAccount doit être vide après déconnexion locale")
+        assertEquals(1L, storedCount, "La table UserAccount doit conserver le compte après une simple déconnexion")
+
+        // 5. Reconnexion nominale après déconnexion
+        val reloginResult = repository.login(account.email, "SecurePass2026!")
+        assertTrue(reloginResult.isSuccess, "La reconnexion avec les identifiants doit réussir")
+        assertEquals(account.email, repository.getCurrentAccount()?.email)
     }
 }
